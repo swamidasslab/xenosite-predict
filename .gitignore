@@ -35,3 +35,7 @@ weights/**/*.pickle
 
 # uv
 uv.lock
+
+# Regenerable OpenBabel dumps from `make dump-ob`
+tests/fixtures/ob_dump_aspirin.json
+tests/fixtures/ob_dumps.json

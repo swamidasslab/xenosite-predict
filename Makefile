@@ -9,7 +9,7 @@ LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
 TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) test test-live \
-	legacy-test-api legacy-test-api-down help
+	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob-features help
 
 help:
 	@echo "extract-weights     copy pickles/TSV/source from $(IMAGE) into weights/legacy/"
@@ -17,6 +17,8 @@ help:
 	@echo "convert-onnx MODEL=epoxidation"
 	@echo "test                unit tests, Docker-free (-m 'not live')"
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
+	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4)"
+	@echo "dump-ob-features    OpenBabel feature dump via that image (SMILES= MODEL=)"
 	@echo "legacy-test-api     build/run derived test image"
 	@echo "legacy-test-api-down"
 
@@ -37,3 +39,15 @@ legacy-test-api:
 
 legacy-test-api-down:
 	docker compose -f $(LEGACY_COMPOSE) down
+
+py2-dump-image:
+	docker build --platform linux/amd64 -t xenosite-predict-py2:dump tools/py2-dump
+
+SMILES ?= O=C(C)Oc1ccccc1C(=O)O
+MODEL ?= epoxidation
+
+dump-ob-features:
+	$(PYTHON) tools/dump_ob.py --smiles '$(SMILES)' --model $(MODEL)
+
+dump-ob:
+	$(PYTHON) tools/dump_ob.py --suite
