@@ -2,7 +2,8 @@
 
 Importing this module does not load OpenBabel. Bindings load on first use.
 PyPI ships OpenBabel **3.2.x** wheels (``uv add openbabel``). The dump oracle
-is Debian OpenBabel **2.4.1**; dump-vs-feature tests catch 3.x drift.
+is Debian OpenBabel **2.4.1**; ``GetHyb()`` is wrapped to that 2.4 behavior
+(halogens 0, aromatic sulfur 3). Dump-vs-feature tests catch remaining 3.x drift.
 """
 
 from __future__ import annotations
@@ -47,8 +48,16 @@ def _remember(ob: Any, pybel: Any) -> tuple[Any, Any]:
     return _CACHE
 
 
+# OpenBabel 2.4 left these unhybridized (GetHyb() == 0). 3.x assigns sp (1).
+_HALOGEN_Z = frozenset({9, 17, 35, 53, 85})
+
+
 def _patch_legacy_api(ob: Any) -> None:
-    """Restore OpenBabel 2.4 method names missing from the 3.2 PyPI wheel."""
+    """Restore OpenBabel 2.4 method names and halogen hybridization."""
+    if getattr(ob, "_xenosite_legacy_api", False):
+        return
+    ob._xenosite_legacy_api = True
+
     atom = ob.OBAtom
     _add(atom, "IsHydrogen", lambda self: self.GetAtomicNum() == 1)
     _add(atom, "IsCarbon", lambda self: self.GetAtomicNum() == 6)
@@ -56,13 +65,33 @@ def _patch_legacy_api(ob: Any) -> None:
     _add(atom, "IsOxygen", lambda self: self.GetAtomicNum() == 8)
     _add(atom, "IsSulfur", lambda self: self.GetAtomicNum() == 16)
     _add(atom, "IsPhosphorus", lambda self: self.GetAtomicNum() == 15)
-    _add(atom, "IsHalogen", lambda self: self.GetAtomicNum() in (9, 17, 35, 53, 85))
+    _add(atom, "IsHalogen", lambda self: self.GetAtomicNum() in _HALOGEN_Z)
     _add(atom, "ImplicitHydrogenCount", lambda self: int(self.GetImplicitHCount()))
+    _wrap_get_hyb(atom)
 
     bond = ob.OBBond
     _add(bond, "IsSingle", lambda self: (not self.IsAromatic()) and self.GetBondOrder() == 1)
     _add(bond, "IsDouble", lambda self: (not self.IsAromatic()) and self.GetBondOrder() == 2)
     _add(bond, "IsTriple", lambda self: (not self.IsAromatic()) and self.GetBondOrder() == 3)
+
+
+def _wrap_get_hyb(atom_cls: Any) -> None:
+    """Match OpenBabel 2.4 ``GetHyb()`` on the 3.2 wheel.
+
+    2.4 left F/Cl/Br/I unhybridized (0). 3.x reports them as sp (1).
+    2.4 counted aromatic sulfur as sp3; 3.x types it ``S2`` / hyb 2.
+    """
+    native = atom_cls.GetHyb
+
+    def GetHyb(self) -> int:
+        z = int(self.GetAtomicNum())
+        if z in _HALOGEN_Z:
+            return 0
+        if z == 16 and self.IsAromatic():
+            return 3
+        return int(native(self))
+
+    atom_cls.GetHyb = GetHyb
 
 
 def _add(cls: Any, name: str, fn) -> None:

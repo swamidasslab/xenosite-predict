@@ -75,6 +75,40 @@ def test_topn_properties(scores, topn):
         assert vec[0, len(scores)] == 0.0
 
 
+def test_halogen_hyb_matches_openbabel_24():
+    """OpenBabel 2.4 left F/Br unhybridized; 3.x would report sp without this wrap."""
+    from xenosite.predict.features._ob import from_rdkit_mol, load
+
+    mol, _ = parse_smiles("O=C(Br)C(F)(F)F")
+    pym = from_rdkit_mol(mol)
+    ob, _ = load()
+    by_z: dict[int, set[int]] = {}
+    for atom in ob.OBMolAtomIter(pym.OBMol):
+        z = atom.GetAtomicNum()
+        if z == 1:
+            continue
+        by_z.setdefault(z, set()).add(atom.GetHyb())
+    assert by_z[9] == {0}
+    assert by_z[35] == {0}
+    assert 2 in by_z[8]
+    assert by_z[6] <= {2, 3}
+
+
+def test_aromatic_sulfur_hyb_matches_openbabel_24():
+    """OpenBabel 2.4 counted thiazole S as sp3; 3.x reports hyb 2."""
+    from xenosite.predict.features._ob import from_rdkit_mol, load
+
+    mol, _ = parse_smiles("c1cscn1")
+    pym = from_rdkit_mol(mol)
+    ob, _ = load()
+    sulfurs = [
+        a.GetHyb()
+        for a in ob.OBMolAtomIter(pym.OBMol)
+        if a.GetAtomicNum() == 16
+    ]
+    assert sulfurs == [3]
+
+
 def test_aspirin_bond_shape():
     from xenosite.predict.features import bond_rows
 
