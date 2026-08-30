@@ -1,4 +1,4 @@
-"""Feature unit tests. Descriptor calls skip when OpenBabel 2.4 is missing."""
+"""Feature unit tests. OpenBabel is a runtime dependency (PyPI wheel)."""
 
 import numpy as np
 import pytest
@@ -9,16 +9,9 @@ from xenosite.predict.compare import scores_close
 from xenosite.predict.features.two_stage import topn_site_features
 from xenosite.predict.molecule import parse_smiles
 
-from tests.support import openbabel_available
-
 ASPIRIN = "O=C(C)Oc1ccccc1C(=O)O"
 
-need_ob = pytest.mark.skipif(
-    not openbabel_available(), reason="OpenBabel 2.4 not installed"
-)
 
-
-@need_ob
 def test_bond_rows_deterministic():
     from xenosite.predict.features import bond_rows
 
@@ -32,7 +25,6 @@ def test_bond_rows_deterministic():
             assert scores_close(float(r1[k]), float(r2[k]))
 
 
-@need_ob
 def test_two_orderings_swap_atom_blocks():
     from xenosite.predict.features import bond_rows
 
@@ -43,7 +35,6 @@ def test_two_orderings_swap_atom_blocks():
     assert "BondDescriptor__Single" in a[0]
 
 
-@need_ob
 def test_ugt_atom_count():
     from xenosite.predict.features import ugt_atom_rows
 
@@ -84,7 +75,6 @@ def test_topn_properties(scores, topn):
         assert vec[0, len(scores)] == 0.0
 
 
-@need_ob
 def test_aspirin_bond_shape():
     from xenosite.predict.features import bond_rows
 

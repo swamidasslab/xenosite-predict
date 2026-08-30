@@ -6,7 +6,6 @@ import pytest
 
 from xenosite.predict import WeightsNotFound, predict
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.errors import OpenBabelNotAvailable
 from xenosite.predict.molecule import parse_smiles
 
 from tests.support import ROOT, load_golden, onnx_weights_present
@@ -37,32 +36,24 @@ def test_epoxidation_parse_all_examples():
 def test_epoxidation_onnx_skips_without_weights():
     be = OnnxBackend(ROOT / "weights" / "onnx")
     if onnx_weights_present("epoxidation"):
-        try:
-            mol = predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
-        except OpenBabelNotAvailable as exc:
-            pytest.skip(str(exc))
+        mol = predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
         assert mol.results
         assert mol.results[0].model == "epoxidation"
         assert len(mol.results[0].bond) == len(mol.bonds.idx)
     else:
-        with pytest.raises((WeightsNotFound, OpenBabelNotAvailable)):
+        with pytest.raises(WeightsNotFound):
             predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
 
 
 def test_epoxidation_golden_if_present():
+    from xenosite.predict.compare import assert_equiv_results
+
     rows = [g for g in load_golden() if g.get("model") == "epoxidation"]
     if not rows:
         pytest.skip("no golden scores committed yet (gather after ONNX convert)")
     if not onnx_weights_present("epoxidation"):
         pytest.skip("no epoxidation ONNX")
     be = OnnxBackend(ROOT / "weights" / "onnx")
-    from xenosite.predict.compare import assert_equiv_results
-
-    pytest.xfail(
-        "internal OpenBabel features are not yet verified against golden frontend "
-        "scores at atol 1e-4. See docs/vendored-diffs.md."
-    )
-
     mismatches = []
     for g in rows:
         mol = predict(g["smiles"], models=["epoxidation"], backend=be)
@@ -78,7 +69,7 @@ def test_epoxidation_golden_if_present():
         except AssertionError as exc:
             mismatches.append(f"{g.get('label') or g['smiles']}: {exc}")
     if mismatches:
-        pytest.fail(
-            "epoxidation RDKit+ONNX vs golden frontend scores (see docs/vendored-diffs.md):\n"
-            + "\n".join(mismatches[:8])
+        pytest.xfail(
+            "epoxidation OpenBabel+ONNX vs golden frontend scores "
+            "(atol 1e-4; see docs/vendored-diffs.md):\n" + "\n".join(mismatches[:8])
         )

@@ -56,13 +56,9 @@ def test_onnx_matches_dumped_py2_nn(key):
 
 
 def test_epoxidation_bond_names_cover_matrix():
-    from tests.support import openbabel_available
-
     names = load_names("epoxidation", "bond")
     if not names:
         pytest.skip("no committed epoxidation bond names")
-    if not openbabel_available():
-        pytest.skip("OpenBabel 2.4 not installed")
     mol, _ = parse_smiles(ASPIRIN)
     rows = bond_rows(mol, original_atom_ordering=True)
     missing = [n for n in names if n not in rows[0]]

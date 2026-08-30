@@ -139,6 +139,7 @@ def _ob_mod():
 def _pt():
     global _PT
     if _PT is None:
-        ob, _p = _ob_mod()
-        _PT = ob.OBElementTable()
+        from . import _ob
+
+        _PT = _ob.element_table()
     return _PT

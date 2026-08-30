@@ -108,10 +108,6 @@ def test_internal_ob_vs_live_dump(model):
     Does not need the WashU registry. Skip if Docker, OpenBabel, or sibling src
     is missing. Any overlapping-column mismatch fails. Do not loosen atol.
     """
-    from tests.support import openbabel_available
-
-    if not openbabel_available():
-        pytest.skip("OpenBabel 2.4 not installed")
     import sys
 
     tools = ROOT / "tools"

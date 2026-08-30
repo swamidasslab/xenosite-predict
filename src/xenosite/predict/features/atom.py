@@ -73,7 +73,7 @@ class AtomTD:
             if not a.IsHydrogen()
         )
         self.MG = MolGraph(pymol)
-        pt = ob.OBElementTable()
+        pt = _ob.element_table()
         self.MG.vertex = dict(
             zip(
                 sorted(self.MG.vertex.keys()),
@@ -413,7 +413,7 @@ class AtomTD:
         self._set("HbondDonor", [int(a.IsHbondDonor()) for a in atoms])
 
     def add_periodic_table_descriptors(self) -> None:
-        pt = self.ob.OBElementTable()
+        pt = _ob.element_table()
         atoms = list(self.HA.values())
         z = [a.GetAtomicNum() for a in atoms]
         hyb = [a.GetHyb() for a in atoms]

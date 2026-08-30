@@ -91,10 +91,7 @@ def list_models(
 
             if not _ob.installed():
                 ok = False
-                reason = (
-                    "OpenBabel 2.4 is required for ONNX descriptors "
-                    "(conda install -c conda-forge openbabel=2.4)"
-                )
+                reason = "OpenBabel is required for ONNX descriptors (uv add openbabel)"
         out.append(
             {
                 "name": info.name,

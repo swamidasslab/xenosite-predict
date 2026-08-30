@@ -30,8 +30,7 @@ ATOM_SYMBOLS = "C N O P S F Cl Br I".split()
 
 
 def _pt():
-    ob, _ = _ob.load()
-    return ob.OBElementTable()
+    return _ob.element_table()
 
 
 class BondTD:
