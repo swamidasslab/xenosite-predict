@@ -216,23 +216,69 @@ def main(argv=None):
         default=os.environ.get("XENOSITE_LEGACY_SRC")
         or os.environ.get("LEGACY_SRC", "/src"),
     )
+    p.add_argument(
+        "--batch",
+        default="",
+        help="JSON list of {smiles, sdf, input_smiles}; dump every job into --out",
+    )
     p.add_argument("--out", default="-")
     args = p.parse_args(argv)
-    if not args.smiles and not args.sdf:
-        raise SystemExit("need --smiles or --sdf")
+    if not args.batch and not args.smiles and not args.sdf:
+        raise SystemExit("need --smiles, --sdf, or --batch")
 
     _stub_confargparse()
     plant_libridass(args.src)
+
+    def dump_all_models(mol):
+        if args.model not in ("all", "") and args.model not in DUMPERS:
+            raise SystemExit("unknown model %s" % args.model)
+        names = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
+        if args.model not in ("all", "", None) and args.model in DUMPERS:
+            names = (args.model,)
+        models = {}
+        for name in names:
+            models[name] = DUMPERS[name](mol)
+        return models
+
+    if args.batch:
+        jobs = json.load(open(args.batch))
+        molecules = []
+        errors = []
+        n = len(jobs)
+        for i, job in enumerate(jobs):
+            smi = job.get("smiles") or ""
+            sys.stderr.write("dumping %d/%d %s\n" % (i + 1, n, smi))
+            try:
+                mol = read_pymol(smi, sdf_path=job.get("sdf") or None)
+                molecules.append(
+                    {
+                        "smiles": smi,
+                        "input_smiles": job.get("input_smiles") or smi,
+                        "via_sdf": bool(job.get("sdf")),
+                        "models": dump_all_models(mol),
+                    }
+                )
+            except Exception as exc:
+                errors.append({"smiles": smi, "error": "%s: %s" % (type(exc).__name__, exc)})
+                sys.stderr.write("FAIL %s: %s\n" % (smi, exc))
+        payload = {"molecules": molecules, "errors": errors}
+        text = json.dumps(payload)
+        if args.out == "-":
+            sys.stdout.write(text)
+            sys.stdout.write("\n")
+        else:
+            with open(args.out, "w") as fh:
+                fh.write(text)
+                fh.write("\n")
+        return 1 if errors else 0
+
     mol = read_pymol(args.smiles, sdf_path=args.sdf or None)
     if args.model == "all":
-        models = {}
-        for name in ("epoxidation", "quinone", "reactivity", "ugt", "ndealk"):
-            models[name] = DUMPERS[name](mol)
         payload = {
             "smiles": args.smiles,
             "model": "all",
             "from_sdf": bool(args.sdf),
-            "models": models,
+            "models": dump_all_models(mol),
         }
     else:
         if args.model not in DUMPERS:

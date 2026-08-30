@@ -8,10 +8,13 @@ image. Does not need the WashU registry. Mounts sibling xenosite-legacy/src.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,7 +58,7 @@ def ensure_dump_image() -> None:
 
 
 def collect_dump_smiles() -> list[str]:
-    """Golden unique SMILES, extras, then the 100–200 descriptor suite."""
+    """Golden unique SMILES, extras, then the committed descriptor suite."""
     out: list[str] = []
     seen: set[str] = set()
 
@@ -142,6 +145,73 @@ def dump_one(smiles: str, model: str, src: Path, *, sdf_text: str | None = None)
     return json.loads(lines[-1])
 
 
+def dump_suite(smiles_list: list[str], src: Path) -> list[dict]:
+    """Dump every model for each SMILES in one container (RDKit molblock SDFs)."""
+    ensure_dump_image()
+    td = tempfile.mkdtemp(prefix="ob-dump-")
+    try:
+        manifest = []
+        for i, smi in enumerate(smiles_list):
+            canonical, sdf_text = _rdkit_sdf(smi)
+            sdf_name = f"{i:03d}.sdf"
+            (Path(td) / sdf_name).write_text(sdf_text)
+            manifest.append(
+                {
+                    "smiles": canonical,
+                    "input_smiles": smi,
+                    "sdf": f"/work/batch/{sdf_name}",
+                }
+            )
+            print(f"queued {i + 1}/{len(smiles_list)} {canonical}", file=sys.stderr)
+        (Path(td) / "manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/amd64",
+            "--entrypoint",
+            "/usr/bin/python",
+            "-v",
+            f"{src.resolve()}:/src:ro",
+            "-v",
+            f"{HELPER.resolve()}:/work/dump_ob_features.py:ro",
+            "-v",
+            f"{td}:/work/batch",
+            "-e",
+            "PYTHONPATH=/src",
+            DUMP_IMAGE,
+            "/work/dump_ob_features.py",
+            "--batch",
+            "/work/batch/manifest.json",
+            "--src",
+            "/src",
+            "--out",
+            "/work/batch/out.json",
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        err_tail = (proc.stderr or proc.stdout or "")[-4000:]
+        if proc.returncode != 0 and not (Path(td) / "out.json").is_file():
+            raise RuntimeError(f"batch dump failed (exit {proc.returncode}):\n{err_tail}")
+        if proc.stderr:
+            sys.stderr.write(proc.stderr)
+        data = json.loads((Path(td) / "out.json").read_text(encoding="utf-8"))
+        errors = data.get("errors") or []
+        if errors:
+            detail = "\n".join(
+                f"  {e.get('smiles')}: {e.get('error')}" for e in errors[:40]
+            )
+            print(
+                f"batch dump failed for {len(errors)} molecule(s):\n{detail}",
+                file=sys.stderr,
+            )
+        return list(data.get("molecules") or []), errors
+    finally:
+        shutil.rmtree(td, ignore_errors=True)
+
+
 def dump_molecule(smiles: str, src: Path, *, from_smiles: bool = False) -> dict:
     """Dump every model for one SMILES in a single container run."""
     canonical = smiles
@@ -167,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--suite",
         action="store_true",
-        help=f"Dump golden SMILES + extras to {SUITE_OUT.name} (and aspirin fixture)",
+        help=f"Dump golden SMILES + extras to {SUITE_OUT.name} and {SUITE_OUT.name}.gz",
     )
     p.add_argument(
         "--from-smiles",
@@ -179,19 +249,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"legacy src missing: {args.src}", file=sys.stderr)
         return 1
     if args.suite:
-        molecules = []
-        for smi in collect_dump_smiles():
-            print(f"dumping {smi} …", file=sys.stderr)
-            molecules.append(dump_molecule(smi, args.src, from_smiles=args.from_smiles))
+        smiles = collect_dump_smiles()
+        print(f"dumping suite n={len(smiles)} …", file=sys.stderr)
+        errors: list[dict] = []
+        if args.from_smiles:
+            molecules = [
+                dump_molecule(smi, args.src, from_smiles=True) for smi in smiles
+            ]
+        else:
+            molecules, errors = dump_suite(smiles, args.src)
         suite = {"molecules": molecules}
         dest = args.out or SUITE_OUT
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(json.dumps(suite), encoding="utf-8")
-        print("wrote", dest, "n=", len(molecules), file=sys.stderr)
+        text = json.dumps(suite)
+        dest.write_text(text, encoding="utf-8")
+        gz = dest.with_name(dest.name + ".gz")
+        with gzip.open(gz, "wt", encoding="utf-8") as fh:
+            fh.write(text)
+        print("wrote", dest, "and", gz, "n=", len(molecules), file=sys.stderr)
         aspirin = next((m for m in molecules if m["smiles"] == ASPIRIN), None)
         if aspirin is not None:
             ASPIRIN_OUT.write_text(json.dumps(aspirin, indent=2) + "\n", encoding="utf-8")
             print("wrote", ASPIRIN_OUT, file=sys.stderr)
+        if errors:
+            return 1
         return 0
 
     smiles = args.smiles or "O=C(C)Oc1ccccc1C(=O)O"
