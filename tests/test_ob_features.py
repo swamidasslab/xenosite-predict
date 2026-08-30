@@ -6,6 +6,11 @@ Missing dumps fail. Each (model, molecule) dump is its own test. Do not loosen a
 Quinone ortho/meta/para mismatches that are *only* those columns are xfailed:
 the dump picked one BFS path via Python 2 ``set`` order; we use any shortest
 path on an aromatic ring instead. Revisit if golden scores move.
+
+Phase1 dumps concatenate Bond_and_LonePair with Possible_Sites SMARTS masks.
+We port BLP only (404 site.onnx inputs); dump comparison skips Possible_Sites.
+Revive ``possible_site_flags`` and OB 2.4 SMARTS parity if we expose legacy
+``ReactionType`` sub-scores (post-NN class × mask), not for class golden heads.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from tests.support import (
     OB_ASPIRIN,
     OB_DUMPS_GZ,
     compare_feature_dump_rows,
+    dump_compare_skip_columns,
     golden_name_by_smiles,
     load_descriptor_smiles,
     load_ob_dump,
@@ -132,7 +138,11 @@ def test_internal_ob_vs_dump(smiles, model):
     dump_mol = next(d for d in _dumps() if d.get("smiles") == smiles)
     payload = dump_mol["models"][model]
     mol, _ = parse_smiles(smiles)
-    mm = compare_feature_dump_rows(rows_for_model(model, mol), payload)
+    mm = compare_feature_dump_rows(
+        rows_for_model(model, mol),
+        payload,
+        skip_columns=dump_compare_skip_columns(model),
+    )
     if _omp_dump_mismatch(mm):
         pytest.xfail(
             "ortho/meta/para uses any shortest path on an aromatic ring; "

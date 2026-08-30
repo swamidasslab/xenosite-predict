@@ -123,6 +123,7 @@ def rows_for_model(model: str, mol) -> list[dict]:
     from xenosite.predict.features import (
         bond_rows,
         ndealk_bond_rows,
+        phase1_rows,
         quinone_atom_rows,
         reactivity_atom_rows,
         ugt_atom_rows,
@@ -138,7 +139,18 @@ def rows_for_model(model: str, mol) -> list[dict]:
         return quinone_atom_rows(mol)
     if model == "reactivity":
         return reactivity_atom_rows(mol)
+    if model == "phase1":
+        return phase1_rows(mol)
     raise KeyError(model)
+
+
+def dump_compare_skip_columns(model: str) -> frozenset[str] | None:
+    """Columns present in py2 dumps but not in our ported feature rows."""
+    if model == "phase1":
+        from xenosite.predict.features.bond_lonepair import POSSIBLE_SITE_COLUMNS
+
+        return POSSIBLE_SITE_COLUMNS
+    return None
 
 
 def load_ob_dump(path: Path | None = None) -> dict:
@@ -165,6 +177,9 @@ def _row_for_ob_index(rows: list[dict], index: str) -> dict | None:
     BondTD: ``{mol}.{a1}.{a2}`` (1-based OpenBabel atom idx).
     AtomTD: ``{mol}.{group}.{atom}``. UGT: ``{mol}.{atom}``.
     """
+    by_index = {str(r["_index"]): r for r in rows if "_index" in r}
+    if index in by_index:
+        return by_index[index]
     parts = str(index).split(".")
     by_bond = {frozenset(r["_atoms"]): r for r in rows if "_atoms" in r}
     by_atom = {int(r["_atom"]): r for r in rows if "_atom" in r}
@@ -179,11 +194,16 @@ def _row_for_ob_index(rows: list[dict], index: str) -> dict | None:
 
 
 def compare_feature_dump_rows(
-    rows: list[dict], dump: dict, *, atol: float = 1e-4
+    rows: list[dict],
+    dump: dict,
+    *,
+    atol: float = 1e-4,
+    skip_columns: set[str] | frozenset[str] | None = None,
 ) -> list[str]:
     """Return unique overlapping column names that disagree (rtol=0).
 
     Default atol is 1e-4. Do not loosen columns to hide OpenBabel 3.x drift.
+    ``skip_columns`` are omitted (e.g. phase1 Possible_Sites in the py2 dump).
     """
     import numpy as np
 
@@ -204,6 +224,8 @@ def compare_feature_dump_rows(
             continue
         ob_map = dict(zip(cols, ob))
         for c, val in ob_map.items():
+            if skip_columns and c in skip_columns:
+                continue
             if c not in got or c in seen:
                 continue
             try:

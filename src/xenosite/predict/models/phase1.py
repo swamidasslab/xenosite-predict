@@ -1,8 +1,11 @@
 """Phase I (molecularNN / TensorFlow). Converted to ONNX; no TensorFlow at runtime.
 
 Site and mol heads are windowed MLPs dumped from the TF1 pickles. SMILES
-inference still needs Bond_and_LonePair descriptors (not ported yet).
-HTTP/legacy backends still work.
+inference needs Bond_and_LonePair rows (404 site.onnx inputs). Possible_Sites
+SMARTS masks are not part of that vector: legacy ``model1`` multiplies class
+scores by them *after* the site net to build ``ReactionType`` sub-scores. We
+omit them from ``phase1_rows``; wire ``possible_site_flags`` only if we expose
+ReactionType (and accept OB 2.4 SMARTS parity work). HTTP/legacy backends work.
 """
 
 from __future__ import annotations
@@ -58,8 +61,9 @@ class Phase1Runner(BaseRunner):
                 "TF is not a runtime dep."
             )
         raise WeightsNotFound(
-            "phase1 ONNX site/mol heads exist, but Bond_and_LonePair descriptors "
-            "are not ported yet, so SMILES inference cannot run."
+            "phase1 ONNX site/mol heads exist, but SMILES inference is not wired "
+            "(Bond_and_LonePair rows → site.onnx → mol.onnx). Possible_Sites masks "
+            "for ReactionType are deferred."
         )
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
