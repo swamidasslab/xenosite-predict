@@ -14,13 +14,13 @@ import numpy as np
 
 
 class MolGraph:
-    def __init__(self, pymol) -> None:
+    def __init__(self, pymol, *, hydrogens: bool = False) -> None:
         ob, _pybel = _ob_mod()
         self.pymol = pymol
         self.vertex: dict[int, str] = {}
         self.neighbors: dict[int, set[int]] = defaultdict(set)
         for a in pymol.atoms:
-            if a.atomicnum == 1:
+            if a.atomicnum == 1 and not hydrogens:
                 continue
             i = a.OBAtom.GetIdx()
             self.vertex[i] = _pt().GetSymbol(a.atomicnum)

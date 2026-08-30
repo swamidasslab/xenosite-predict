@@ -78,14 +78,14 @@ def _patch_legacy_api(ob: Any) -> None:
 def _wrap_get_hyb(atom_cls: Any) -> None:
     """Match OpenBabel 2.4 ``GetHyb()`` on the 3.2 wheel.
 
-    2.4 left F/Cl/Br/I unhybridized (0). 3.x reports them as sp (1).
+    2.4 left H/F/Cl/Br/I unhybridized (0). 3.x reports them as sp (1).
     2.4 counted aromatic sulfur as sp3; 3.x types it ``S2`` / hyb 2.
     """
     native = atom_cls.GetHyb
 
     def GetHyb(self) -> int:
         z = int(self.GetAtomicNum())
-        if z in _HALOGEN_Z:
+        if z == 1 or z in _HALOGEN_Z:
             return 0
         if z == 16 and self.IsAromatic():
             return 3
