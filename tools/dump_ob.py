@@ -23,6 +23,7 @@ HELPER = ROOT / "tools" / "py2-dump" / "dump_ob_features.py"
 DEFAULT_SRC = ROOT.parent.parent / "xenosite-legacy" / "src"
 MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
 GOLDEN = ROOT / "tests" / "fixtures" / "golden_smiles.json"
+DESCRIPTOR = ROOT / "tests" / "fixtures" / "descriptor_smiles.json"
 # Extra molecules not in the golden score fixture (ndealk C–N off-by-1 case).
 EXTRA_SMILES = ("CCCC1CCCNC1C=O",)
 ASPIRIN_OUT = ROOT / "tests" / "fixtures" / "ob_dump_aspirin.json"
@@ -54,18 +55,26 @@ def ensure_dump_image() -> None:
 
 
 def collect_dump_smiles() -> list[str]:
-    """Golden unique SMILES plus extras that historically drifted."""
+    """Golden unique SMILES, extras, then the 100–200 descriptor suite."""
     out: list[str] = []
     seen: set[str] = set()
+
+    def add(s: str) -> None:
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+
     if GOLDEN.is_file():
         for row in json.loads(GOLDEN.read_text(encoding="utf-8")):
-            s = row.get("smiles")
-            if s and s not in seen:
-                seen.add(s)
-                out.append(s)
+            add(row.get("smiles") or "")
     for s in EXTRA_SMILES:
-        if s not in seen:
-            out.append(s)
+        add(s)
+    if DESCRIPTOR.is_file():
+        payload = json.loads(DESCRIPTOR.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            payload = payload.get("smiles") or payload.get("molecules") or []
+        for s in payload:
+            add(str(s))
     return out
 
 

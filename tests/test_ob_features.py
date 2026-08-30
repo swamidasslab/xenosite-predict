@@ -33,6 +33,21 @@ for _mol in load_ob_dumps():
             _CASES.append((smi, _model))
 
 
+def test_descriptor_smiles_suite_size():
+    from tests.support import load_descriptor_smiles
+    from xenosite.predict.molecule import parse_smiles
+
+    smiles = load_descriptor_smiles()
+    if not smiles:
+        pytest.skip("missing tests/fixtures/descriptor_smiles.json")
+    assert 100 <= len(smiles) <= 200
+    assert len(set(smiles)) == len(smiles)
+    assert "CC(=O)Oc1ccccc1C(=O)O" in smiles
+    for s in smiles:
+        _, mol = parse_smiles(s)
+        assert mol.atoms.num >= 2
+
+
 def test_ob_dump_suite_covers_golden_and_extra():
     dumps = load_ob_dumps()
     if not dumps:

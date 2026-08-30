@@ -18,7 +18,7 @@ help:
 	@echo "test                unit tests, Docker-free (-m 'not live')"
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4)"
-	@echo "dump-ob-features    OpenBabel feature dump via that image (SMILES= MODEL=)"
+	@echo "dump-ob             dump 100–200 descriptor SMILES via py2 OpenBabel image"
 	@echo "legacy-test-api     build/run derived test image"
 	@echo "legacy-test-api-down"
 

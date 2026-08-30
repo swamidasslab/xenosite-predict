@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = Path(__file__).resolve().parent / "fixtures" / "golden_smiles.json"
+DESCRIPTOR_SMILES = Path(__file__).resolve().parent / "fixtures" / "descriptor_smiles.json"
 OB_ASPIRIN = Path(__file__).resolve().parent / "fixtures" / "ob_dump_aspirin.json"
 OB_DUMPS = Path(__file__).resolve().parent / "fixtures" / "ob_dumps.json"
 MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
@@ -56,6 +57,15 @@ def onnx_io_dims(model: str, head: str) -> tuple[int, int] | None:
     if n_in is None:
         return None
     return int(n_in), int(n_out)
+
+
+def load_descriptor_smiles() -> list[str]:
+    if not DESCRIPTOR_SMILES.is_file():
+        return []
+    payload = json.loads(DESCRIPTOR_SMILES.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        payload = payload.get("smiles") or payload.get("molecules") or []
+    return [str(s) for s in payload if s]
 
 
 def load_golden():
