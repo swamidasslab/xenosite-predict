@@ -23,3 +23,7 @@ class WeightsNotFound(XenositePredictError, FileNotFoundError):
 
 class ModelNotAvailable(XenositePredictError, RuntimeError):
     """The model is registered but blocked (MOPAC, missing convert, pipeline)."""
+
+
+class OpenBabelNotAvailable(XenositePredictError, RuntimeError):
+    """OpenBabel 2.4 is not installed; internal descriptors cannot run."""
