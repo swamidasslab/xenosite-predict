@@ -127,25 +127,10 @@ def from_rdkit_mol(rdkit_mol) -> Any:
     sdf = Chem.MolToMolBlock(rdkit_mol)
     _ob, pybel = load()
     mol = pybel.readstring("mol", sdf)
-    _assign_charges(mol)
+    # pybel assigns Gasteiger on read (same as OpenBabel 2.4 / the dump).
+    # OBChargeModel.FindType("gasteiger") in 3.2 overwrites those and
+    # equalizes nitro oxygens (~0.45 off the dump). Do not recompute.
     return mol
-
-
-def _assign_charges(pymol) -> None:
-    obmol = pymol.OBMol
-    if hasattr(obmol, "AssignPartialCharges"):
-        try:
-            obmol.AssignPartialCharges()
-            return
-        except Exception:
-            pass
-    ob, _pybel = load()
-    finder = getattr(getattr(ob, "OBChargeModel", None), "FindType", None)
-    if finder is None:
-        return
-    model = finder("gasteiger")
-    if model is not None:
-        model.ComputeCharges(obmol)
 
 
 def ob_idx_to_rdkit(ob_idx: int) -> int:
