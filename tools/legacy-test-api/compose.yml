@@ -1,0 +1,12 @@
+services:
+  legacy-test-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8099:8099"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib2; urllib2.urlopen('http://127.0.0.1:8099/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
