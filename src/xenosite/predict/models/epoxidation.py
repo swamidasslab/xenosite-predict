@@ -30,38 +30,35 @@ class EpoxidationRunner(BaseRunner):
         mol_names = load_names("epoxidation", "mol")
 
         scores_by_bond: dict[frozenset[int], list[float]] = {}
-        last_rows = None
-        last_scores = None
+        mol_scores: list[float] = []
         for ordering in (True, False):
             rows = bond_rows(mol, original_atom_ordering=ordering)
-            last_rows = rows
-            x, used = matrix_from_rows(rows, bond_names)
+            x, _used = matrix_from_rows(rows, bond_names)
             if x.size == 0:
                 continue
             y = backend.run_head(self.name, "bond", x).reshape(-1)
-            last_scores = y
             for row, s in zip(rows, y):
                 key = frozenset(row["_atoms"])  # type: ignore[arg-type]
                 scores_by_bond.setdefault(key, []).append(float(s))
+            if mol_names:
+                mx = topn_site_features(
+                    y,
+                    rows,
+                    mol_names,
+                    score_suffix="__AtomScore",
+                )
+                mol_scores.append(
+                    float(backend.run_head(self.name, "mol", mx).reshape(-1)[0])
+                )
 
         averaged = {k: float(np.mean(v)) for k, v in scores_by_bond.items()}
-        current = [tuple(sorted(k)) for k in averaged]
-        # reorder_by_bond wants parallel scores
         keys = list(averaged)
         pred = [averaged[k] for k in keys]
         bond_pred = reorder_by_bond(pred, keys, molecule.bonds.idx, fill=0.0)
 
-        mol_score = 0.0
-        if mol_names and last_rows is not None and last_scores is not None:
-            mx = topn_site_features(
-                last_scores,
-                last_rows,
-                mol_names,
-                score_suffix="__AtomScore",
-            )
-            mol_score = float(backend.run_head(self.name, "mol", mx).reshape(-1)[0])
-        elif last_scores is not None and len(last_scores):
-            mol_score = float(np.max(list(averaged.values())))
+        mol_score = float(np.mean(mol_scores)) if mol_scores else 0.0
+        if not mol_scores and averaged:
+            mol_score = float(max(averaged.values()))
 
         append_mol_bond(
             molecule, model=self.name, version=self.version, mol=mol_score, bond=bond_pred

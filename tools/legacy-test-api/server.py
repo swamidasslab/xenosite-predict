@@ -174,9 +174,26 @@ def _serialize(obj):
     return str(obj)
 
 
+def _rdkit_site_dict(site):
+    """Convert OpenBabel 1-based atom indices in site/bond maps to 0-based RDKit."""
+    if not isinstance(site, dict):
+        return site
+    out = {}
+    for k, v in site.items():
+        if isinstance(k, frozenset):
+            out[frozenset(int(x) - 1 for x in k)] = v
+        else:
+            out[k] = v
+    return out
+
+
 def predict(model, smiles):
     P = _load_predictor(model)
     raw = P.predict(smiles) if hasattr(P, "predict") else P(smiles)
+    if isinstance(raw, dict):
+        for key in ("site", "bond"):
+            if key in raw:
+                raw[key] = _rdkit_site_dict(raw[key])
     return _serialize(raw)
 
 
