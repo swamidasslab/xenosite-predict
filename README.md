@@ -92,7 +92,9 @@ make legacy-test-api-down
 
 Convert deps: `uv run --group convert`. Runtime deps: rdkit, numpy, onnxruntime, httpx, pydantic. No TensorFlow, pandas, OpenBabel, or pickle at inference.
 
-Populate weights from `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api`, or the sibling tarball `xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz`.
+Populate pickles from `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api` (needs registry login) or the sibling tarball `xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz`. `make convert-onnx` unpickles in a public **python:2.7-slim** dump image (`tools/py2-dump/`), not the WashU API image.
+
+RDKit features are **not** assumed equal to OpenBabel. Live `test_rdkit_vs_ob` is the gate; frontend golden score tests xfail until that passes. Random-vector tests prove ONNX == the pickled numpy NN only.
 
 ## Layout
 

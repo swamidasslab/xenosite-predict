@@ -28,7 +28,14 @@ def load_names(model: str, head: str) -> Optional[list[str]]:
 
 
 def select_columns(row: dict[str, float], names: list[str], *, fill: float = 0.0) -> np.ndarray:
-    return np.asarray([float(row.get(n, fill)) for n in names], dtype=np.float64)
+    vals = []
+    for n in names:
+        v = row.get(n, fill)
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            vals.append(fill)
+    return np.asarray(vals, dtype=np.float64)
 
 
 def matrix_from_rows(
@@ -42,9 +49,10 @@ def matrix_from_rows(
         seen = set()
         for row in rows:
             for k in row:
-                if k not in seen:
-                    seen.add(k)
-                    keys.append(k)
+                if k.startswith("_") or k in seen:
+                    continue
+                seen.add(k)
+                keys.append(k)
         names = keys
     mat = np.stack([select_columns(r, names, fill=fill) for r in rows], axis=0)
     return mat, names

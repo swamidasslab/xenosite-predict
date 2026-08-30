@@ -36,8 +36,9 @@ def test_topology_aspirin():
     assert all(i >= 0 for pair in molecule.bonds.idx for i in pair)
 
 
-def test_append_requires_backend(monkeypatch):
+def test_append_requires_backend(tmp_path, monkeypatch):
     from xenosite.predict.errors import BackendNotConfigured
 
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(BackendNotConfigured):
         predict("CCCCO", models=["epoxidation"], env={})

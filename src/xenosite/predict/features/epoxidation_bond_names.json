@@ -379,6 +379,5 @@
     "Atom2_Lone_Pair_Depth_3",
     "Atom1_Within_Epoxide",
     "Atom2_Within_Epoxide"
-  ],
-  "source": "BOND_TRAINING.tsv"
+  ]
 }

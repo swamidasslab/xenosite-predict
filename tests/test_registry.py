@@ -26,12 +26,23 @@ def test_unknown_model_predict(monkeypatch):
         predict("CCCCO", models=["not-a-model"], backend=be)
 
 
-def test_list_models_without_backend():
+def test_list_models_without_backend(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     rows = list_models(env={})
     names = {r["name"] for r in rows}
     assert "epoxidation" in names
     assert "bioactivation" in names
     assert all(r["available"] is False for r in rows)
+
+
+def test_list_models_local_onnx():
+    from tests.support import ROOT
+
+    rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(ROOT / "weights" / "onnx")})
+    by = {r["name"]: r for r in rows}
+    if (ROOT / "weights" / "onnx" / "epoxidation").exists():
+        assert by["epoxidation"]["available"] is True
+    assert by["bioactivation"]["available"] is False
 
 
 def test_picker_http_url():

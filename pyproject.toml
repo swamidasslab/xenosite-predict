@@ -36,6 +36,7 @@ exclude = [
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "msgpack>=1.0",
 ]
 convert = [
     "safetensors>=0.4",

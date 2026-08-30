@@ -5,6 +5,16 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8099:8099"
+    environment:
+      PYTHONPATH: /src
+      PORT: "8099"
+    volumes:
+      - ../../weights/legacy/sibling_libridass:/src/libridass:ro
+      - ../../weights/legacy/tarball/libridass/epoxidation1/models:/src/libridass/epoxidation1/models:ro
+      - ../../weights/legacy/tarball/libridass/quinone1/models:/src/libridass/quinone1/models:ro
+      - ../../weights/legacy/tarball/libridass/reactivity1/models:/src/libridass/reactivity1/models:ro
+      - ../../weights/legacy/tarball/libridass/ugt1/models:/src/libridass/ugt1/models:ro
+      - ../../weights/legacy/tarball/libridass/ndealk1/models:/src/libridass/ndealk1/models:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib2; urllib2.urlopen('http://127.0.0.1:8099/health')"]
       interval: 10s

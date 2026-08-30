@@ -21,6 +21,5 @@
     "Atom__Top1",
     "Atom__Top2",
     "Atom__Top3"
-  ],
-  "source": "molecule_training.tsv"
+  ]
 }

@@ -43,3 +43,20 @@ def test_topn_padding():
     assert vec.shape == (1, 4)
     assert abs(vec[0, 0] - 0.9) < 1e-9
     assert vec[0, 2] == 0.0  # padded
+
+
+def test_aspirin_bond_freeze():
+    """Freeze a few RDKit epoxidation columns so descriptor drift is visible."""
+    mol, _ = parse_smiles(ASPIRIN)
+    rows = bond_rows(mol, original_atom_ordering=True)
+    assert len(rows) == 13
+    # First heavy bond: carbonyl C=O of the ester in canonical order is unstable;
+    # freeze counts that are OpenBabel-independent (atom numbers, bond type flags).
+    singles = sum(r["BondDescriptor__Single"] for r in rows)
+    doubles = sum(r["BondDescriptor__Double"] for r in rows)
+    arom = sum(r["BondDescriptor__Aromatic"] for r in rows)
+    assert singles == 5.0
+    assert doubles == 2.0
+    assert arom == 6.0
+    assert rows[0]["Atom1_PT__Mass"] > 0
+    assert "MolDesc__TPSA" in rows[0]

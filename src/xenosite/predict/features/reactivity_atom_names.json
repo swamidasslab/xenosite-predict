@@ -208,11 +208,6 @@
     "NHydrogens__New_Topological",
     "HbondAcceptor__New_Topological",
     "HbondDonor__New_Topological",
-    "PartialCharge__New_Topological",
-    "MULTITARGET_Cyanide",
-    "MULTITARGET_DNA",
-    "MULTITARGET_GSH",
-    "MULTITARGET_Protein"
-  ],
-  "source": "ATOM_TRAINING.tsv"
+    "PartialCharge__New_Topological"
+  ]
 }

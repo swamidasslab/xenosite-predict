@@ -16,8 +16,12 @@ NDEALK_OFFBY = "CCCC1CCCNC1C=O"
 @pytest.mark.parametrize("model", ["quinone", "ugt", "ndealk", "isozyme", "reactivity"])
 def test_onnx_skips_or_runs(model):
     be = OnnxBackend(ROOT / "weights" / "onnx")
-    if onnx_weights_present("ndealk" if model == "isozyme" else model):
-        mol = predict(ASPIRIN, models=[model], backend=be)
+    key = "ndealk" if model == "isozyme" else model
+    if onnx_weights_present(key):
+        try:
+            mol = predict(ASPIRIN, models=[model], backend=be)
+        except WeightsNotFound as exc:
+            pytest.skip(str(exc))
         assert mol.results
     else:
         with pytest.raises((WeightsNotFound, ModelNotAvailable)):

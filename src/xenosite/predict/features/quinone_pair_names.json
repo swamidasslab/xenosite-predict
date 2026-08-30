@@ -4,6 +4,5 @@
     "Atom2_Pred",
     "AtomPair__Distance",
     "AtomPair__Distance_Is_Odd"
-  ],
-  "source": "atom_pair_training.tsv"
+  ]
 }

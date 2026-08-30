@@ -121,6 +121,8 @@ def bond_rows(
         row[prefix + "Double"] = float(t == Chem.rdchem.BondType.DOUBLE)
         row[prefix + "Triple"] = float(t == Chem.rdchem.BondType.TRIPLE)
         row[prefix + "Aromatic"] = float(b.GetIsAromatic())
+        _bond_neighbor_counts(mol, row, "Atom1_", i1, depth1)
+        _bond_neighbor_counts(mol, row, "Atom2_", i2, depth2)
         tid = assigned[bi]
         row[prefix + "NTopologicalEquivalent"] = float(n_eq[tid])
         row[prefix + "Possible_Site_of_N_Dealkylation"] = float(
@@ -235,6 +237,52 @@ def _atom_block(
                 for j in nbrs
             )
         )
+
+
+def _bond_neighbor_counts(
+    mol: rdchem.Mol,
+    row: dict,
+    label: str,
+    start: int,
+    depths: list[set[int]],
+) -> None:
+    """Count last-edge bond types on shortest paths to depth-1/2 neighbors.
+
+    Legacy OpenBabel: ``BN_{single,aromatic,double,triple}_{1,2}``.
+    """
+    parent: dict[int, int | None] = {start: None}
+    for d in range(1, min(3, len(depths))):
+        for j in depths[d]:
+            if j in parent:
+                continue
+            for nbr in mol.GetAtomWithIdx(j).GetNeighbors():
+                k = nbr.GetIdx()
+                if k in depths[d - 1] or k == start:
+                    parent[j] = k
+                    break
+    for depth in (1, 2):
+        nbrs = depths[depth] if depth < len(depths) else set()
+        single = aromatic = double = triple = 0
+        for j in nbrs:
+            p = parent.get(j)
+            if p is None:
+                continue
+            b = mol.GetBondBetweenAtoms(j, p)
+            if b is None:
+                continue
+            t = b.GetBondType()
+            if b.GetIsAromatic():
+                aromatic += 1
+            elif t == Chem.rdchem.BondType.SINGLE:
+                single += 1
+            elif t == Chem.rdchem.BondType.DOUBLE:
+                double += 1
+            elif t == Chem.rdchem.BondType.TRIPLE:
+                triple += 1
+        row[f"{label}BN_single_{depth}"] = float(single)
+        row[f"{label}BN_aromatic_{depth}"] = float(aromatic)
+        row[f"{label}BN_double_{depth}"] = float(double)
+        row[f"{label}BN_triple_{depth}"] = float(triple)
 
 
 def _has_alpha_beta_unsat(atom: rdchem.Atom) -> bool:

@@ -94,9 +94,11 @@ Phase1 is TensorFlow `molecularNN`. Bioactivation enumerates metabolites then sc
 
 Feature **names/order** JSON may be committed next to Python modules after `make convert-onnx` reads TSV headers. Weight tensors stay in gitignored `weights/`.
 
-### Extract (2026-08-29)
+### Extract and ONNX convert (2026-08-29)
 
-- WashU registry `dockerreg01.accounts.ad.wustl.edu` did not resolve (no VPN/DNS). No `xenosite-legacy:api` image locally.
-- Fallback tarball `xenosite_legacy_data_trimmed.tgz` **does** contain pickles and TSV headers (epoxidation, quinone, reactivity, ugt, ndealk, phase1, bioactivation). Sibling `libridass` sources were copied for diffs only.
-- ONNX export still needs Python 2.7 unpickling inside the legacy image. **No ONNX files were written** (not faked).
-- Feature-name JSON for epo/quinone/reactivity/ugt was committed from those TSV headers. N-dealk has no training TSV in the tarball (`xval.tsv` only).
+- WashU registry requires `docker login dockerreg01.accounts.ad.wustl.edu` (DNS works; no basic auth in this environment).
+- Fallback tarball contains pickles. Conversion uses a public `python:2.7-slim` (linux/amd64) dump image plus sibling `NN/` sources (OpenOpt stubbed). **Not** the WashU image.
+- Numpy-NN heads converted and random-vector parity vs dumped py2 `model.output` holds at atol `1e-4` (typically `~1e-7` float32): epoxidation bond/mol, quinone atom/pair/mol, reactivity atom (AbutLayer) / mol, ugt atom, ndealk bond (10 isozyme heads).
+- **Phase1 / bioactivation:** TF1 `molecularNN` / metabolite pipeline — convert stops; no TF in the installed package. HTTP/legacy backends still apply.
+- Feature-name JSON committed from TSV headers. N-dealk has no training TSV in the tarball.
+- RDKit vs OpenBabel dumps still require the py2+OpenBabel test image. Until those live tests pass, SMILES/golden score tests are xfailed: ONNX==NN is proven; RDKit==OpenBabel is not.

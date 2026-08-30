@@ -390,6 +390,5 @@
     "Site_Meta_To_Cl",
     "Site_Meta_To_Br",
     "Site_Meta_To_I"
-  ],
-  "source": "atom_training.tsv"
+  ]
 }

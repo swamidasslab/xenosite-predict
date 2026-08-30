@@ -35,6 +35,5 @@
     "BondDescriptor__NTopologicalEquivalent__MIN",
     "BondDescriptor__Double__MIN",
     "BondDescriptor__Triple__MAX"
-  ],
-  "source": "MOLECULE_TRAINING.tsv"
+  ]
 }

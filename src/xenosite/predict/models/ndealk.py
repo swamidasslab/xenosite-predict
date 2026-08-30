@@ -49,6 +49,11 @@ class NdealkFamily(BaseRunner):
         mol = self.rdkit_mol(molecule)
         rows = bond_rows(mol, original_atom_ordering=True)
         names = load_names("ndealk", "bond")
+        if not names:
+            raise WeightsNotFound(
+                "ndealk feature-name JSON is missing (no training TSV in the tarball). "
+                "Cannot align RDKit columns to the 386-D ONNX input."
+            )
         x, _ = matrix_from_rows(rows, names)
         y = backend.run_head("ndealk", "bond", x)
         if y.ndim == 1:

@@ -81,25 +81,6 @@
     "PO_3",
     "NN_3",
     "PN_3",
-    "NS_3",
-    "PS_3",
-    "NP_3",
-    "PP_3",
-    "NX_3",
-    "PX_3",
-    "atoms",
-    "bonds",
-    "TPSA",
-    "logP",
-    "MW",
-    "MR",
-    "HBA1",
-    "HBA2",
-    "sbonds",
-    "dbonds",
-    "tbonds",
-    "abonds",
-    "EXP_SOM"
-  ],
-  "source": "DESC.tsv"
+    "NS_3"
+  ]
 }

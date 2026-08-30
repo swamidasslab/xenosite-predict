@@ -34,11 +34,6 @@
     "Protein_TopSite2",
     "Protein_TopSite3",
     "Protein_TopSite4",
-    "Protein_TopSite5",
-    "MULTITARGET_Cyanide",
-    "MULTITARGET_DNA",
-    "MULTITARGET_GSH",
-    "MULTITARGET_Protein"
-  ],
-  "source": "MOLECULE_TRAINING.tsv"
+    "Protein_TopSite5"
+  ]
 }
