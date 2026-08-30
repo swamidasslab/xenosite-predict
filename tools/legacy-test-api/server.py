@@ -1,19 +1,67 @@
+# -*- coding: utf-8 -*-
 """Tiny test-only HTTP API. Not production Flask.
 
 FROM xenosite-legacy:api. Endpoints:
 
 - GET  /health
 - POST /predict/<model>   JSON {smiles}
-- POST /nn/<model>/<head> JSON {x: [[...], ...]}  (patterns × features)
+- POST /nn/<model>/<head> JSON {x: [[...], ...]}  (patterns x features)
 - POST /features/<model>  JSON {smiles}  OpenBabel feature dump for RDKit compare
 """
-
-from __future__ import annotations
 
 # This file is copied into the py2 image; keep it 2/3 compatible where possible.
 import json
 import os
 import sys
+import types
+
+
+def _stub_confargparse():
+    sys.modules.setdefault("confargparse", types.ModuleType("confargparse"))
+
+
+def _stub_module(name, **attrs):
+    mod = types.ModuleType(name)
+    for key, val in attrs.items():
+        setattr(mod, key, val)
+    sys.modules[name] = mod
+    return mod
+
+
+def _stub_openopt():
+    """Stub openopt only when not installed (production image has the real package)."""
+    try:
+        __import__("openopt")
+        return
+    except ImportError:
+        pass
+
+    class OpenOptResult(object):
+        pass
+
+    class EmptyClass(object):
+        pass
+
+    _stub_module("result", OpenOptResult=OpenOptResult)
+    _stub_module("nonOptMisc", EmptyClass=EmptyClass)
+    mod = types.ModuleType("openopt")
+
+    class _Result(object):
+        xf = []
+
+    class NLP(object):
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def solve(self, *args, **kwargs):
+            return _Result()
+
+    mod.NLP = NLP
+    sys.modules["openopt"] = mod
+
+
+_stub_openopt()
+_stub_confargparse()
 
 try:
     from http.server import BaseHTTPRequestHandler, HTTPServer  # py3
@@ -22,7 +70,9 @@ except ImportError:
 
 
 def _json(handler, code, obj):
-    body = json.dumps(obj).encode("utf-8")
+    body = json.dumps(obj)
+    if not isinstance(body, bytes):
+        body = body.encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
@@ -42,9 +92,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
-        raw = self.rfile.read(length) if length else b"{}"
+        raw = self.rfile.read(length) if length else ""
+        if isinstance(raw, bytes):
+            text = raw.decode("utf-8") or "{}"
+        else:
+            text = raw or "{}"
         try:
-            payload = json.loads(raw.decode("utf-8") or "{}")
+            payload = json.loads(text)
         except ValueError:
             _json(self, 400, {"error": "invalid json"})
             return
@@ -66,31 +120,36 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _load_predictor(model):
-    from libridass import (
-        bioactivation1,
-        epoxidation1,
-        ndealk1,
-        quinone1,
-        reactivity1,
-        ugt1,
-    )
+    """Load one predictor only — avoid importing phase1/TF when serving epoxidation, etc."""
+    if model == "epoxidation":
+        from libridass.epoxidation1 import PyMolPredictor
 
-    mapping = {
-        "epoxidation": epoxidation1.PyMolPredictor,
-        "quinone": quinone1.PyMolPredictor,
-        "reactivity": reactivity1.PyMolPredictor,
-        "ugt": ugt1.PyMolPredictor,
-        "ndealk": ndealk1.PyMolPredictor,
-        "isozyme": ndealk1.PyMolPredictor,
-        "bioactivation": bioactivation1.PyMolPredictor,
-    }
+        return PyMolPredictor()
+    if model == "quinone":
+        from libridass.quinone1 import PyMolPredictor
+
+        return PyMolPredictor()
+    if model == "reactivity":
+        from libridass.reactivity1 import PyMolPredictor
+
+        return PyMolPredictor()
+    if model == "ugt":
+        from libridass.ugt1 import PyMolPredictor
+
+        return PyMolPredictor()
+    if model in ("ndealk", "isozyme"):
+        from libridass.ndealk1 import PyMolPredictor
+
+        return PyMolPredictor()
+    if model == "bioactivation":
+        from libridass.bioactivation1 import PyMolPredictor
+
+        return PyMolPredictor()
     if model == "phase1":
-        from libridass import bioactivation1 as b
+        from libridass.bioactivation1 import PyMolPredictor
 
-        return b.PyMolPredictor().BPD.APMP
-    if model not in mapping:
-        raise KeyError("unknown model %s" % model)
-    return mapping[model]()
+        return PyMolPredictor().BPD.APMP
+    raise KeyError("unknown model %s" % model)
 
 
 def _serialize(obj):
@@ -128,7 +187,7 @@ def nn(model, head, matrix):
 
     P = _load_predictor(model)
     net = _head_model(P, model, head)
-    X = mat(np.asarray(matrix, dtype=float)).T  # features × patterns
+    X = mat(np.asarray(matrix, dtype=float)).T  # features x patterns
     ids = [str(i) for i in range(X.shape[1])]
     pred = net.predict((ids, X))
     _id, Y = pred
