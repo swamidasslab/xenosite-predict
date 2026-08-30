@@ -156,7 +156,7 @@ class AtomTD:
 
     def add_ring_sizes(self) -> None:
         for size in range(3, 9):
-            if size == 8:
+            if size == 8 and not self.reduced_descriptor_set:
                 of_size = [r for r in self.rings if r.Size() >= size]
             else:
                 of_size = [r for r in self.rings if r.Size() == size]
@@ -168,7 +168,13 @@ class AtomTD:
         for row in self.rows:
             best = 0.0
             for size in range(3, 9):
-                if row.get(f"Ring{size}"):
+                n = float(row.get(f"Ring{size}") or 0)
+                if not n:
+                    continue
+                # Quinone binarizes ring counts before 1/size; reactivity does not.
+                if self.reduced_descriptor_set:
+                    best = max(best, 1.0 / (n * size))
+                else:
                     best = max(best, 1.0 / size)
             inv.append(best)
         self._set("MaxInvRingSize", inv)

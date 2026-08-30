@@ -1,8 +1,8 @@
 """Heavy-atom graph helpers used by BondTD/AtomTD (numpy, no pandas).
 
 Port of ``xenosite.finger.graph.UndirectedGraph`` methods BondTD actually calls:
-neighbors, pairwise_distance, shortest_path, DFS cycles.
-Vertex keys are 1-based OpenBabel atom indices.
+neighbors, pairwise_distance, shortest_path. Rings are OpenBabel SSSR
+(not DFS cycles). Vertex keys are 1-based OpenBabel atom indices.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import numpy as np
 class MolGraph:
     def __init__(self, pymol) -> None:
         ob, _pybel = _ob_mod()
+        self.pymol = pymol
         self.vertex: dict[int, str] = {}
         self.neighbors: dict[int, set[int]] = defaultdict(set)
         for a in pymol.atoms:
@@ -71,60 +72,16 @@ class MolGraph:
                 q.append(w)
         return []
 
-    def _dfs(self):
-        ignore: set[int] = set()
-        explored: set[int] = set()
-        visited: set[int] = set()
-        edge: set[frozenset[int]] = set()
-        vs = [v for v in sorted(self.vertex) if v not in ignore]
-        if not vs:
-            return
-        start = vs[0]
-        visited.add(start)
-        stack = [start]
-        while stack:
-            t = stack[-1]
-            skip = False
-            for n in sorted(self.neighbors[t]):
-                e = frozenset((t, n))
-                if e in edge:
-                    continue
-                if n in ignore:
-                    continue
-                if n not in visited and n not in explored:
-                    edge.add(e)
-                    visited.add(n)
-                    stack.append(n)
-                    yield (t, n, "t")
-                    skip = True
-                    break
-                if n in visited:
-                    edge.add(e)
-                    yield (t, n, "b")
-            if skip:
-                continue
-            explored.add(t)
-            stack.pop()
-
     def cycles(self) -> list[set[int]]:
-        walk = list(self._dfs())
-        back = [n for n, (_a, _b, t) in enumerate(walk) if t == "b"]
-        cycles: list[set[int]] = []
-        for bi in back:
-            sv = v = walk[bi][1]
-            member = {v}
-            i = bi
-            while True:
-                v = walk[i][0]
-                member.add(v)
-                while True:
-                    i -= 1
-                    if i < 0 or (walk[i][1] == v and walk[i][2] != "b"):
-                        break
-                if v == sv:
-                    break
-            cycles.append(member)
-        return cycles
+        """Smallest set of smallest rings (OpenBabel SSSR), heavy atoms only."""
+        obmol = self.pymol.OBMol
+        obmol.FindSSSR()
+        rings: list[set[int]] = []
+        for ring in obmol.GetSSSR():
+            member = {idx for idx in self.vertex if ring.IsInRing(idx)}
+            if member:
+                rings.append(member)
+        return rings
 
 
 _PT = None

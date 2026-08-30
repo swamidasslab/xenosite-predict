@@ -131,6 +131,15 @@ def test_nte_uses_sorted_symmetry_classes():
     assert "BondDescriptor__NTopologicalEquivalent" not in mm
 
 
+def test_sssr_naphthalene_is_two_hexagons():
+    from xenosite.predict.features._ob import from_rdkit_mol
+    from xenosite.predict.features.molgraph import MolGraph
+
+    mol, _ = parse_smiles("c1ccc2ccccc2c1")
+    sizes = sorted(len(r) for r in MolGraph(from_rdkit_mol(mol)).cycles())
+    assert sizes == [6, 6]
+
+
 def test_aspirin_bond_shape():
     from xenosite.predict.features import bond_rows
 
