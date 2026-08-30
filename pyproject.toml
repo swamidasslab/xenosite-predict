@@ -38,6 +38,7 @@ exclude = [
 [dependency-groups]
 dev = [
     "pytest>=8",
+    "pytest-xdist>=3.5",
     "msgpack>=1.0",
     "hypothesis>=6.100",
 ]

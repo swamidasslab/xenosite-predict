@@ -1,66 +1,63 @@
 """Golden frontend scores vs ONNX + internal OpenBabel features.
 
-Skip only when golden rows or ONNX weights are missing. Score mismatches
-stay xfail until dump parity is signed off; unexpected errors fail.
-Do not loosen atol.
+Each (model, molecule) row is its own test, including phase1. Missing golden
+rows, ONNX weights, or overlapping score fields fail. Do not loosen atol.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from xenosite.predict import WeightsNotFound, predict
+from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.compare import assert_equiv_results
-from xenosite.predict.errors import ModelNotAvailable
 
-from tests.support import ROOT, load_golden, onnx_weights_present
-
-MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme")
-
-_GOLDEN_XFAIL = pytest.mark.xfail(
-    reason="OpenBabel+ONNX scores not yet signed off vs golden frontend (atol 1e-4)",
-    strict=False,
-    raises=AssertionError,
+from tests.support import (
+    GOLDEN,
+    ROOT,
+    assert_golden_molecule,
+    load_golden,
+    onnx_weights_present,
 )
 
 
-@_GOLDEN_XFAIL
-@pytest.mark.parametrize("model", MODELS)
-def test_golden_scores_onnx(model):
-    rows = [g for g in load_golden() if g.get("model") == model]
-    if not rows:
-        pytest.skip(f"no golden rows for {model}")
-    key = "ndealk" if model == "isozyme" else model
-    if not onnx_weights_present(key):
-        pytest.skip(f"no ONNX for {key}")
-    be = OnnxBackend(ROOT / "weights" / "onnx")
-    g = rows[1] if len(rows) > 1 else rows[0]
-    try:
-        mol = predict(g["smiles"], models=[model], backend=be)
-    except (WeightsNotFound, ModelNotAvailable) as exc:
-        pytest.skip(str(exc))
-    golden = (g.get("results") or [{}])[0]
-    got = mol.results[0]
-    subset = {}
-    got_d = {
-        "mol": getattr(got, "mol", None),
-        "bond": getattr(got, "bond", None),
-        "atom": getattr(got, "atom", None),
-    }
-    for k in ("mol", "bond", "atom"):
-        if golden.get(k) is not None and got_d.get(k) is not None:
-            subset[k] = golden[k]
-    if not subset:
-        pytest.skip("no overlapping score fields")
-    assert_equiv_results(subset, {k: got_d[k] for k in subset})
+def _golden_params():
+    return [
+        pytest.param(
+            g["model"],
+            g["smiles"],
+            id=f"{g['model']}:{g.get('name') or g['smiles'][:24]}",
+        )
+        for g in load_golden()
+    ]
+
+
+def test_golden_fixture_present():
+    rows = load_golden()
+    assert GOLDEN.is_file(), f"missing {GOLDEN}"
+    assert rows, f"empty golden fixture {GOLDEN}"
+
+
+@pytest.mark.parametrize("model,smiles", _golden_params())
+def test_golden_scores_onnx(model, smiles):
+    rows = [
+        g
+        for g in load_golden()
+        if g.get("model") == model and g.get("smiles") == smiles
+    ]
+    assert rows, f"no golden row for {model} {smiles}"
+    g = rows[0]
+    mol = predict(smiles, models=[model], backend=OnnxBackend(ROOT / "weights" / "onnx"))
+    assert mol.results
+    assert_golden_molecule(mol, g)
 
 
 def test_quinone_null_pair_predicts():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
-    if not onnx_weights_present("quinone"):
-        pytest.skip("no quinone ONNX")
-    mol = predict("O=C(Br)C(F)(F)F", models=["quinone"], backend=be)
+    assert onnx_weights_present("quinone"), "no quinone ONNX under weights/onnx"
+    mol = predict(
+        "O=C(Br)C(F)(F)F",
+        models=["quinone"],
+        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+    )
     assert mol.results
     r = mol.results[0]
     assert hasattr(r, "pair")

@@ -18,6 +18,7 @@ def test_pair_idx_order_independent():
     assert_equiv_results(a, b)
 
 
-def test_golden_loader_optional():
+def test_golden_loader():
     data = load_golden()
     assert isinstance(data, list)
+    assert data, "missing tests/fixtures/golden_smiles.json"

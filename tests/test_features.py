@@ -1,7 +1,6 @@
 """Feature unit tests. OpenBabel is a runtime dependency (PyPI wheel)."""
 
 import numpy as np
-import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -118,12 +117,10 @@ def test_nte_uses_sorted_symmetry_classes():
     )
 
     dumps = load_ob_dumps()
-    if not dumps:
-        pytest.skip("missing OB dumps")
+    assert dumps, "missing tests/fixtures/ob_dumps.json.gz (git lfs pull, or run make dump-ob)"
     smi = "COCCc1ccc(OCC(O)CNC(C)C)cc1"
     dump = next((d for d in dumps if d.get("smiles") == smi), None)
-    if dump is None:
-        pytest.skip(f"no dump for {smi}")
+    assert dump is not None, f"no dump for {smi}"
     mol, _ = parse_smiles(smi)
     mm = compare_feature_dump_rows(
         rows_for_model("epoxidation", mol), dump["models"]["epoxidation"]
@@ -136,8 +133,9 @@ def test_sssr_naphthalene_is_two_hexagons():
     from xenosite.predict.features.molgraph import MolGraph
 
     mol, _ = parse_smiles("c1ccc2ccccc2c1")
-    sizes = sorted(len(r) for r in MolGraph(from_rdkit_mol(mol)).cycles())
-    assert sizes == [6, 6]
+    mg = MolGraph(from_rdkit_mol(mol))
+    assert sorted(len(r) for r in mg.cycles()) == [6, 6]
+    assert sorted(len(r) for r in mg.dfs_cycles()) == [6, 10]
 
 
 def test_aspirin_bond_shape():

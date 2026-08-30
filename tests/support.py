@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 from pathlib import Path
 
@@ -10,6 +11,8 @@ GOLDEN = Path(__file__).resolve().parent / "fixtures" / "golden_smiles.json"
 DESCRIPTOR_SMILES = Path(__file__).resolve().parent / "fixtures" / "descriptor_smiles.json"
 OB_ASPIRIN = Path(__file__).resolve().parent / "fixtures" / "ob_dump_aspirin.json"
 OB_DUMPS = Path(__file__).resolve().parent / "fixtures" / "ob_dumps.json"
+OB_DUMPS_GZ = OB_DUMPS.with_name(OB_DUMPS.name + ".gz")
+ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
 MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
 
 
@@ -74,12 +77,44 @@ def load_golden():
     return json.loads(GOLDEN.read_text(encoding="utf-8"))
 
 
-def load_ob_dumps() -> list[dict]:
-    """All OpenBabel dumps (golden SMILES + extras). Empty if the suite is missing."""
+def _load_json(path: Path):
+    probe = path.read_bytes()[:80]
+    if probe.startswith(b"version https://git-lfs.github.com/spec/v1"):
+        raise RuntimeError(
+            f"{path} is a Git LFS pointer; install git-lfs and run `git lfs pull`"
+        )
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            return json.load(fh)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _suite_path() -> Path | None:
     if OB_DUMPS.is_file():
-        data = json.loads(OB_DUMPS.read_text(encoding="utf-8"))
-        mols = data.get("molecules") if isinstance(data, dict) else data
-        return list(mols or [])
+        return OB_DUMPS
+    if OB_DUMPS_GZ.is_file():
+        return OB_DUMPS_GZ
+    return None
+
+
+def _suite_molecules() -> list[dict]:
+    path = _suite_path()
+    if path is None:
+        return []
+    data = _load_json(path)
+    mols = data.get("molecules") if isinstance(data, dict) else data
+    return list(mols or [])
+
+
+def load_ob_dumps() -> list[dict]:
+    """All OpenBabel dumps (golden SMILES + extras). Empty if the suite is missing.
+
+    Prefers uncompressed ``ob_dumps.json`` (fresh ``make dump-ob``), else the
+    committed ``ob_dumps.json.gz`` (Git LFS).
+    """
+    mols = _suite_molecules()
+    if mols:
+        return mols
     dump = load_ob_dump()
     return [dump] if dump else []
 
@@ -108,9 +143,14 @@ def rows_for_model(model: str, mol) -> list[dict]:
 
 def load_ob_dump(path: Path | None = None) -> dict:
     p = path or OB_ASPIRIN
-    if not p.is_file():
+    if p.is_file():
+        return _load_json(p)
+    if path is not None:
         return {}
-    return json.loads(p.read_text(encoding="utf-8"))
+    for mol in _suite_molecules():
+        if mol.get("smiles") == ASPIRIN_SMILES:
+            return mol
+    return {}
 
 
 def openbabel_available() -> bool:
@@ -141,10 +181,9 @@ def _row_for_ob_index(rows: list[dict], index: str) -> dict | None:
 def compare_feature_dump_rows(
     rows: list[dict], dump: dict, *, atol: float = 1e-4
 ) -> list[str]:
-    """Return unique overlapping column names that disagree (atol 1e-4, rtol=0).
+    """Return unique overlapping column names that disagree (rtol=0).
 
-    Aligns by OpenBabel index when possible. Unaligned dump rows are
-    ``_unaligned``. Do not loosen atol.
+    Default atol is 1e-4. Do not loosen columns to hide OpenBabel 3.x drift.
     """
     import numpy as np
 
@@ -176,6 +215,70 @@ def compare_feature_dump_rows(
     if unaligned:
         mismatches.append(f"_unaligned:{unaligned}")
     return mismatches
+
+
+def golden_name_by_smiles() -> dict[str, str]:
+    return {
+        g["smiles"]: str(g.get("name") or g["smiles"][:32])
+        for g in load_golden()
+        if g.get("smiles")
+    }
+
+
+def _jsonish(v):
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        return [_jsonish(x) for x in v]
+    if isinstance(v, str):
+        return v
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return float(v)
+    if hasattr(v, "tolist"):
+        return _jsonish(v.tolist())
+    if hasattr(v, "item"):
+        return _jsonish(v.item())
+    return v
+
+
+def score_fields(obj) -> dict:
+    """``mol`` / ``bond`` / ``atom`` from a Result or a golden-result dict."""
+    if isinstance(obj, dict):
+        return {k: obj.get(k) for k in ("mol", "bond", "atom")}
+    return {
+        "mol": getattr(obj, "mol", None),
+        "bond": getattr(obj, "bond", None),
+        "atom": getattr(obj, "atom", None),
+    }
+
+
+def assert_golden_molecule(got, golden_row) -> None:
+    """Compare every golden head to the matching ``got.results`` entry (atol 1e-4)."""
+    from xenosite.predict.compare import assert_equiv_results
+
+    golden_results = golden_row.get("results") or []
+    assert golden_results, "golden row has no results"
+    by_model = {r.model: r for r in got.results}
+    for g in golden_results:
+        name = g.get("model")
+        assert name in by_model, f"missing result {name}; got {sorted(by_model)}"
+        want = score_fields(g)
+        have = score_fields(by_model[name])
+        subset = {}
+        got_subset = {}
+        for k in ("mol", "bond", "atom"):
+            if want.get(k) is not None and have.get(k) is not None:
+                subset[k] = _jsonish(want[k])
+                got_subset[k] = _jsonish(have[k])
+        assert subset, (
+            f"no overlapping score fields for {name} "
+            f"(golden mol/bond/atom present: "
+            f"{ {k: want.get(k) is not None for k in ('mol', 'bond', 'atom')} }; "
+            f"got: { {k: have.get(k) is not None for k in ('mol', 'bond', 'atom')} })"
+        )
+        assert_equiv_results(subset, got_subset)
 
 
 # Back-compat alias used by older live-test drafts.

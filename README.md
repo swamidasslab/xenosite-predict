@@ -2,7 +2,7 @@
 
 Python 3.11+ RDKit + ONNX predictors for XenoSite. Dist name **xenosite-predict**; import **`xenosite.predict`** (PEP 420 namespace). This repo is nested under `xenosite-api` and gitignored there; origin is [github.com/swamidasslab/xenosite-predict](https://github.com/swamidasslab/xenosite-predict).
 
-Publish **sdist only** (no wheel): ONNX weights stay local (`weights/`, gitignored). OpenBabel comes from PyPI (`uv add openbabel`, currently 3.2.x wheels). `make test` is Docker-free. Feature tests run against the installed OpenBabel; dump-oracle comparisons skip only if `make dump-ob` has not been run. `make test-live` skips if Docker, the legacy image, or ONNX files are missing. Do not commit model weights, pickles, or extracted `libridass/` trees.
+Publish **sdist only** (no wheel): ONNX weights stay local (`weights/`, gitignored). OpenBabel comes from PyPI (`uv add openbabel`, currently 3.2.x wheels). `make test` is Docker-free. Feature tests compare the installed OpenBabel to the committed `tests/fixtures/ob_dumps.json.gz` (Git LFS). `make test-live` skips if Docker, the legacy image, or ONNX files are missing. Do not commit model weights, pickles, or extracted `libridass/` trees.
 
 This package is **not** wired into `xenosite-api` yet.
 
@@ -98,9 +98,9 @@ The dump image remains the OpenBabel **2.4.1** feature oracle. Host inference us
 
 Populate pickles from `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api` (needs registry login) or the sibling tarball `xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz`. `make convert-onnx` unpickles in a public **python:2.7-slim** dump image (`tools/py2-dump/`), not the WashU API image.
 
-The same dump image is the OpenBabel **feature oracle**: Debian Buster `python-openbabel` 2.4.1 from archive.debian.org, running as `/usr/bin/python` (the image's `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` feeds an RDKit molblock so 1-based OB indices align with 0-based RDKit, and dumps BondTD/AtomTD/UGT/Heuristic rows from sibling `xenosite-legacy/src`. Dumps are regenerable and gitignored.
+The same dump image is the OpenBabel **feature oracle**: Debian Buster `python-openbabel` 2.4.1 from archive.debian.org, running as `/usr/bin/python` (the image's `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` feeds an RDKit molblock so 1-based OB indices align with 0-based RDKit, and dumps BondTD/AtomTD/UGT/Heuristic rows from sibling `xenosite-legacy/src`. The gzipped suite `tests/fixtures/ob_dumps.json.gz` is committed via Git LFS so dump tests run without Docker; uncompressed JSON stays gitignored. Clone with Git LFS (`git lfs pull`).
 
-Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel internally (PyPI 3.2.x). `tests/test_ob_features.py` compares host OpenBabel 3.2 rows to 2.4 dumps at atol `1e-4` / rtol `0` (xfail on mismatch; skip only if dumps are missing). Frontend golden score tests stay xfailed until that comparison is clean. Hypothesis draws random finite matrices for ONNX heads (`test_onnx_random_matrix_finite`) and live `/nn` vs ONNX (`test_random_vector_nn`). The convert dump `tests/fixtures/random_vectors.json` is the Python-2 regression (ONNX == pickled numpy NN).
+Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel internally (PyPI 3.2.x). `tests/test_ob_features.py` compares host OpenBabel 3.2 rows to 2.4 dumps at atol `1e-4` / rtol `0`. Missing dumps fail. Hypothesis draws random finite matrices for ONNX heads (`test_onnx_random_matrix_finite`) and live `/nn` vs ONNX (`test_random_vector_nn`). The convert dump `tests/fixtures/random_vectors.json` is the Python-2 regression (ONNX == pickled numpy NN).
 
 ## Layout
 

@@ -1,14 +1,14 @@
-"""Epoxidation golden / ONNX tests — skip without weights. 13 example molecules."""
+"""Epoxidation parse and ONNX smoke tests. 13 example molecules."""
 
 from __future__ import annotations
 
 import pytest
 
-from xenosite.predict import WeightsNotFound, predict
+from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.molecule import parse_smiles
 
-from tests.support import ROOT, load_golden, onnx_weights_present
+from tests.support import ROOT, golden_name_by_smiles, onnx_weights_present
 
 EXAMPLE_SMILES = [
     r"C/C(=C\c1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
@@ -27,49 +27,24 @@ EXAMPLE_SMILES = [
 ]
 
 
-def test_epoxidation_parse_all_examples():
-    for smi in EXAMPLE_SMILES:
-        _, molecule = parse_smiles(smi)
-        assert molecule.atoms.num >= 2
+def _example_ids():
+    names = golden_name_by_smiles()
+    return [names.get(s) or s[:24] for s in EXAMPLE_SMILES]
 
 
-def test_epoxidation_onnx_skips_without_weights():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
-    if onnx_weights_present("epoxidation"):
-        mol = predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
-        assert mol.results
-        assert mol.results[0].model == "epoxidation"
-        assert len(mol.results[0].bond) == len(mol.bonds.idx)
-    else:
-        with pytest.raises(WeightsNotFound):
-            predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
+@pytest.mark.parametrize("smiles", EXAMPLE_SMILES, ids=_example_ids())
+def test_epoxidation_parse(smiles):
+    _, molecule = parse_smiles(smiles)
+    assert molecule.atoms.num >= 2
 
 
-def test_epoxidation_golden_if_present():
-    from xenosite.predict.compare import assert_equiv_results
-
-    rows = [g for g in load_golden() if g.get("model") == "epoxidation"]
-    if not rows:
-        pytest.skip("no golden scores committed yet (gather after ONNX convert)")
-    if not onnx_weights_present("epoxidation"):
-        pytest.skip("no epoxidation ONNX")
-    be = OnnxBackend(ROOT / "weights" / "onnx")
-    mismatches = []
-    for g in rows:
-        mol = predict(g["smiles"], models=["epoxidation"], backend=be)
-        golden = (g.get("results") or [{}])[0]
-        if golden.get("bond") is None:
-            continue
-        got = mol.results[0]
-        try:
-            assert_equiv_results(
-                {"bond": golden["bond"], "mol": golden["mol"]},
-                {"bond": list(got.bond), "mol": float(got.mol)},
-            )
-        except AssertionError as exc:
-            mismatches.append(f"{g.get('label') or g['smiles']}: {exc}")
-    if mismatches:
-        pytest.xfail(
-            "epoxidation OpenBabel+ONNX vs golden frontend scores "
-            "(atol 1e-4; see docs/vendored-diffs.md):\n" + "\n".join(mismatches[:8])
-        )
+def test_epoxidation_onnx_predicts():
+    assert onnx_weights_present("epoxidation"), "no epoxidation ONNX under weights/onnx"
+    mol = predict(
+        EXAMPLE_SMILES[1],
+        models=["epoxidation"],
+        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+    )
+    assert mol.results
+    assert mol.results[0].model == "epoxidation"
+    assert len(mol.results[0].bond) == len(mol.bonds.idx)

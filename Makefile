@@ -18,7 +18,7 @@ help:
 	@echo "test                unit tests, Docker-free (-m 'not live')"
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4)"
-	@echo "dump-ob             dump 100–200 descriptor SMILES via py2 OpenBabel image"
+	@echo "dump-ob             dump descriptor SMILES suite (json + gzip) via py2 OpenBabel image"
 	@echo "legacy-test-api     build/run derived test image"
 	@echo "legacy-test-api-down"
 
@@ -29,7 +29,7 @@ convert-onnx:
 	$(CONVERT) tools/convert_onnx.py --src weights/legacy --out weights/onnx $(if $(MODEL),--model $(MODEL),)
 
 test:
-	$(PYTEST) -m "not live"
+	$(PYTEST) -m "not live" -n auto
 
 test-live:
 	$(PYTEST) -m live

@@ -38,15 +38,15 @@ def _replay() -> dict:
     return {k: v for k, v in data.items() if isinstance(v, dict) and "x" in v and "y" in v}
 
 
-@pytest.mark.parametrize("key", sorted(_replay()) or ["_none"])
+def test_onnx_replay_fixture_present():
+    assert _replay(), "missing tests/fixtures/random_vectors.json (run make convert-onnx)"
+
+
+@pytest.mark.parametrize("key", sorted(_replay()))
 def test_onnx_matches_dumped_py2_nn(key):
-    replay = _replay()
-    if not replay:
-        pytest.skip("no dumped random-vector fixtures (run make convert-onnx)")
-    rec = replay[key]
+    rec = _replay()[key]
     model, head = key.split("_", 1)
-    if not onnx_weights_present(model):
-        pytest.skip(f"no ONNX for {model}")
+    assert onnx_weights_present(model), f"no ONNX for {model} under weights/onnx"
     be = OnnxBackend(ROOT / "weights" / "onnx")
     x = np.asarray(rec["x"], dtype=np.float32)
     y_ref = np.asarray(rec["y"], dtype=np.float64)
@@ -57,8 +57,7 @@ def test_onnx_matches_dumped_py2_nn(key):
 
 def test_epoxidation_bond_names_cover_matrix():
     names = load_names("epoxidation", "bond")
-    if not names:
-        pytest.skip("no committed epoxidation bond names")
+    assert names, "no committed epoxidation bond names"
     mol, _ = parse_smiles(ASPIRIN)
     rows = bond_rows(mol, original_atom_ordering=True)
     missing = [n for n in names if n not in rows[0]]
@@ -67,27 +66,17 @@ def test_epoxidation_bond_names_cover_matrix():
     assert x.shape == (len(rows), len(names))
 
 
-def _onnx_head_params():
-    heads = list_onnx_heads()
-    if heads:
-        return heads
-    return [
-        pytest.param(
-            "epoxidation",
-            "bond",
-            marks=pytest.mark.skip(reason="no ONNX weights"),
-        )
-    ]
+def test_onnx_heads_present():
+    assert list_onnx_heads(), "no ONNX weights under weights/onnx"
 
 
-@pytest.mark.parametrize("model,head", _onnx_head_params())
+@pytest.mark.parametrize("model,head", list_onnx_heads())
 @settings(max_examples=8, deadline=None)
 @given(data=st.data())
 def test_onnx_random_matrix_finite(model, head, data):
     """Random finite inputs of the declared feature width stay finite."""
     dims = onnx_io_dims(model, head)
-    if dims is None:
-        pytest.skip(f"no I/O dims for {model}/{head}")
+    assert dims is not None, f"no I/O dims for {model}/{head}"
     n_in, n_out = dims
     x = data.draw(feature_matrix(n_in))
     be = OnnxBackend(ROOT / "weights" / "onnx")
