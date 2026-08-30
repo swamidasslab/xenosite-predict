@@ -1,6 +1,9 @@
 """Feature unit tests. Descriptor calls skip when OpenBabel 2.4 is missing."""
 
+import numpy as np
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from xenosite.predict.compare import scores_close
 from xenosite.predict.features.two_stage import topn_site_features
@@ -56,6 +59,29 @@ def test_topn_padding():
     assert vec.shape == (1, 4)
     assert abs(vec[0, 0] - 0.9) < 1e-9
     assert vec[0, 2] == 0.0
+
+
+@given(
+    scores=st.lists(
+        st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
+        min_size=0,
+        max_size=12,
+    ),
+    topn=st.integers(min_value=1, max_value=6),
+)
+def test_topn_properties(scores, topn):
+    """Top-1 is the max site score; extra Top-k slots pad with 0."""
+    names = [f"Top{k}__AtomScore" for k in range(1, topn + 1)]
+    rows = [{"foo": float(i)} for i in range(len(scores))]
+    vec = topn_site_features(scores, rows, names)
+    assert vec.shape == (1, topn)
+    assert np.all(np.isfinite(vec))
+    if scores:
+        assert vec[0, 0] == max(scores)
+    else:
+        assert vec[0, 0] == 0.0
+    if topn > len(scores):
+        assert vec[0, len(scores)] == 0.0
 
 
 @need_ob

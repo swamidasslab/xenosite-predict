@@ -104,7 +104,7 @@ Populate pickles from `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-lega
 
 The same dump image is the OpenBabel **feature oracle**: Debian Buster `python-openbabel` 2.4.1 from archive.debian.org, running as `/usr/bin/python` (the image's `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` feeds an RDKit molblock so 1-based OB indices align with 0-based RDKit, and dumps BondTD/AtomTD/UGT/Heuristic rows from sibling `xenosite-legacy/src`. Dumps are regenerable and gitignored.
 
-Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel 2.4 internally. `tests/test_ob_features.py` compares host OpenBabel rows to those dumps at atol `1e-4` / rtol `0` (skip without OB or dumps). Frontend golden score tests stay xfailed until that comparison is clean and ONNX is fed from those rows. Random-vector tests prove ONNX == the pickled numpy NN only.
+Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel 2.4 internally. `tests/test_ob_features.py` compares host OpenBabel rows to those dumps at atol `1e-4` / rtol `0` (skip without OB or dumps). Frontend golden score tests stay xfailed until that comparison is clean and ONNX is fed from those rows. Hypothesis draws random finite matrices for ONNX heads (`test_onnx_random_matrix_finite`) and live `/nn` vs ONNX (`test_random_vector_nn`). The convert dump `tests/fixtures/random_vectors.json` is the Python-2 regression (ONNX == pickled numpy NN).
 
 ## Layout
 
