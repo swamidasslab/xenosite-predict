@@ -14,8 +14,9 @@ This host script:
 4. Writes committed feature-name JSON next to ``src/xenosite/predict/features/``
    when TSV headers are present.
 
-Do not fake ONNX files when dump/convert fails. Phase1/bioactivation are TF1
-molecularNN — stop and document if convert fails; do not add TF at runtime.
+Do not fake ONNX files when dump/convert fails. Phase1 TF1 molecularNN pickles
+convert on the host (no TensorFlow): ``tools/convert_phase1.py``. Bioactivation
+is a pipeline, not a single graph.
 """
 
 from __future__ import annotations
@@ -323,19 +324,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    wanted = [args.model] if args.model else list(MODELS)
+    wanted = [args.model] if args.model else [*MODELS, "phase1"]
     any_ok = False
+    tools_dir = Path(__file__).resolve().parent
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
     for name in wanted:
+        if name == "bioactivation":
+            print(
+                "bioactivation: metabolite pipeline — not a single ONNX graph.",
+                file=sys.stderr,
+            )
+            continue
+        if name == "phase1":
+            from convert_phase1 import convert as convert_phase1
+
+            if convert_phase1(args.src, args.out):
+                any_ok = True
+            continue
         spec = MODELS.get(name)
         if not spec:
             print(f"unknown model {name}", file=sys.stderr)
-            continue
-        if name in ("phase1", "bioactivation"):
-            print(
-                f"{name}: TF molecularNN / pipeline — stop if convert fails; "
-                "not converting on the host without a dump.",
-                file=sys.stderr,
-            )
             continue
         legacy = spec["legacy"]
         src_root = libridass_root()

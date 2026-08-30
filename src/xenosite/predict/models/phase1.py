@@ -1,7 +1,8 @@
-"""Phase I (molecularNN / TensorFlow). ONNX convert is a stop-if-fails path.
+"""Phase I (molecularNN / TensorFlow). Converted to ONNX; no TensorFlow at runtime.
 
-No TensorFlow at runtime. If convert did not produce ONNX, the ONNX backend
-raises WeightsNotFound. HTTP/legacy backends still work.
+Site and mol heads are windowed MLPs dumped from the TF1 pickles. SMILES
+inference still needs Bond_and_LonePair descriptors (not ported yet).
+HTTP/legacy backends still work.
 """
 
 from __future__ import annotations
@@ -48,15 +49,18 @@ def _snake(s: str) -> str:
 class Phase1Runner(BaseRunner):
     name = "phase1"
     version = "0"
-    onnx_heads = PHASE1_HEADS
+    onnx_heads = ("site", "mol")
 
     def from_onnx(self, molecule: Molecule, backend: OnnxBackend) -> None:
-        if not backend.has_head(self.name, "site"):
+        if not backend.has_head(self.name, "site") or not backend.has_head(self.name, "mol"):
             raise WeightsNotFound(
-                "phase1 ONNX missing (TF molecularNN convert is a stop-if-fails path). "
-                "Use HTTP/legacy backend or convert the graph; TF is not a runtime dep."
+                "phase1 ONNX missing (site + mol). Run `make convert-onnx MODEL=phase1`. "
+                "TF is not a runtime dep."
             )
-        raise WeightsNotFound("phase1 ONNX inference is not wired until convert succeeds")
+        raise WeightsNotFound(
+            "phase1 ONNX site/mol heads exist, but Bond_and_LonePair descriptors "
+            "are not ported yet, so SMILES inference cannot run."
+        )
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
         data = native.get("data") or native
@@ -85,4 +89,10 @@ class Phase1Runner(BaseRunner):
             )
 
 
-register_model("phase1", "0", factory=lambda: Phase1Runner(), heads=PHASE1_HEADS)
+register_model(
+    "phase1",
+    "0",
+    factory=lambda: Phase1Runner(),
+    heads=PHASE1_HEADS,
+    two_stage=True,
+)
