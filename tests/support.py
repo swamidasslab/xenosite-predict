@@ -13,7 +13,7 @@ OB_ASPIRIN = Path(__file__).resolve().parent / "fixtures" / "ob_dump_aspirin.jso
 OB_DUMPS = Path(__file__).resolve().parent / "fixtures" / "ob_dumps.json"
 OB_DUMPS_GZ = OB_DUMPS.with_name(OB_DUMPS.name + ".gz")
 ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
-MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
+MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1")
 
 
 def onnx_weights_present(model: str | None = None) -> bool:

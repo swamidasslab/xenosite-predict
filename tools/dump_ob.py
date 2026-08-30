@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Host driver: dump OpenBabel features via xenosite-predict-py2:dump.
 
-Uses Debian python-openbabel 2.4 from archive.debian.org inside the dump
-image. Does not need the WashU registry. Mounts sibling xenosite-legacy/src.
+Uses Debian python-openbabel 2.4 and python-rdkit from archive.debian.org
+inside the dump image. Does not need the WashU registry. Mounts sibling
+xenosite-legacy/src.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ HELPER = ROOT / "tools" / "py2-dump" / "dump_ob_features.py"
 # Nested repo sits at …/xenosite/xenosite-api/xenosite-predict; sibling ML tree is
 # …/xenosite/xenosite-legacy/src (libridass + xenosite.finger).
 DEFAULT_SRC = ROOT.parent.parent / "xenosite-legacy" / "src"
-MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
+MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1")
 GOLDEN = ROOT / "tests" / "fixtures" / "golden_smiles.json"
 DESCRIPTOR = ROOT / "tests" / "fixtures" / "descriptor_smiles.json"
 # Extra molecules not in the golden score fixture (ndealk C–N off-by-1 case).
@@ -32,6 +33,7 @@ EXTRA_SMILES = ("CCCC1CCCNC1C=O",)
 ASPIRIN_OUT = ROOT / "tests" / "fixtures" / "ob_dump_aspirin.json"
 SUITE_OUT = ROOT / "tests" / "fixtures" / "ob_dumps.json"
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
+DEFAULT_CHUNK = 25
 
 
 def ensure_dump_image() -> None:
@@ -79,6 +81,128 @@ def collect_dump_smiles() -> list[str]:
         for s in payload:
             add(str(s))
     return out
+
+
+def _lfs_pointer(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    return path.read_bytes()[:80].startswith(b"version https://git-lfs.github.com/spec/v1")
+
+
+def _model_complete(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    cols = payload.get("columns")
+    rows = payload.get("rows")
+    return isinstance(cols, list) and isinstance(rows, list) and len(cols) > 0
+
+
+def _index_molecules(molecules: list[dict]) -> dict[str, dict]:
+    by: dict[str, dict] = {}
+    for rec in molecules:
+        for key in (rec.get("smiles"), rec.get("input_smiles")):
+            if key:
+                by[str(key)] = rec
+    return by
+
+
+def load_existing_suite(dest: Path) -> list[dict]:
+    """Uncompressed JSON if present, else gzip. LFS pointers count as missing."""
+    gz = dest.with_name(dest.name + ".gz")
+    path: Path | None = None
+    if dest.is_file() and not _lfs_pointer(dest):
+        path = dest
+    elif gz.is_file() and not _lfs_pointer(gz):
+        path = gz
+    if path is None:
+        return []
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            data = json.load(fh)
+    else:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    mols = data.get("molecules") if isinstance(data, dict) else data
+    return list(mols or [])
+
+
+def write_suite(dest: Path, molecules: list[dict]) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps({"molecules": molecules})
+    tmp = dest.with_name(dest.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(dest)
+    gz = dest.with_name(dest.name + ".gz")
+    gztmp = Path(str(gz) + ".tmp")
+    with gzip.open(gztmp, "wt", encoding="utf-8") as fh:
+        fh.write(text)
+    gztmp.replace(gz)
+    aspirin = next((m for m in molecules if m.get("smiles") == ASPIRIN), None)
+    if aspirin is not None:
+        ASPIRIN_OUT.write_text(json.dumps(aspirin, indent=2) + "\n", encoding="utf-8")
+
+
+def merge_dumped(molecules: list[dict], dumped: list[dict]) -> list[dict]:
+    """Update existing records in place; append molecules the suite did not have."""
+    by = _index_molecules(molecules)
+    for fresh in dumped:
+        smi = str(fresh.get("smiles") or "")
+        rec = by.get(smi) or by.get(str(fresh.get("input_smiles") or ""))
+        models = fresh.get("models") or {}
+        if rec is None:
+            rec = {
+                "smiles": fresh.get("smiles"),
+                "input_smiles": fresh.get("input_smiles") or fresh.get("smiles"),
+                "via_sdf": fresh.get("via_sdf", True),
+                "models": {},
+            }
+            molecules.append(rec)
+            for key in (rec.get("smiles"), rec.get("input_smiles")):
+                if key:
+                    by[str(key)] = rec
+        rec.setdefault("models", {})
+        rec["models"].update(models)
+        if "via_sdf" in fresh:
+            rec["via_sdf"] = fresh["via_sdf"]
+    return molecules
+
+
+def plan_jobs(
+    smiles_list: list[str],
+    molecules: list[dict],
+    wanted: tuple[str, ...] | list[str],
+    *,
+    force: bool,
+) -> list[dict]:
+    """Jobs for molecule/model pairs the suite does not already have."""
+    by = _index_molecules(molecules)
+    jobs: list[dict] = []
+    for smi in smiles_list:
+        rec = by.get(smi)
+        sdf_text = None
+        canonical = smi
+        if rec is None:
+            canonical, sdf_text = _rdkit_sdf(smi)
+            rec = by.get(canonical)
+        else:
+            canonical = rec.get("smiles") or smi
+        have = (rec or {}).get("models") or {}
+        if force:
+            missing = list(wanted)
+        else:
+            missing = [m for m in wanted if not _model_complete(have.get(m))]
+        if not missing:
+            continue
+        if sdf_text is None:
+            canonical, sdf_text = _rdkit_sdf(smi)
+        jobs.append(
+            {
+                "smiles": canonical,
+                "input_smiles": smi,
+                "sdf_text": sdf_text,
+                "models": missing,
+            }
+        )
+    return jobs
 
 
 def _rdkit_sdf(smiles: str) -> tuple[str, str]:
@@ -145,24 +269,50 @@ def dump_one(smiles: str, model: str, src: Path, *, sdf_text: str | None = None)
     return json.loads(lines[-1])
 
 
-def dump_suite(smiles_list: list[str], src: Path) -> list[dict]:
-    """Dump every model for each SMILES in one container (RDKit molblock SDFs)."""
+def dump_batch(jobs: list[dict], src: Path) -> tuple[list[dict], list[dict], bool]:
+    """Dump the given jobs in one container. Each job may list a subset of models.
+
+    The third return value is True if the container was interrupted; partial
+    ``out.json`` is still returned so the host can checkpoint.
+    """
+    if not jobs:
+        return [], [], False
     ensure_dump_image()
     td = tempfile.mkdtemp(prefix="ob-dump-")
+    outp = Path(td) / "out.json"
+
+    def _read_out() -> tuple[list[dict], list[dict]]:
+        if not outp.is_file():
+            return [], []
+        data = json.loads(outp.read_text(encoding="utf-8"))
+        errors = data.get("errors") or []
+        if errors:
+            detail = "\n".join(
+                f"  {e.get('smiles')}: {e.get('error')}" for e in errors[:40]
+            )
+            print(
+                f"batch dump failed for {len(errors)} molecule(s):\n{detail}",
+                file=sys.stderr,
+            )
+        return list(data.get("molecules") or []), errors
+
     try:
         manifest = []
-        for i, smi in enumerate(smiles_list):
-            canonical, sdf_text = _rdkit_sdf(smi)
+        for i, job in enumerate(jobs):
             sdf_name = f"{i:03d}.sdf"
-            (Path(td) / sdf_name).write_text(sdf_text)
+            (Path(td) / sdf_name).write_text(job["sdf_text"])
             manifest.append(
                 {
-                    "smiles": canonical,
-                    "input_smiles": smi,
+                    "smiles": job["smiles"],
+                    "input_smiles": job.get("input_smiles") or job["smiles"],
                     "sdf": f"/work/batch/{sdf_name}",
+                    "models": list(job.get("models") or MODELS),
                 }
             )
-            print(f"queued {i + 1}/{len(smiles_list)} {canonical}", file=sys.stderr)
+            print(
+                f"queued {i + 1}/{len(jobs)} {job['smiles']} models={manifest[-1]['models']}",
+                file=sys.stderr,
+            )
         (Path(td) / "manifest.json").write_text(
             json.dumps(manifest), encoding="utf-8"
         )
@@ -191,25 +341,33 @@ def dump_suite(smiles_list: list[str], src: Path) -> list[dict]:
             "--out",
             "/work/batch/out.json",
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        err_tail = (proc.stderr or proc.stdout or "")[-4000:]
-        if proc.returncode != 0 and not (Path(td) / "out.json").is_file():
-            raise RuntimeError(f"batch dump failed (exit {proc.returncode}):\n{err_tail}")
-        if proc.stderr:
+        interrupted = False
+        proc = None
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+        except KeyboardInterrupt:
+            interrupted = True
+        if proc is not None and proc.stderr:
             sys.stderr.write(proc.stderr)
-        data = json.loads((Path(td) / "out.json").read_text(encoding="utf-8"))
-        errors = data.get("errors") or []
-        if errors:
-            detail = "\n".join(
-                f"  {e.get('smiles')}: {e.get('error')}" for e in errors[:40]
-            )
-            print(
-                f"batch dump failed for {len(errors)} molecule(s):\n{detail}",
-                file=sys.stderr,
-            )
-        return list(data.get("molecules") or []), errors
+        dumped, errors = _read_out()
+        if interrupted:
+            return dumped, errors, True
+        if not outp.is_file():
+            err_tail = ((proc.stderr if proc else "") or (proc.stdout if proc else "") or "")[
+                -4000:
+            ]
+            code = proc.returncode if proc is not None else "interrupt"
+            raise RuntimeError(f"batch dump failed (exit {code}):\n{err_tail}")
+        return dumped, errors, False
     finally:
         shutil.rmtree(td, ignore_errors=True)
+
+
+def dump_suite(smiles_list: list[str], src: Path) -> tuple[list[dict], list[dict]]:
+    """Dump every model for each SMILES (full redo; does not read the suite file)."""
+    jobs = plan_jobs(smiles_list, [], MODELS, force=True)
+    dumped, errors, _interrupted = dump_batch(jobs, src)
+    return dumped, errors
 
 
 def dump_molecule(smiles: str, src: Path, *, from_smiles: bool = False) -> dict:
@@ -231,13 +389,24 @@ def dump_molecule(smiles: str, src: Path, *, from_smiles: bool = False) -> dict:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--smiles", default=None, help="one SMILES; ignored with --suite")
-    p.add_argument("--model", default=None, help="one model; default all in one container")
+    p.add_argument("--model", default=None, help="one model; with --suite, only fill that model")
     p.add_argument("--src", type=Path, default=DEFAULT_SRC)
     p.add_argument("--out", type=Path, default=None)
     p.add_argument(
         "--suite",
         action="store_true",
-        help=f"Dump golden SMILES + extras to {SUITE_OUT.name} and {SUITE_OUT.name}.gz",
+        help=f"Fill {SUITE_OUT.name} incrementally (skip molecule/model pairs already dumped)",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-dump even when the suite already has that molecule/model",
+    )
+    p.add_argument(
+        "--chunk",
+        type=int,
+        default=DEFAULT_CHUNK,
+        help="Molecules per docker run before writing the suite (default %(default)s)",
     )
     p.add_argument(
         "--from-smiles",
@@ -250,27 +419,61 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.suite:
         smiles = collect_dump_smiles()
-        print(f"dumping suite n={len(smiles)} …", file=sys.stderr)
-        errors: list[dict] = []
-        if args.from_smiles:
-            molecules = [
-                dump_molecule(smi, args.src, from_smiles=True) for smi in smiles
-            ]
-        else:
-            molecules, errors = dump_suite(smiles, args.src)
-        suite = {"molecules": molecules}
         dest = args.out or SUITE_OUT
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        text = json.dumps(suite)
-        dest.write_text(text, encoding="utf-8")
-        gz = dest.with_name(dest.name + ".gz")
-        with gzip.open(gz, "wt", encoding="utf-8") as fh:
-            fh.write(text)
-        print("wrote", dest, "and", gz, "n=", len(molecules), file=sys.stderr)
-        aspirin = next((m for m in molecules if m["smiles"] == ASPIRIN), None)
-        if aspirin is not None:
-            ASPIRIN_OUT.write_text(json.dumps(aspirin, indent=2) + "\n", encoding="utf-8")
-            print("wrote", ASPIRIN_OUT, file=sys.stderr)
+        wanted: tuple[str, ...] = (args.model,) if args.model else MODELS
+        if args.model and args.model not in MODELS and args.model != "isozyme":
+            print(f"unknown model {args.model}", file=sys.stderr)
+            return 1
+        if args.model == "isozyme":
+            wanted = ("ndealk",)
+        molecules = load_existing_suite(dest)
+        jobs = plan_jobs(smiles, molecules, wanted, force=args.force)
+        print(
+            f"suite n={len(smiles)} have={len(molecules)} todo={len(jobs)} models={list(wanted)}",
+            file=sys.stderr,
+        )
+        if not jobs:
+            gz = dest.with_name(dest.name + ".gz")
+            need_write = (
+                bool(molecules)
+                and (
+                    not dest.is_file()
+                    or _lfs_pointer(dest)
+                    or not gz.is_file()
+                    or _lfs_pointer(gz)
+                )
+            )
+            if need_write:
+                write_suite(dest, molecules)
+                print("wrote", dest, "and", gz, "n=", len(molecules), file=sys.stderr)
+            else:
+                print("suite already complete", file=sys.stderr)
+            return 0
+        errors: list[dict] = []
+        chunk = max(1, args.chunk)
+        for i in range(0, len(jobs), chunk):
+            batch = jobs[i : i + chunk]
+            print(
+                f"dumping chunk {i // chunk + 1}/{(len(jobs) + chunk - 1) // chunk} "
+                f"({len(batch)} molecules) …",
+                file=sys.stderr,
+            )
+            dumped, batch_errors, interrupted = dump_batch(batch, args.src)
+            merge_dumped(molecules, dumped)
+            errors.extend(batch_errors)
+            write_suite(dest, molecules)
+            print(
+                "wrote",
+                dest,
+                "n=",
+                len(molecules),
+                "chunk_ok=",
+                len(dumped),
+                file=sys.stderr,
+            )
+            if interrupted:
+                print("interrupted; suite checkpointed", dest, file=sys.stderr)
+                return 1
         if errors:
             return 1
         return 0

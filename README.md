@@ -76,7 +76,7 @@ Per-model override: `predict(..., backends={("bioactivation", "0"): "http"})`.
 | `ugt` | `AtomResult` | Internal OpenBabel topological + mol descriptors. No MOPAC/SmartCYP on the inference path. |
 | `ndealk` | `BondResult` (HLM slice) | Same ONNX as isozyme. Check `CCCC1CCCNC1C=O` for off-by-1. |
 | `isozyme` | ten `BondResult` (`isozyme.3a4`, … `isozyme.hlm`) | Production Flask uses **ndealk1** for `metabolism1`, not the MOPAC metabolism predictor. |
-| `phase1` | five `AtomBondResult` | TF `molecularNN`. No TF at runtime; ONNX convert is stop-if-fails. |
+| `phase1` | five `AtomBondResult` | TF `molecularNN` converted to ONNX (`site` + `mol`). No TF at runtime. SMILES still needs Bond_and_LonePair features. |
 | `bioactivation` | `MolAtomResult` + metabolites | **Pipeline last** (enumeration + other models), not a single ONNX. |
 
 ## Makefile (tools are not in the sdist)
@@ -98,7 +98,7 @@ The dump image remains the OpenBabel **2.4.1** feature oracle. Host inference us
 
 Populate pickles from `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api` (needs registry login) or the sibling tarball `xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz`. `make convert-onnx` unpickles in a public **python:2.7-slim** dump image (`tools/py2-dump/`), not the WashU API image.
 
-The same dump image is the OpenBabel **feature oracle**: Debian Buster `python-openbabel` 2.4.1 from archive.debian.org, running as `/usr/bin/python` (the image's `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` feeds an RDKit molblock so 1-based OB indices align with 0-based RDKit, and dumps BondTD/AtomTD/UGT/Heuristic rows from sibling `xenosite-legacy/src`. The gzipped suite `tests/fixtures/ob_dumps.json.gz` is committed via Git LFS so dump tests run without Docker; uncompressed JSON stays gitignored. Clone with Git LFS (`git lfs pull`).
+The same dump image is the OpenBabel **feature oracle**: Debian Buster `python-openbabel` 2.4.1 and `python-rdkit` from archive.debian.org, running as `/usr/bin/python` (the image's `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` feeds an RDKit molblock so 1-based OB indices align with 0-based RDKit, and dumps BondTD/AtomTD/UGT/Heuristic/Bond_and_LonePair rows from sibling `xenosite-legacy/src`. It is **idempotent**: molecule/model pairs already in the suite are skipped, and the JSON is checkpointed after each chunk. The gzipped suite `tests/fixtures/ob_dumps.json.gz` is committed via Git LFS so dump tests run without Docker; uncompressed JSON stays gitignored. Clone with Git LFS (`git lfs pull`).
 
 Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel internally (PyPI 3.2.x). `tests/test_ob_features.py` compares host OpenBabel 3.2 rows to 2.4 dumps at atol `1e-4` / rtol `0`. Missing dumps fail. Hypothesis draws random finite matrices for ONNX heads (`test_onnx_random_matrix_finite`) and live `/nn` vs ONNX (`test_random_vector_nn`). The convert dump `tests/fixtures/random_vectors.json` is the Python-2 regression (ONNX == pickled numpy NN).
 

@@ -1,9 +1,9 @@
 # coding: utf-8
 """Dump OpenBabel feature rows from vendored libridass (Python 2.7 + pybel).
 
-Does not import libridass.utils / RDKit. Plant namespace packages so
-epoxidation1/quinone1/ugt1/ndealk1/reactivity1 __init__ files (which pull
-RDKit) are never executed.
+Does not import libridass.utils. Plant namespace packages so
+epoxidation1/quinone1/ugt1/ndealk1/reactivity1 __init__ files are never
+executed. Debian ``python-rdkit`` is available for Bond_and_LonePairTD.
 
 Usage (Debian /usr/bin/python inside xenosite-predict-py2:dump):
 
@@ -166,16 +166,80 @@ def _unordered_bond_key(ix):
     return "%d.%d.%d" % (moln, lo, hi)
 
 
+class _Phase1Options(object):
+    verbose = False
+    add_weight = False
+    several_target_columns = True
+    input_target = (
+        "StableOxygenation__UnstableOxygenation__Dehydrogenation__"
+        "Reduction__Hydrolysis"
+    )
+    mask_hydrogen = False
+    title = ""
+
+
+def _phase1_prep(mol):
+    """Match libridass.phase1.predictor.PyMolPredictor.read (add H, heavy then light)."""
+    import openbabel
+    import pybel
+
+    mol.removeh()
+    mol.addh()
+    mol.convertdbonds()
+    heavy = [x.idx for x in mol.atoms if not x.OBAtom.IsHydrogen()]
+    light = [x.idx for x in mol.atoms if x.OBAtom.IsHydrogen()]
+    mol.OBMol.RenumberAtoms(heavy + light)
+    openbabel.obErrorLog.SetOutputLevel(0)
+    mol = pybel.readstring("sdf", mol.write("sdf"))
+    openbabel.obErrorLog.SetOutputLevel(1)
+    return mol
+
+
+def dump_phase1(mol):
+    """Bond_and_LonePair + Possible_Sites into the same dump payload as other models."""
+    from topological_descriptors.bond_and_lone_pair import Bond_and_LonePairTD
+    from topological_descriptors.possible_site import Possible_Sites
+    import pandas as pd
+
+    mol = _phase1_prep(mol)
+    options = _Phase1Options()
+    B = Bond_and_LonePairTD(mol, options, molnum=1)
+    if B.broken:
+        raise ValueError("Bond_and_LonePairTD marked molecule broken")
+    B_desc = B.run_bond_level()
+    if B.broken or B_desc is None:
+        raise ValueError("Bond_and_LonePairTD failed run_bond_level")
+    PS = Possible_Sites(mol, options, molnum=1)
+    PS_desc = PS.run()
+    quinone = [
+        "Quinone_Dehydrogenation",
+        "Imine_Dehydrogenation",
+        "QuinoneImine_Dehydrogenation",
+        "QuinoneMethide_Dehydrogenation",
+        "ImineMethide_Dehydrogenation",
+    ]
+    ester = ["Ester_Hydrolysis", "PEster_Hydrolysis", "HalogenEster_Hydrolysis"]
+    PS_desc["Quinone_Dehydrogenation"] = PS_desc.apply(
+        lambda x: max(x[quinone]), axis=1
+    )
+    PS_desc["Ester_Hydrolysis"] = PS_desc.apply(lambda x: max(x[ester]), axis=1)
+    PS_desc = PS_desc.drop(
+        ["Atom1_Index", "Atom2_Index"] + quinone[1:] + ester[1:],
+        axis=1,
+    )
+    joined = pd.concat([B_desc, PS_desc], axis=1)
+    return df_to_dump(joined)
+
+
 def dump_ndealk(mol):
     from libridass.ndealk1.scripts import Heuristic_desc, bond_desc
+    import pandas as pd
 
     B = bond_desc.BondTD(mol)
     if B.broken:
         raise ValueError("BondTD marked molecule broken")
     B_desc = B.run_bond_level()
     H = Heuristic_desc.Heuristic(mol).run()
-    import pandas as pd
-
     # Heuristic index is begin/end (C–N forced C then N). BondTD is C–N or
     # min idx. Concat on raw index outer-joins and invents extra rows.
     H2 = H.copy()
@@ -195,6 +259,7 @@ DUMPERS = {
     "ugt": dump_ugt,
     "ndealk": dump_ndealk,
     "isozyme": dump_ndealk,
+    "phase1": dump_phase1,
 }
 
 
@@ -229,39 +294,33 @@ def main(argv=None):
     _stub_confargparse()
     plant_libridass(args.src)
 
-    def dump_all_models(mol):
-        if args.model not in ("all", "") and args.model not in DUMPERS:
-            raise SystemExit("unknown model %s" % args.model)
-        names = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk")
-        if args.model not in ("all", "", None) and args.model in DUMPERS:
-            names = (args.model,)
+    def dump_named_models(mol, names):
         models = {}
-        for name in names:
-            models[name] = DUMPERS[name](mol)
-        return models
-
-    if args.batch:
-        jobs = json.load(open(args.batch))
-        molecules = []
         errors = []
-        n = len(jobs)
-        for i, job in enumerate(jobs):
-            smi = job.get("smiles") or ""
-            sys.stderr.write("dumping %d/%d %s\n" % (i + 1, n, smi))
+        for name in names:
             try:
-                mol = read_pymol(smi, sdf_path=job.get("sdf") or None)
-                molecules.append(
-                    {
-                        "smiles": smi,
-                        "input_smiles": job.get("input_smiles") or smi,
-                        "via_sdf": bool(job.get("sdf")),
-                        "models": dump_all_models(mol),
-                    }
-                )
+                models[name] = DUMPERS[name](mol)
             except Exception as exc:
-                errors.append({"smiles": smi, "error": "%s: %s" % (type(exc).__name__, exc)})
-                sys.stderr.write("FAIL %s: %s\n" % (smi, exc))
-        payload = {"molecules": molecules, "errors": errors}
+                errors.append("%s: %s: %s" % (name, type(exc).__name__, exc))
+                sys.stderr.write("FAIL model %s: %s\n" % (name, exc))
+        return models, errors
+
+    def names_for_job(job):
+        requested = None
+        if job is not None:
+            requested = job.get("models")
+        if requested:
+            names = list(requested)
+        elif args.model not in ("all", "", None) and args.model in DUMPERS:
+            names = [args.model]
+        else:
+            names = ["epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1"]
+        unknown = [n for n in names if n not in DUMPERS]
+        if unknown:
+            raise SystemExit("unknown model %s" % unknown[0])
+        return names
+
+    def write_out(payload):
         text = json.dumps(payload)
         if args.out == "-":
             sys.stdout.write(text)
@@ -270,32 +329,53 @@ def main(argv=None):
             with open(args.out, "w") as fh:
                 fh.write(text)
                 fh.write("\n")
+
+    if args.batch:
+        jobs = json.load(open(args.batch))
+        molecules = []
+        errors = []
+        n = len(jobs)
+        for i, job in enumerate(jobs):
+            smi = job.get("smiles") or ""
+            sys.stderr.write("dumping %d/%d %s %s\n" % (i + 1, n, smi, job.get("models") or "all"))
+            try:
+                mol = read_pymol(smi, sdf_path=job.get("sdf") or None)
+                dumped, merr = dump_named_models(mol, names_for_job(job))
+                if dumped:
+                    molecules.append(
+                        {
+                            "smiles": smi,
+                            "input_smiles": job.get("input_smiles") or smi,
+                            "via_sdf": bool(job.get("sdf")),
+                            "models": dumped,
+                        }
+                    )
+                if merr:
+                    errors.append({"smiles": smi, "error": "; ".join(merr)})
+            except Exception as exc:
+                errors.append({"smiles": smi, "error": "%s: %s" % (type(exc).__name__, exc)})
+                sys.stderr.write("FAIL %s: %s\n" % (smi, exc))
+            write_out({"molecules": molecules, "errors": errors})
         return 1 if errors else 0
 
     mol = read_pymol(args.smiles, sdf_path=args.sdf or None)
+    dumped, merr = dump_named_models(mol, names_for_job(None))
+    if merr and args.model not in ("all", "", None):
+        raise SystemExit(merr[0])
     if args.model == "all":
         payload = {
             "smiles": args.smiles,
             "model": "all",
             "from_sdf": bool(args.sdf),
-            "models": dump_all_models(mol),
+            "models": dumped,
         }
     else:
-        if args.model not in DUMPERS:
-            raise SystemExit("unknown model %s" % args.model)
-        payload = DUMPERS[args.model](mol)
+        payload = dumped[args.model]
         payload["smiles"] = args.smiles
         payload["model"] = args.model
         payload["from_sdf"] = bool(args.sdf)
-    text = json.dumps(payload)
-    if args.out == "-":
-        sys.stdout.write(text)
-        sys.stdout.write("\n")
-    else:
-        with open(args.out, "w") as fh:
-            fh.write(text)
-            fh.write("\n")
-    return 0
+    write_out(payload)
+    return 1 if merr else 0
 
 
 if __name__ == "__main__":
