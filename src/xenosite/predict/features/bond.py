@@ -457,3 +457,34 @@ def bond_rows(rdkit_mol, *, original_atom_ordering: bool = True, **kwargs) -> li
     return BondTD(
         pymol, original_atom_ordering=original_atom_ordering, **kwargs
     ).run()
+
+
+def ndealk_bond_rows(rdkit_mol) -> list[dict]:
+    """ndealk1 Heuristic + BondTD (``BondDesc__`` prefix, C–N / min-idx order).
+
+    Join Heuristic onto BondTD by unordered atom pair, then keep BondTD row
+    order. Heuristic uses begin/end except C–N → C then N.
+    """
+    from .heuristic import heuristic_rows
+
+    pymol = _ob.from_rdkit_mol(rdkit_mol)
+    rows = BondTD(
+        pymol,
+        original_atom_ordering=True,
+        bond_prefix="BondDesc__%s",
+        atom_order="ndealk",
+        ndealk_max_inv_scalar=True,
+    ).run()
+    h_by = {frozenset(r["_atoms"]): r for r in heuristic_rows(pymol)}
+    keys = (
+        "otherN_C",
+        "methyl",
+        "short_chain",
+        "in_ring_non_aromatic",
+        "in_ring_aromatic",
+    )
+    for r in rows:
+        h = h_by.get(frozenset(r["_atoms"]), {})
+        for k in keys:
+            r[k] = float(h.get(k, 0.0))
+    return rows
