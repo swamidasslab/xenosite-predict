@@ -109,6 +109,28 @@ def test_aromatic_sulfur_hyb_matches_openbabel_24():
     assert sulfurs == [3]
 
 
+def test_nte_uses_sorted_symmetry_classes():
+    """Aromatic bond classes must not depend on Kekulé atom-index order."""
+    from tests.support import (
+        compare_feature_dump_rows,
+        load_ob_dumps,
+        rows_for_model,
+    )
+
+    dumps = load_ob_dumps()
+    if not dumps:
+        pytest.skip("missing OB dumps")
+    smi = "COCCc1ccc(OCC(O)CNC(C)C)cc1"
+    dump = next((d for d in dumps if d.get("smiles") == smi), None)
+    if dump is None:
+        pytest.skip(f"no dump for {smi}")
+    mol, _ = parse_smiles(smi)
+    mm = compare_feature_dump_rows(
+        rows_for_model("epoxidation", mol), dump["models"]["epoxidation"]
+    )
+    assert "BondDescriptor__NTopologicalEquivalent" not in mm
+
+
 def test_aspirin_bond_shape():
     from xenosite.predict.features import bond_rows
 

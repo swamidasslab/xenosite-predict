@@ -171,7 +171,10 @@ class BondTD:
         nxt = 0
         self.BT: dict[str, int] = {}
         for ix, pair in zip(self.index, self.HBAI):
-            key = ".".join(str(atom_topology[y]) for y in sorted(pair))
+            # Sort symmetry classes, not atom indices. Atom-index order follows
+            # the molblock Kekulé numbering and splits equivalent aromatic bonds
+            # (e.g. "6.13" vs "13.6"). Legacy sorted the GID pair.
+            key = ".".join(str(x) for x in sorted(atom_topology[y] for y in pair))
             if key not in seen:
                 nxt += 1
                 seen[key] = nxt
