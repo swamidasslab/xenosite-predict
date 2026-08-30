@@ -2,7 +2,7 @@
 
 Python 3.11+ RDKit + ONNX predictors for XenoSite. Dist name **xenosite-predict**; import **`xenosite.predict`** (PEP 420 namespace). This repo is nested under `xenosite-api` and gitignored there; origin is [github.com/swamidasslab/xenosite-predict](https://github.com/swamidasslab/xenosite-predict).
 
-The wheel is **not** self-contained: ONNX weights are local (`weights/`, gitignored). `make test` is Docker-free and stays green without weights. `make test-live` skips if Docker, the legacy image, or ONNX files are missing. Do not commit model weights, pickles, or extracted `libridass/` trees.
+Publish **sdist only** (no wheel): OpenBabel **2.4.x** is a system/conda pin, not a pip package, and ONNX weights stay local (`weights/`, gitignored). `make test` is Docker-free and stays green without weights or OpenBabel (feature tests skip). `make test-live` skips if Docker, the legacy image, or ONNX files are missing. Do not commit model weights, pickles, or extracted `libridass/` trees.
 
 This package is **not** wired into `xenosite-api` yet.
 
@@ -22,7 +22,7 @@ list_models()  # what this process can actually run (backend-aware)
 - **`models=`** is a name (default version `"0"`) or `(name, version)` pairs. Do not pass one version string for a whole list.
 - **Indices** are 0-based RDKit atom/bond indices. Scores are floats (`atol=1e-4` in tests).
 - **Name lookup is omitted.** Pass SMILES, not drug names.
-- Import does **not** open ONNX or HTTP. Load on first use of that `(model, version)`.
+- Import does **not** open ONNX, HTTP, or OpenBabel. Load on first use of that `(model, version)`. Callers never import `openbabel` / `pybel`.
 
 ### `predict(inp, model=..., models=..., backend=..., backends=..., env=...)`
 
@@ -45,7 +45,7 @@ Returns dicts `{name, version, available, backend, reason, heads, two_stage, pip
 
 ### Errors
 
-`InvalidMolecule`, `UnknownModel`, `BackendNotConfigured`, `WeightsNotFound`, `ModelNotAvailable`.
+`InvalidMolecule`, `UnknownModel`, `BackendNotConfigured`, `WeightsNotFound`, `ModelNotAvailable`, `OpenBabelNotAvailable`.
 
 ## Backends
 
@@ -73,28 +73,38 @@ Per-model override: `predict(..., backends={("bioactivation", "0"): "http"})`.
 | `epoxidation` | `MolBondResult` | Two-stage: bond ONNX then mol ONNX (Top-N site scores). Averages two atom orderings. |
 | `quinone` | `MolAtomPairResult` | Atom → pair → mol. Includes null-pair molecule `O=C(Br)C(F)(F)F`. |
 | `reactivity` | four `MolAtomResult` (`reactivity.gsh` / `.protein` / `.cyanide` / `.dna`) | Two-stage atom then mol. |
-| `ugt` | `AtomResult` | RDKit topological + mol descriptors. No MOPAC/SmartCYP on the inference path. |
+| `ugt` | `AtomResult` | Internal OpenBabel topological + mol descriptors. No MOPAC/SmartCYP on the inference path. |
 | `ndealk` | `BondResult` (HLM slice) | Same ONNX as isozyme. Check `CCCC1CCCNC1C=O` for off-by-1. |
 | `isozyme` | ten `BondResult` (`isozyme.3a4`, … `isozyme.hlm`) | Production Flask uses **ndealk1** for `metabolism1`, not the MOPAC metabolism predictor. |
 | `phase1` | five `AtomBondResult` | TF `molecularNN`. No TF at runtime; ONNX convert is stop-if-fails. |
 | `bioactivation` | `MolAtomResult` + metabolites | **Pipeline last** (enumeration + other models), not a single ONNX. |
 
-## Makefile (tools are not in the wheel)
+## Makefile (tools are not in the sdist)
 
 ```
 make extract-weights          # Docker image or fallback tarball → weights/legacy/
 make convert-onnx             # pickle → ONNX; MODEL=epoxidation for one model
-make test                     # pytest -m "not live"  (no Docker)
+make test                     # pytest -m "not live"  (no Docker; skips without OB)
 make test-live                # pytest -m live; fixture skips if Docker/image missing
+make py2-dump-image           # python:2.7-slim + numpy + Debian OpenBabel 2.4
+make dump-ob                  # OpenBabel feature dump via that image (no WashU)
 make legacy-test-api          # build/run derived test image
 make legacy-test-api-down
 ```
 
-Convert deps: `uv run --group convert`. Runtime deps: rdkit, numpy, onnxruntime, httpx, pydantic. No TensorFlow, pandas, OpenBabel, or pickle at inference.
+Convert deps: `uv run --group convert`. Installed runtime: rdkit, numpy, onnxruntime, httpx, pydantic. **Internal** OpenBabel 2.4.x is required to run ONNX feature graphs (not part of the public API; not on PyPI for 3.x). No TensorFlow, pandas, or pickle at inference.
+
+```
+conda install -c conda-forge openbabel=2.4
+```
+
+OpenBabel 3.x will not match the trained nets. Do not vendor OpenBabel sources (GPL).
 
 Populate pickles from `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api` (needs registry login) or the sibling tarball `xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz`. `make convert-onnx` unpickles in a public **python:2.7-slim** dump image (`tools/py2-dump/`), not the WashU API image.
 
-RDKit features are **not** assumed equal to OpenBabel. Live `test_rdkit_vs_ob` is the gate; frontend golden score tests xfail until that passes. Random-vector tests prove ONNX == the pickled numpy NN only.
+The same dump image is the OpenBabel **feature oracle**: Debian Buster `python-openbabel` 2.4.1 from archive.debian.org, running as `/usr/bin/python` (the image's `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` feeds an RDKit molblock so 1-based OB indices align with 0-based RDKit, and dumps BondTD/AtomTD/UGT/Heuristic rows from sibling `xenosite-legacy/src`. Dumps are regenerable and gitignored.
+
+Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel 2.4 internally. `tests/test_ob_features.py` compares host OpenBabel rows to those dumps at atol `1e-4` / rtol `0` (skip without OB or dumps). Frontend golden score tests stay xfailed until that comparison is clean and ONNX is fed from those rows. Random-vector tests prove ONNX == the pickled numpy NN only.
 
 ## Layout
 

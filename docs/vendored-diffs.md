@@ -46,14 +46,11 @@ Shared helpers in this package (types, canonicalize, adapters, float compare, ON
 
 Quinone **pair-head TSV** is only four columns after atom scores are joined (`Atom1_Pred`, `Atom2_Pred`, `AtomPair__Distance`, `AtomPair__Distance_Is_Odd`), not a full copy of atom descriptors.
 
-RDKit ports live under `src/xenosite/predict/features/`. They are **not** assumed equal to OpenBabel until `@pytest.mark.live` `test_rdkit_vs_ob_*` passes. Known likely drift (document, do not hide in `atol`):
+Inference feature graphs live under `src/xenosite/predict/features/` and call **OpenBabel 2.4 internally**. The public API stays RDKit mols and 0-based indices. There is no RDKit chemistry dual path.
 
-- Gasteiger vs OpenBabel partial charges
-- `pybel.calcdesc()` vs RDKit Crippen / TPSA / HBA1 vs HBA2
-- `IsRotor`, `HasAlphaBetaUnsat`, explicit-H counts
-- Periodic-table corrected radii
+**OpenBabel oracle is `xenosite-predict-py2:dump`**, not the WashU image. Debian Buster `python-openbabel` 2.4.1 is installed from `archive.debian.org` onto `/usr/bin/python` (the image’s `/usr/local` CPython cannot load the multiarch SWIG module). `make dump-ob` writes `tests/fixtures/ob_dumps.json` via RDKit molblock so 1-based OB indices align with 0-based RDKit. Compare overlapping columns at atol `1e-4`, **rtol=0**. Do not loosen atol.
 
-If a live RDKit vs OB test fails, **do not ship that model on RDKit** until fixed or an explicit exception is recorded here.
+If a host-OB vs dump test fails, **do not ship that model** until fixed or an explicit exception is recorded here.
 
 ## Isozyme vs ndealk
 
@@ -68,15 +65,15 @@ So **isozyme (API `/v0/isozyme`) and ndealk share the same ndealk1 net**. User A
 
 ## MOPAC / SmartCYP inference gate (early)
 
-Traced each model’s **inference** `PyMolPredictor.predict` / Flask wiring. “Yes” blocks RDKit-only until the plan is revised.
+Traced each model’s **inference** `PyMolPredictor.predict` / Flask wiring. “Yes” blocks shipping until the plan is revised.
 
-| User-API model | MOPAC on inference? | SmartCYP on inference? | RDKit-only |
+| User-API model | MOPAC on inference? | SmartCYP on inference? | Internal OB features |
 |---|---|---|---|
-| epoxidation | **no** | **no** | allowed (verify vs OB dumps) |
-| quinone | **no** | **no** | allowed (verify vs OB dumps) |
-| reactivity | **no** | **no** | allowed (verify vs OB dumps) |
+| epoxidation | **no** | **no** | BondTD (two atom orderings) |
+| quinone | **no** | **no** | AtomTD (full EDG/EWG/OMP) |
+| reactivity | **no** | **no** | AtomTD reduced set |
 | ugt | **no** | **no** | `SmartCYPDescriptors` exists in `topo.py` `__main__` only; predictor uses `TopologicalDescriptors` + `MoleculeDescriptors` |
-| ndealk | **no** | **no** | bond_desc + Heuristic SMARTS |
+| ndealk | **no** | **no** | BondTD (`BondDesc__`) + Heuristic, join by unordered atom pair |
 | isozyme | **no** (Flask uses ndealk1) | **no** | same as ndealk |
 | metabolism1.predictor (unused) | **yes** | **yes** | **blocked** — not ported |
 | phase1 | **no** in predictor.py | **no** | TF molecularNN; convert is stop-if-fails |
@@ -100,5 +97,6 @@ Feature **names/order** JSON may be committed next to Python modules after `make
 - Fallback tarball contains pickles. Conversion uses a public `python:2.7-slim` (linux/amd64) dump image plus sibling `NN/` sources (OpenOpt stubbed). **Not** the WashU image.
 - Numpy-NN heads converted and random-vector parity vs dumped py2 `model.output` holds at atol `1e-4` (typically `~1e-7` float32): epoxidation bond/mol, quinone atom/pair/mol, reactivity atom (AbutLayer) / mol, ugt atom, ndealk bond (10 isozyme heads).
 - **Phase1 / bioactivation:** TF1 `molecularNN` / metabolite pipeline — convert stops; no TF in the installed package. HTTP/legacy backends still apply.
-- Feature-name JSON committed from TSV headers. N-dealk has no training TSV in the tarball.
-- RDKit vs OpenBabel dumps still require the py2+OpenBabel test image. Until those live tests pass, SMILES/golden score tests are xfailed: ONNX==NN is proven; RDKit==OpenBabel is not.
+- Feature-name JSON committed from TSV headers. N-dealk has no training TSV in the tarball; the aspirin OpenBabel dump supplied 386 `ndealk_bond_names.json` columns (`Heuristic` + `BondDesc`).
+- Host OpenBabel vs dump tests use `xenosite-predict-py2:dump` (Debian `python-openbabel` 2.4.1 from archive.debian.org + sibling `xenosite-legacy/src`). Not the WashU API image and not the micromamba test-API. `make dump-ob` writes gitignored `tests/fixtures/ob_dumps.json`. Compare rows by **atom identity** in the dump index (`1.5.10` = mol.atom1.atom2, 1-based), not OpenBabel bond-iterator order. Use **rtol=0**.
+- Until overlapping columns match at `atol=1e-4`, SMILES/golden score tests stay xfailed: ONNX==NN is proven; host features vs the 2.4 dump oracle are not yet signed off.
