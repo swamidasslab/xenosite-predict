@@ -316,6 +316,11 @@ class AtomTD:
             )
 
     def _omp_paths(self, ends_for_start, *, site: bool) -> list[int]:
+        """True if any shortest path sits on an aromatic ring (order-independent).
+
+        The 2.4 dump used a single BFS path whose tie-break was CPython 2.7
+        ``set`` iteration order. Matching that is not worth the e2e noise.
+        """
         add = []
         for paths in ends_for_start:
             if site:
@@ -353,7 +358,11 @@ class AtomTD:
                     for idx, nbrs in at_depth
                 ]
                 paths = [
-                    [self.MG.shortest_path(start, end) for end in ends]
+                    [
+                        p
+                        for end in ends
+                        for p in self.MG.all_shortest_paths(start, end)
+                    ]
                     for start, ends in typed
                 ]
                 self._set(prefix % (label, sym), self._omp_paths(paths, site=site))
@@ -372,7 +381,11 @@ class AtomTD:
                     (idx, [x for x in nbrs if x in matches]) for idx, nbrs in at_depth
                 ]
                 paths = [
-                    [self.MG.shortest_path(start, end) for end in ends]
+                    [
+                        p
+                        for end in ends
+                        for p in self.MG.all_shortest_paths(start, end)
+                    ]
                     for start, ends in typed
                 ]
                 self._set(prefix % (position, name), self._omp_paths(paths, site=site))
