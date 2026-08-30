@@ -239,6 +239,77 @@ def compare_feature_dump_rows(
     return mismatches
 
 
+PARITY_MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme")
+ASPIRIN_SMILES_CANON = ASPIRIN_SMILES  # CC(=O)Oc1ccccc1C(=O)O
+
+_DESCRIPTOR_CACHE: dict[tuple[str, str], list[str]] | None = None
+
+
+def onnx_model_key(model: str) -> str:
+    """Registry model name → ONNX weights directory."""
+    return "ndealk" if model == "isozyme" else model
+
+
+def descriptor_mismatch_columns(smiles: str, model: str) -> list[str]:
+    """Overlapping dump columns that disagree with internal OpenBabel (no ``_`` meta)."""
+    from xenosite.predict.molecule import parse_smiles
+
+    dump_mol = next(
+        (d for d in load_ob_dumps() if d.get("smiles") == smiles),
+        None,
+    )
+    if dump_mol is None or model not in (dump_mol.get("models") or {}):
+        return ["_missing_dump"]
+    mol, _ = parse_smiles(smiles)
+    mm = compare_feature_dump_rows(
+        rows_for_model(model, mol),
+        dump_mol["models"][model],
+        skip_columns=dump_compare_skip_columns(model),
+    )
+    return [c for c in mm if not c.startswith("_")]
+
+
+def descriptor_passes(smiles: str, model: str) -> bool:
+    return not descriptor_mismatch_columns(smiles, model)
+
+
+def descriptor_omp_only(smiles: str, model: str) -> bool:
+    cols = descriptor_mismatch_columns(smiles, model)
+    if not cols:
+        return False
+    return all("Ortho_" in c or "Meta_" in c or "Para_" in c for c in cols)
+
+
+def prediction_score_fields(obj) -> dict:
+    """Score vectors for legacy vs ONNX parity (includes quinone pair fields)."""
+    keys = ("mol", "bond", "atom", "pair", "pair_idx")
+    if isinstance(obj, dict):
+        return {k: _jsonish(obj[k]) for k in keys if obj.get(k) is not None}
+    out = {}
+    for k in keys:
+        v = getattr(obj, k, None)
+        if v is not None:
+            out[k] = _jsonish(v)
+    return out
+
+
+def assert_predictions_parity(legacy_mol, onnx_mol, *, atol: float = 1e-4) -> None:
+    """Assert legacy-test-api and ONNX ``predict`` agree on every result head."""
+    from xenosite.predict.compare import assert_equiv_results
+
+    by_legacy = {r.model: r for r in legacy_mol.results}
+    by_onnx = {r.model: r for r in onnx_mol.results}
+    assert set(by_legacy) == set(by_onnx), (
+        f"result heads differ: legacy={sorted(by_legacy)} onnx={sorted(by_onnx)}"
+    )
+    for name in sorted(by_legacy):
+        want = prediction_score_fields(by_legacy[name])
+        have = prediction_score_fields(by_onnx[name])
+        assert want, f"no score fields on legacy result {name}"
+        assert have, f"no score fields on onnx result {name}"
+        assert_equiv_results(want, have, atol=atol)
+
+
 def golden_name_by_smiles() -> dict[str, str]:
     return {
         g["smiles"]: str(g.get("name") or g["smiles"][:32])
