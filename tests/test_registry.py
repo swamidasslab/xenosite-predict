@@ -37,11 +37,16 @@ def test_list_models_without_backend(tmp_path, monkeypatch):
 
 def test_list_models_local_onnx():
     from tests.support import ROOT
+    from xenosite.predict.features import _ob
 
     rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(ROOT / "weights" / "onnx")})
     by = {r["name"]: r for r in rows}
     if (ROOT / "weights" / "onnx" / "epoxidation").exists():
-        assert by["epoxidation"]["available"] is True
+        if _ob.installed():
+            assert by["epoxidation"]["available"] is True
+        else:
+            assert by["epoxidation"]["available"] is False
+            assert "OpenBabel" in by["epoxidation"]["reason"]
     assert by["bioactivation"]["available"] is False
 
 

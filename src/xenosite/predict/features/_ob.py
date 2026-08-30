@@ -41,6 +41,16 @@ def load() -> tuple[Any, Any]:
         ) from exc
 
 
+def installed() -> bool:
+    """True if OpenBabel bindings are importable. Does not load them."""
+    import importlib.util
+
+    return (
+        importlib.util.find_spec("openbabel") is not None
+        or importlib.util.find_spec("pybel") is not None
+    )
+
+
 def available() -> bool:
     try:
         load()

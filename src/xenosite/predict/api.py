@@ -45,7 +45,7 @@ def predict(
 
     Notes
     -----
-    One molecule at a time (no batch API). Import does not open ONNX or HTTP.
+    One molecule at a time (no batch API). Import does not open ONNX, HTTP, or OpenBabel.
     """
     ensure_builtins()
     if models is None:
@@ -86,6 +86,15 @@ def list_models(
         spec = (info.name, info.version)
         ok = spec in available and not info.blocked_reason
         reason = info.blocked_reason or ("" if ok else (default_reason or "not on this backend"))
+        if ok and bname == "onnx" and info.name not in ("phase1", "bioactivation"):
+            from .features import _ob
+
+            if not _ob.installed():
+                ok = False
+                reason = (
+                    "OpenBabel 2.4 is required for ONNX descriptors "
+                    "(conda install -c conda-forge openbabel=2.4)"
+                )
         out.append(
             {
                 "name": info.name,
