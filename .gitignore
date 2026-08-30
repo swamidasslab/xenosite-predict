@@ -37,6 +37,7 @@ weights/**/*.pickle
 # uv
 uv.lock
 
-# Regenerable OpenBabel dumps from `make dump-ob`
+# Regenerable uncompressed OpenBabel dumps from `make dump-ob`.
+# The gzipped suite (ob_dumps.json.gz) is committed via Git LFS.
 tests/fixtures/ob_dump_aspirin.json
 tests/fixtures/ob_dumps.json
