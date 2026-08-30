@@ -271,11 +271,18 @@ def main(argv: list[str] | None = None) -> int:
         legacy = spec["legacy"]
         rebase = f"libridass.{legacy}"
         # search extract
-        roots = list(args.src.rglob(legacy))
-        if not roots:
-            print(f"no extract for {legacy} under {args.src}", file=sys.stderr)
+        roots = [p for p in args.src.rglob(legacy) if p.is_dir()]
+        # Prefer a tree that actually contains the pickled nets (tarball), not
+        # sibling sources that omit models.
+        def score(root: Path) -> int:
+            return sum(1 for rel in spec["heads"].values() if (root / rel).is_file())
+
+        roots.sort(key=score, reverse=True)
+        if not roots or score(roots[0]) == 0:
+            print(f"no pickles for {legacy} under {args.src}", file=sys.stderr)
             continue
         root = roots[0]
+        print(f"using extract {root} for {name}")
         dump_dir = args.out / "_dump" / name
         for head, rel in spec["heads"].items():
             pkl = root / rel
