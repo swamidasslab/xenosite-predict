@@ -343,7 +343,7 @@ class BondTD:
             self._set(f"{prefix}MaxInvRingSize", inv)
 
     def add_nrings(self) -> None:
-        cycles = self.MG.cycles()
+        cycles = self.MG.dfs_cycles()
         for label, indexes in self.BAI_zips:
             self._set(
                 f"{label}NRings",

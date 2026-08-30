@@ -1,8 +1,9 @@
 """Heavy-atom graph helpers used by BondTD/AtomTD (numpy, no pandas).
 
 Port of ``xenosite.finger.graph.UndirectedGraph`` methods BondTD actually calls:
-neighbors, pairwise_distance, shortest_path. Rings are OpenBabel SSSR
-(not DFS cycles). Vertex keys are 1-based OpenBabel atom indices.
+neighbors, pairwise_distance, shortest_path. ``cycles()`` is OpenBabel SSSR;
+``dfs_cycles()`` is the legacy DFS back-edge set used by BondTD ``NRings``.
+Vertex keys are 1-based OpenBabel atom indices.
 """
 
 from __future__ import annotations
@@ -55,6 +56,11 @@ class MolGraph:
         return dist, v2i
 
     def shortest_path(self, s: int, e: int) -> list[int]:
+        """One minimum-length path. Neighbors are visited in sorted index order.
+
+        Legacy code iterated ``set`` neighbors in CPython 2.7 hash order, so
+        tied BFS paths were machine-dependent. We do not replicate that.
+        """
         if s == e:
             return [s]
         path = {s: [s]}
@@ -62,7 +68,7 @@ class MolGraph:
         seen = {s}
         while q:
             v = q.popleft()
-            for w in self.neighbors[v]:
+            for w in sorted(self.neighbors[v]):
                 if w in seen:
                     continue
                 seen.add(w)
@@ -71,6 +77,105 @@ class MolGraph:
                     return path[w]
                 q.append(w)
         return []
+
+    def all_shortest_paths(self, s: int, e: int) -> list[list[int]]:
+        """Every minimum-length path (sorted neighbor order).
+
+        Quinone ortho/meta/para is true if **any** of these paths lies on an
+        aromatic ring, so the feature does not depend on set iteration order.
+        """
+        if s == e:
+            return [[s]]
+        dist = {s: 0}
+        parents: dict[int, list[int]] = {s: []}
+        q = deque([s])
+        while q:
+            v = q.popleft()
+            dv = dist[v]
+            if e in dist and dv >= dist[e]:
+                continue
+            for w in sorted(self.neighbors[v]):
+                if w not in dist:
+                    dist[w] = dv + 1
+                    parents[w] = [v]
+                    q.append(w)
+                elif dist[w] == dv + 1:
+                    parents[w].append(v)
+
+        if e not in dist:
+            return []
+
+        found: list[list[int]] = []
+
+        def rec(node: int) -> None:
+            if node == s:
+                found.append([s])
+                return
+            for p in parents[node]:
+                before = len(found)
+                rec(p)
+                for i in range(before, len(found)):
+                    found[i] = found[i] + [node]
+
+        rec(e)
+        return found
+
+    def dfs(self, v: int | None = None):
+        """Port of ``xenosite.finger.graph.UndirectedGraph.DFS`` (sorted neighbors)."""
+        ignore: set[int] = set()
+        explored: set[int] = set()
+        if v is None:
+            vs = [n for n in sorted(self.vertex) if n not in ignore]
+            v = vs[0]
+        visited = {v}
+        edge: set[frozenset[int]] = set()
+        stack = [v]
+        while stack:
+            t = stack[-1]
+            skip = False
+            for n in sorted(self.neighbors[t]):
+                e = frozenset((t, n))
+                if e in edge:
+                    continue
+                if n not in visited and n not in explored:
+                    edge.add(e)
+                    visited.add(n)
+                    stack.append(n)
+                    yield (t, n, "t")
+                    skip = True
+                    break
+                if n in visited:
+                    edge.add(e)
+                    yield (t, n, "b")
+            if skip:
+                continue
+            explored.add(t)
+            stack.pop()
+
+    def dfs_cycles(self) -> list[set[int]]:
+        """DFS back-edge cycles used by BondTD ``NRings`` (legacy UndirectedGraph).
+
+        Fusion atoms sit in extra perimeter cycles that SSSR drops; the 2.4 dump
+        oracle counts those. ``cycles()`` stays OpenBabel SSSR.
+        """
+        walk = list(self.dfs())
+        cycles: list[set[int]] = []
+        back = [n for n, (_a, _b, t) in enumerate(walk) if t == "b"]
+        for bi in back:
+            sv = v = walk[bi][1]
+            member = {v}
+            i = bi
+            while True:
+                v = walk[i][0]
+                member.add(v)
+                while True:
+                    i -= 1
+                    if i < 0 or (walk[i][1] == v and walk[i][2] != "b"):
+                        break
+                if v == sv:
+                    break
+            cycles.append(member)
+        return cycles
 
     def cycles(self) -> list[set[int]]:
         """Smallest set of smallest rings (OpenBabel SSSR), heavy atoms only."""
