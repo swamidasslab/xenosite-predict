@@ -1,0 +1,54 @@
+[project]
+name = "xenosite-predict"
+version = "0.1.0"
+description = "RDKit + ONNX predictors for XenoSite (xenosite.predict namespace package)"
+readme = "README.md"
+authors = [
+    { name = "S. Joshua Swamidass", email = "swamidass@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "rdkit>=2023.9.2",
+    "numpy>=1.26",
+    "onnxruntime>=1.16",
+    "httpx>=0.24",
+    "pydantic>=2.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xenosite"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/xenosite/predict/features" = "xenosite/predict/features"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/tools",
+    "/weights",
+    "/tests",
+    "/docs",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+convert = [
+    "safetensors>=0.4",
+    "onnx>=1.15",
+]
+
+[tool.pytest.ini_options]
+addopts = "-m \"not live\""
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+markers = [
+    "live: requires Docker legacy test API and/or ONNX weights",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

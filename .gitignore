@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+
+# Local model artifacts — never commit weights or extracted legacy trees
+weights/legacy/
+weights/onnx/
+weights/**/*.onnx
+weights/**/*.safetensors
+weights/**/*.model
+weights/**/*.pyp
+weights/**/*.pkl
+weights/**/*.pickle
+*.onnx
+*.safetensors
+*.model
+*.pyp
+
+# uv
+uv.lock

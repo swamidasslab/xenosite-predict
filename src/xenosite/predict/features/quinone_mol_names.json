@@ -1,0 +1,26 @@
+{
+  "names": [
+    "MolDesc__bonds",
+    "MolDesc__TPSA",
+    "MolDesc__logP",
+    "MolDesc__MW",
+    "MolDesc__MR",
+    "MolDesc__HBD",
+    "MolDesc__HBA1",
+    "MolDesc__HBA2",
+    "MolDesc__sbonds",
+    "MolDesc__dbonds",
+    "MolDesc__tbonds",
+    "MolDesc__abonds",
+    "MolDesc__heavy_atoms",
+    "MolDesc__hydrogens",
+    "MolDesc__NumRings",
+    "AtomPair__Top1",
+    "AtomPair__Top2",
+    "AtomPair__Top3",
+    "Atom__Top1",
+    "Atom__Top2",
+    "Atom__Top3"
+  ],
+  "source": "molecule_training.tsv"
+}

@@ -1,0 +1,4 @@
+# Keep this directory; ignore everything else (weights, pickles, extracted trees).
+*
+!.gitignore
+!README.md
