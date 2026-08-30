@@ -1,4 +1,4 @@
-"""Golden frontend scores vs ONNX+RDKit. Xfail until RDKit matches OpenBabel."""
+"""Golden frontend scores vs ONNX + internal OpenBabel features. Xfail until dumps match."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pytest
 from xenosite.predict import WeightsNotFound, predict
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.compare import assert_equiv_results
-from xenosite.predict.errors import ModelNotAvailable
+from xenosite.predict.errors import ModelNotAvailable, OpenBabelNotAvailable
 
 from tests.support import ROOT, load_golden, onnx_weights_present
 
@@ -15,7 +15,7 @@ MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme")
 
 
 @pytest.mark.parametrize("model", MODELS)
-def test_golden_scores_rdkit_onnx(model):
+def test_golden_scores_onnx(model):
     rows = [g for g in load_golden() if g.get("model") == model]
     if not rows:
         pytest.skip(f"no golden rows for {model}")
@@ -24,8 +24,9 @@ def test_golden_scores_rdkit_onnx(model):
         pytest.skip(f"no ONNX for {key}")
     be = OnnxBackend(ROOT / "weights" / "onnx")
     pytest.xfail(
-        "RDKit descriptors are not yet equal to OpenBabel dumps at atol 1e-4; "
-        "ONNX==numpy-NN random-vector parity holds. See docs/vendored-diffs.md."
+        "internal OpenBabel features are not yet verified against golden frontend "
+        "scores at atol 1e-4. Un-xfail after dump-vs-feature tests pass and ONNX "
+        "is fed from those rows. See docs/vendored-diffs.md."
     )
     g = rows[1] if len(rows) > 1 else rows[0]  # aspirin-like when present
     try:
@@ -49,7 +50,10 @@ def test_quinone_null_pair_predicts_or_skips():
     be = OnnxBackend(ROOT / "weights" / "onnx")
     if not onnx_weights_present("quinone"):
         pytest.skip("no quinone ONNX")
-    mol = predict("O=C(Br)C(F)(F)F", models=["quinone"], backend=be)
+    try:
+        mol = predict("O=C(Br)C(F)(F)F", models=["quinone"], backend=be)
+    except OpenBabelNotAvailable as exc:
+        pytest.skip(str(exc))
     assert mol.results
     r = mol.results[0]
     assert hasattr(r, "pair")

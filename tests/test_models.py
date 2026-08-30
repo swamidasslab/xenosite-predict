@@ -4,7 +4,7 @@ import pytest
 
 from xenosite.predict import WeightsNotFound, predict
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.errors import ModelNotAvailable
+from xenosite.predict.errors import ModelNotAvailable, OpenBabelNotAvailable
 
 from tests.support import ROOT, onnx_weights_present
 
@@ -20,11 +20,11 @@ def test_onnx_skips_or_runs(model):
     if onnx_weights_present(key):
         try:
             mol = predict(ASPIRIN, models=[model], backend=be)
-        except WeightsNotFound as exc:
+        except (WeightsNotFound, OpenBabelNotAvailable) as exc:
             pytest.skip(str(exc))
         assert mol.results
     else:
-        with pytest.raises((WeightsNotFound, ModelNotAvailable)):
+        with pytest.raises((WeightsNotFound, ModelNotAvailable, OpenBabelNotAvailable)):
             predict(ASPIRIN, models=[model], backend=be)
 
 

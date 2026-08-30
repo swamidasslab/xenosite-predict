@@ -11,7 +11,7 @@ from rdkit import Chem
 from ..backends.adapters import append_atom_pair, or_combine
 from ..backends.onnx import OnnxBackend
 from ..errors import WeightsNotFound
-from ..features import load_names, matrix_from_rows, reactivity_atom_rows, topn_site_features
+from ..features import load_names, matrix_from_rows, quinone_atom_rows, topn_site_features
 from ..registry import register_model
 from ..types import Molecule
 from ._base import BaseRunner
@@ -28,7 +28,7 @@ class QuinoneRunner(BaseRunner):
                 "quinone ONNX heads missing (atom, pair, mol). Run make convert-onnx MODEL=quinone"
             )
         mol = self.rdkit_mol(molecule)
-        atom_rows = reactivity_atom_rows(mol)
+        atom_rows = quinone_atom_rows(mol)
         atom_names = load_names("quinone", "atom")
         x, _ = matrix_from_rows(atom_rows, atom_names)
         atom_scores = backend.run_head(self.name, "atom", x).reshape(-1)

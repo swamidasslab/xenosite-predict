@@ -14,7 +14,7 @@ import numpy as np
 from ..backends.adapters import append_bond, reorder_by_bond
 from ..backends.onnx import OnnxBackend
 from ..errors import WeightsNotFound
-from ..features import bond_rows, load_names, matrix_from_rows
+from ..features import load_names, matrix_from_rows, ndealk_bond_rows
 from ..registry import register_model
 from ..types import Molecule
 from ._base import BaseRunner
@@ -47,7 +47,7 @@ class NdealkFamily(BaseRunner):
                 "ndealk/isozyme ONNX missing bond. Run make convert-onnx MODEL=ndealk"
             )
         mol = self.rdkit_mol(molecule)
-        rows = bond_rows(mol, original_atom_ordering=True)
+        rows = ndealk_bond_rows(mol)
         names = load_names("ndealk", "bond")
         if not names:
             raise WeightsNotFound(

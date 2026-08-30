@@ -11,6 +11,8 @@ from .registry import register_model
 from .errors import (
     BackendNotConfigured,
     InvalidMolecule,
+    ModelNotAvailable,
+    OpenBabelNotAvailable,
     UnknownModel,
     WeightsNotFound,
 )
@@ -49,4 +51,6 @@ __all__ = [
     "UnknownModel",
     "BackendNotConfigured",
     "WeightsNotFound",
+    "ModelNotAvailable",
+    "OpenBabelNotAvailable",
 ]

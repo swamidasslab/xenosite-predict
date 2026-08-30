@@ -1,4 +1,4 @@
-"""Live parity: random-vector, SMILES, RDKit vs OpenBabel. Skip without Docker."""
+"""Live parity: random-vector, SMILES, OpenBabel dump vs host features. Skip without Docker."""
 
 from __future__ import annotations
 
@@ -12,10 +12,9 @@ from xenosite.predict import predict
 from xenosite.predict.backends.legacy import LegacyTestBackend
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.compare import scores_close
-from xenosite.predict.features import bond_rows, ugt_atom_rows
 from xenosite.predict.molecule import parse_smiles
 
-from tests.support import ROOT, compare_rdkit_ob_rows, onnx_weights_present
+from tests.support import ROOT, compare_feature_dump_rows, onnx_weights_present, rows_for_model
 
 SEED = 20260829
 REPLAY = ROOT / "tests" / "fixtures" / "random_vectors.json"
@@ -94,29 +93,37 @@ def test_smiles_parity(legacy_api_url, model):
 
 @pytest.mark.live
 @pytest.mark.parametrize("model", ["epoxidation", "ugt", "reactivity", "ndealk", "quinone"])
-def test_rdkit_vs_ob(legacy_api_url, model):
-    """Dump OpenBabel features from the test image; compare to RDKit on same SMILES."""
-    from xenosite.predict.features import reactivity_atom_rows
+def test_internal_ob_vs_live_dump(model):
+    """Re-dump via xenosite-predict-py2:dump; compare to host OpenBabel features.
 
-    legacy = LegacyTestBackend(legacy_api_url)
+    Does not need the WashU registry. Skip if Docker, OpenBabel, or sibling src
+    is missing. Any overlapping-column mismatch fails. Do not loosen atol.
+    """
+    from tests.support import openbabel_available
+
+    if not openbabel_available():
+        pytest.skip("OpenBabel 2.4 not installed")
+    import sys
+
+    tools = ROOT / "tools"
+    if str(tools) not in sys.path:
+        sys.path.insert(0, str(tools))
+    from dump_ob import DEFAULT_SRC, _rdkit_sdf, dump_one  # type: ignore
+
+    if not DEFAULT_SRC.is_dir():
+        pytest.skip(f"xenosite-legacy/src missing at {DEFAULT_SRC}")
+    mol, molecule = parse_smiles(ASPIRIN)
+    canonical, sdf_text = _rdkit_sdf(ASPIRIN)
     try:
-        dump = legacy.dump_features(ASPIRIN, model)
+        dump = dump_one(canonical, model, DEFAULT_SRC, sdf_text=sdf_text)
     except Exception as exc:
-        pytest.skip(f"feature dump failed: {exc}")
-    mol, _ = parse_smiles(ASPIRIN)
-    if model in ("epoxidation", "ndealk"):
-        rows = bond_rows(mol, original_atom_ordering=True)
-    elif model == "ugt":
-        rows = ugt_atom_rows(mol)
-    else:
-        rows = reactivity_atom_rows(mol)
-    cols = dump.get("columns") or []
-    ob_rows = dump.get("rows") or []
-    if not cols or not ob_rows:
+        pytest.skip(f"OpenBabel dump via py2 image failed: {exc}")
+    rows = rows_for_model(model, mol)
+    if not dump.get("columns") or not dump.get("rows"):
         pytest.skip("empty OB dump")
-    mismatches = compare_rdkit_ob_rows(rows, dump)
+    mismatches = compare_feature_dump_rows(rows, dump)
     if mismatches:
         pytest.fail(
-            f"RDKit vs OpenBabel mismatch for {model} (docs/vendored-diffs.md): "
-            + ", ".join(mismatches[:12])
+            f"internal OpenBabel vs dump mismatch for {model} (do not loosen atol): "
+            + ", ".join(mismatches)
         )

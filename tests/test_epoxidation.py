@@ -6,6 +6,7 @@ import pytest
 
 from xenosite.predict import WeightsNotFound, predict
 from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import OpenBabelNotAvailable
 from xenosite.predict.molecule import parse_smiles
 
 from tests.support import ROOT, load_golden, onnx_weights_present
@@ -34,15 +35,17 @@ def test_epoxidation_parse_all_examples():
 
 
 def test_epoxidation_onnx_skips_without_weights():
+    be = OnnxBackend(ROOT / "weights" / "onnx")
     if onnx_weights_present("epoxidation"):
-        be = OnnxBackend(ROOT / "weights" / "onnx")
-        mol = predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
+        try:
+            mol = predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
+        except OpenBabelNotAvailable as exc:
+            pytest.skip(str(exc))
         assert mol.results
         assert mol.results[0].model == "epoxidation"
         assert len(mol.results[0].bond) == len(mol.bonds.idx)
     else:
-        be = OnnxBackend(ROOT / "weights" / "onnx")
-        with pytest.raises(WeightsNotFound):
+        with pytest.raises((WeightsNotFound, OpenBabelNotAvailable)):
             predict(EXAMPLE_SMILES[1], models=["epoxidation"], backend=be)
 
 
@@ -56,8 +59,8 @@ def test_epoxidation_golden_if_present():
     from xenosite.predict.compare import assert_equiv_results
 
     pytest.xfail(
-        "RDKit feature vectors do not yet match OpenBabel dumps / frontend goldens "
-        "(atol 1e-4). Random-vector ONNX==NN holds. See docs/vendored-diffs.md."
+        "internal OpenBabel features are not yet verified against golden frontend "
+        "scores at atol 1e-4. See docs/vendored-diffs.md."
     )
 
     mismatches = []
