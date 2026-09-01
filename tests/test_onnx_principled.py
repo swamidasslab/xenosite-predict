@@ -112,13 +112,16 @@ def test_predict_default_differs_from_legacy(model, smiles):
     assert _max_score_delta(_scores(principled, model), _scores(legacy, model)) > 1e-6
 
 
-def test_ndealk_principled_fewer_active_bonds_than_legacy():
-    """Topo-GID dedup in principled mode drops orphan legacy site keys."""
-    principled = _onnx_predict(NDEALK_PRINCIPLED_FEWER, "ndealk")
-    legacy = _onnx_predict(NDEALK_PRINCIPLED_FEWER, "ndealk", _parameter=GOLDEN_PARAMETER)
-    pri_n = _active_bond_count(_scores(principled, "ndealk"))
-    leg_n = _active_bond_count(_scores(legacy, "ndealk"))
-    assert pri_n < leg_n
+def test_ndealk_rdkit_symmetry_broadcast():
+    """Production path broadcasts one class score to all RDKit-symmetric bonds."""
+    from xenosite.predict.molecule import parse_smiles
+    from tests.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
+
+    rdmol, _ = parse_smiles(NDEALK_PRINCIPLED_FEWER)
+    mol = _onnx_predict(NDEALK_PRINCIPLED_FEWER, "ndealk")
+    groups = bond_symmetry_groups(rdmol)
+    assert groups
+    assert_bond_scores_symmetric(mol.results[0].bond, groups)
 
 
 def test_quinone_principled_scores_finite():
