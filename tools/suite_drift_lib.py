@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
-from collections import Counter, defaultdict
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -59,6 +60,11 @@ def cache_index(rows: list[dict]) -> dict[tuple[str, str], dict]:
     return {(r.get("model"), r.get("smiles")): r for r in rows}
 
 
+def default_workers() -> int:
+    n = os.cpu_count() or 4
+    return max(1, min(n, 8))
+
+
 def mol_class(smiles: str) -> str:
     return "[nH]" if NH_SMILES.search(smiles) else "other"
 
@@ -108,105 +114,157 @@ def failing_fields(
     return out
 
 
+def _analyze_golden_row(task: tuple[dict, dict | None]) -> DriftReport:
+    """Compare one golden row to its cached ONNX result (worker-safe)."""
+    import sys
+
+    root = str(ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+    from tests.support import golden_score_fields, parity_atol
+    from xenosite.predict.numbering import normalize_quinone_pair_fields
+
+    g, cached = task
+    report = DriftReport()
+    model = g.get("model") or ""
+    smiles = g.get("smiles") or ""
+    atol = parity_atol(smiles, model)
+
+    if cached is None:
+        report.pytest_fail_rows += 1
+        report.by_model[model] += 1
+        report.by_mol_class[mol_class(smiles)] += 1
+        report.by_field["uncached"] += 1
+        report.unique_failing_smiles.add(smiles)
+        return report
+
+    if cached.get("error"):
+        report.pytest_fail_rows += 1
+        report.by_model[model] += 1
+        report.by_mol_class[mol_class(smiles)] += 1
+        report.by_field["predict_error"] += 1
+        report.predict_errors.append((model, smiles, cached["error"]))
+        report.unique_failing_smiles.add(smiles)
+        return report
+
+    onnx_results = {r["model"]: r for r in cached.get("results") or []}
+    row_failed = False
+    row_max = 0.0
+
+    for gr in g.get("results") or []:
+        head = gr.get("model") or ""
+        if head not in onnx_results:
+            report.head_failures += 1
+            report.by_field["missing_head"] += 1
+            if not row_failed:
+                report.pytest_fail_rows += 1
+                report.by_model[model] += 1
+                report.by_mol_class[mol_class(smiles)] += 1
+                report.unique_failing_smiles.add(smiles)
+                row_failed = True
+            continue
+
+        want = golden_score_fields(gr)
+        have = golden_score_fields(onnx_results[head])
+        if head == "quinone":
+            normalize_quinone_pair_fields(want, have, smiles)
+
+        d = max_diff(want, have)
+        row_max = max(row_max, d)
+        report.stats_by_model.setdefault(model, []).append(d)
+
+        bad = failing_fields(want, have, atol)
+        if bad:
+            report.head_failures += len(bad)
+            if not row_failed:
+                report.pytest_fail_rows += 1
+                report.by_model[model] += 1
+                report.by_mol_class[mol_class(smiles)] += 1
+                report.unique_failing_smiles.add(smiles)
+                row_failed = True
+            for fld, fd in bad:
+                report.by_field[fld] += 1
+                report.by_model_field[(model, fld)] += 1
+                report.by_magnitude[mag_bucket(fd)] += 1
+                report.field_failures.append(
+                    FieldFailure(
+                        model=model,
+                        smiles=smiles,
+                        name=g.get("name") or smiles[:40],
+                        head=head,
+                        field=fld,
+                        max_diff=fd,
+                        atol=atol,
+                    )
+                )
+
+    if not row_failed:
+        report.pytest_pass_rows += 1
+        if model not in report.stats_by_model:
+            report.stats_by_model[model] = [row_max]
+
+    return report
+
+
+def merge_reports(reports: list[DriftReport]) -> DriftReport:
+    out = DriftReport()
+    for r in reports:
+        out.pytest_fail_rows += r.pytest_fail_rows
+        out.pytest_pass_rows += r.pytest_pass_rows
+        out.head_failures += r.head_failures
+        out.by_model.update(r.by_model)
+        out.by_field.update(r.by_field)
+        out.by_model_field.update(r.by_model_field)
+        out.by_mol_class.update(r.by_mol_class)
+        out.by_magnitude.update(r.by_magnitude)
+        out.unique_failing_smiles |= r.unique_failing_smiles
+        out.field_failures.extend(r.field_failures)
+        out.predict_errors.extend(r.predict_errors)
+        for model, vals in r.stats_by_model.items():
+            out.stats_by_model.setdefault(model, []).extend(vals)
+    return out
+
+
 def analyze_suite(
     golden_rows: list[dict],
     onnx_rows: list[dict],
     *,
     models: list[str],
-    normalize_quinone,
-    golden_score_fields,
-    parity_atol,
+    workers: int = 1,
 ) -> DriftReport:
     """Compare cached ONNX rows to golden; no inference."""
+    from tools.progress import iter_progress, map_progress, worker_quiet
+
     onnx_by = cache_index(onnx_rows)
-    report = DriftReport()
+    model_set = set(models)
+    tasks = [
+        (g, onnx_by.get((g.get("model"), g.get("smiles"))))
+        for g in golden_rows
+        if (g.get("model") or "") in model_set
+    ]
+    if not tasks:
+        return DriftReport()
 
-    for g in golden_rows:
-        model = g.get("model") or ""
-        if model not in models:
-            continue
-        smiles = g.get("smiles") or ""
-        key = (model, smiles)
-        atol = parity_atol(smiles, model)
-        cached = onnx_by.get(key)
+    workers = max(1, workers)
+    label = f"analyze drift ({workers}w, {len(tasks)} rows)"
+    if workers == 1:
+        worker_quiet()
+        parts = [
+            _analyze_golden_row(task)
+            for task in iter_progress(tasks, desc=label, unit="row")
+        ]
+        return merge_reports(parts)
 
-        if cached is None:
-            report.pytest_fail_rows += 1
-            report.by_model[model] += 1
-            report.by_mol_class[mol_class(smiles)] += 1
-            report.by_field["uncached"] += 1
-            report.unique_failing_smiles.add(smiles)
-            continue
-
-        if cached.get("error"):
-            report.pytest_fail_rows += 1
-            report.by_model[model] += 1
-            report.by_mol_class[mol_class(smiles)] += 1
-            report.by_field["predict_error"] += 1
-            report.predict_errors.append((model, smiles, cached["error"]))
-            report.unique_failing_smiles.add(smiles)
-            continue
-
-        onnx_results = {r["model"]: r for r in cached.get("results") or []}
-        row_failed = False
-        row_max = 0.0
-
-        for gr in g.get("results") or []:
-            head = gr.get("model") or ""
-            if head not in onnx_results:
-                report.head_failures += 1
-                report.by_field["missing_head"] += 1
-                if not row_failed:
-                    report.pytest_fail_rows += 1
-                    report.by_model[model] += 1
-                    report.by_mol_class[mol_class(smiles)] += 1
-                    report.unique_failing_smiles.add(smiles)
-                    row_failed = True
-                continue
-
-            want = golden_score_fields(gr)
-            have = golden_score_fields(onnx_results[head])
-            if head == "quinone":
-                normalize_quinone(want, smiles)
-                normalize_quinone(have, smiles)
-
-            d = max_diff(want, have)
-            row_max = max(row_max, d)
-            report.stats_by_model.setdefault(model, []).append(d)
-
-            bad = failing_fields(want, have, atol)
-            if bad:
-                report.head_failures += len(bad)
-                if not row_failed:
-                    report.pytest_fail_rows += 1
-                    report.by_model[model] += 1
-                    report.by_mol_class[mol_class(smiles)] += 1
-                    report.unique_failing_smiles.add(smiles)
-                    row_failed = True
-                for fld, fd in bad:
-                    report.by_field[fld] += 1
-                    report.by_model_field[(model, fld)] += 1
-                    report.by_magnitude[mag_bucket(fd)] += 1
-                    report.field_failures.append(
-                        FieldFailure(
-                            model=model,
-                            smiles=smiles,
-                            name=g.get("name") or smiles[:40],
-                            head=head,
-                            field=fld,
-                            max_diff=fd,
-                            atol=atol,
-                        )
-                    )
-            elif d <= atol:
-                pass
-
-        if not row_failed:
-            report.pytest_pass_rows += 1
-            if model not in report.stats_by_model:
-                report.stats_by_model[model] = [row_max]
-
-    return report
+    with ProcessPoolExecutor(max_workers=workers, initializer=worker_quiet) as pool:
+        parts = map_progress(
+            _analyze_golden_row,
+            tasks,
+            pool=pool,
+            desc=label,
+            unit="row",
+        )
+    return merge_reports(parts)
 
 
 def format_report(report: DriftReport, *, top_n: int = 15) -> str:

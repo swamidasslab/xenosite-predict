@@ -26,21 +26,15 @@ if str(ROOT) not in sys.path:
 
 from tests.support import (  # noqa: E402
     SUITE_MODELS,
-    golden_score_fields,
     load_golden_suite,
-    parity_atol,
 )
 from tools.suite_drift_lib import (  # noqa: E402
     DEFAULT_CACHE,
     analyze_suite,
+    default_workers,
     format_report,
     load_cache,
 )
-from xenosite.predict.numbering import normalize_quinone_fields_for_smiles  # noqa: E402
-
-
-def _normalize_quinone(fields: dict, smiles: str) -> None:
-    normalize_quinone_fields_for_smiles(fields, smiles)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -55,6 +49,12 @@ def main(argv: list[str] | None = None) -> int:
         help="run capture_suite_onnx for missing pairs first",
     )
     p.add_argument("--top", type=int, default=15, help="examples in report")
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=default_workers(),
+        help="parallel worker processes (default: min(cpu_count, 8))",
+    )
     args = p.parse_args(argv)
 
     if args.refresh:
@@ -63,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             cmd.extend(["--model", args.model])
         if args.smiles:
             cmd.extend(["--smiles", args.smiles])
+        cmd.extend(["--workers", str(max(1, args.workers))])
         subprocess.check_call(cmd)
 
     cache = load_cache(args.cache)
@@ -83,18 +84,19 @@ def main(argv: list[str] | None = None) -> int:
         golden,
         cache,
         models=models,
-        normalize_quinone=_normalize_quinone,
-        golden_score_fields=golden_score_fields,
-        parity_atol=parity_atol,
+        workers=max(1, args.workers),
     )
 
     if args.fail_only and report.pytest_fail_rows == 0:
         return 0
 
-    print(format_report(report, top_n=args.top))
+    # Report on stdout so it does not clobber the tqdm bar on stderr.
+    sys.stdout.write(format_report(report, top_n=args.top) + "\n")
     uncached = report.by_field.get("uncached", 0)
     if uncached:
-        print(f"\n({uncached} golden rows missing from cache — run capture_suite_onnx.py)")
+        sys.stdout.write(
+            f"\n({uncached} golden rows missing from cache — run capture_suite_onnx.py)\n"
+        )
     return 1 if report.pytest_fail_rows else 0
 
 

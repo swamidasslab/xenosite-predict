@@ -21,7 +21,7 @@ help:
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4 + RDKit)"
 	@echo "dump-ob             fill descriptor suite incrementally (skip dumps already present)"
 	@echo "capture-suite-onnx  cache ONNX scores (CAPTURE_WORKERS=8 default; CAPTURE_MODEL/SMILES to filter)"
-	@echo "drift-report        classify ONNX vs golden from cache (instant)"
+	@echo "drift-report        classify ONNX vs golden from cache (DRIFT_WORKERS=8 default)"
 	@echo "legacy-test-api     build/run derived test image"
 	@echo "legacy-test-api-down"
 
@@ -53,6 +53,7 @@ MODEL ?= epoxidation
 CAPTURE_MODEL ?=
 CAPTURE_SMILES ?=
 CAPTURE_WORKERS ?= 8
+DRIFT_WORKERS ?= 8
 
 dump-ob-features:
 	$(PYTHON) tools/dump_ob.py --smiles '$(SMILES)' --model $(MODEL)
@@ -68,6 +69,7 @@ capture-suite-onnx:
 	  $(if $(FORCE),--force,)
 
 drift-report:
-	$(PYTHON) tools/report_suite_drift.py \
+	-$(PYTHON) tools/report_suite_drift.py \
+	  --workers $(DRIFT_WORKERS) \
 	  $(if $(CAPTURE_MODEL),--model $(CAPTURE_MODEL),) \
 	  $(if $(REFRESH),--refresh,)
