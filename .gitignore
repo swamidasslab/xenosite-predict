@@ -41,3 +41,5 @@ uv.lock
 # The gzipped suite (ob_dumps.json.gz) is committed via Git LFS.
 tests/fixtures/ob_dump_aspirin.json
 tests/fixtures/ob_dumps.json
+# Regenerable ONNX score cache from `make capture-suite-onnx`
+tests/fixtures/suite_onnx_cache.json

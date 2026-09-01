@@ -9,7 +9,8 @@ LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
 TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) test test-live \
-	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob-features help
+	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
+	capture-suite-onnx drift-report help
 
 help:
 	@echo "extract-weights     copy pickles/TSV/source from $(IMAGE) into weights/legacy/"
@@ -19,6 +20,8 @@ help:
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4 + RDKit)"
 	@echo "dump-ob             fill descriptor suite incrementally (skip dumps already present)"
+	@echo "capture-suite-onnx  cache ONNX scores for golden suite (incremental)"
+	@echo "drift-report        classify ONNX vs golden from cache (instant)"
 	@echo "legacy-test-api     build/run derived test image"
 	@echo "legacy-test-api-down"
 
@@ -51,3 +54,9 @@ dump-ob-features:
 
 dump-ob:
 	$(PYTHON) tools/dump_ob.py --suite
+
+capture-suite-onnx:
+	$(PYTHON) tools/capture_suite_onnx.py $(if $(MODEL),--model $(MODEL),) $(if $(SMILES),--smiles '$(SMILES)',) $(if $(FORCE),--force,)
+
+drift-report:
+	$(PYTHON) tools/report_suite_drift.py $(if $(MODEL),--model $(MODEL),) $(if $(REFRESH),--refresh,)
