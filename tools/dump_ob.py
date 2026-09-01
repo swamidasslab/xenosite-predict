@@ -19,6 +19,10 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.progress import iter_progress  # noqa: E402
 DUMP_IMAGE = os.environ.get("XENOSITE_PY2_DUMP_IMAGE", "xenosite-predict-py2:dump")
 DUMP_DOCKERFILE = ROOT / "tools" / "py2-dump" / "Dockerfile"
 HELPER = ROOT / "tools" / "py2-dump" / "dump_ob_features.py"
@@ -451,13 +455,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         errors: list[dict] = []
         chunk = max(1, args.chunk)
-        for i in range(0, len(jobs), chunk):
+        chunk_starts = list(range(0, len(jobs), chunk))
+        for i in iter_progress(chunk_starts, desc="OB dump chunks", unit="chunk"):
             batch = jobs[i : i + chunk]
-            print(
-                f"dumping chunk {i // chunk + 1}/{(len(jobs) + chunk - 1) // chunk} "
-                f"({len(batch)} molecules) …",
-                file=sys.stderr,
-            )
             dumped, batch_errors, interrupted = dump_batch(batch, args.src)
             merge_dumped(molecules, dumped)
             errors.extend(batch_errors)

@@ -19,7 +19,7 @@ import argparse
 import os
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +31,7 @@ from tests.support import (  # noqa: E402
     load_golden_suite,
     serialize_molecule_results,
 )
+from tools.progress import iter_progress, map_progress, worker_quiet  # noqa: E402
 from tools.suite_drift_lib import DEFAULT_CACHE, cache_index, load_cache, save_cache  # noqa: E402
 
 _WEIGHTS_ROOT: str = ""
@@ -42,6 +43,7 @@ def _default_workers() -> int:
 
 
 def _worker_init(weights_root: str) -> None:
+    worker_quiet()
     global _WEIGHTS_ROOT
     _WEIGHTS_ROOT = weights_root
 
@@ -133,34 +135,34 @@ def main(argv: list[str] | None = None) -> int:
 
     if workers == 1:
         _worker_init(weights_root)
-        for task in pending:
+        for task in iter_progress(pending, desc="capture ONNX", unit="pair"):
             rec = _capture_one(task)
             rows.append(rec)
             added += 1
             save_cache(args.cache, rows)
-            status = "ok" if not rec["error"] else f"ERR {rec['error'][:40]}"
-            print(
-                f"[{added}/{len(pending)}] {rec['model']} {rec['name'][:32]} {status}",
-                flush=True,
-            )
     else:
-        print(f"capture {len(pending)} pairs with {workers} workers", flush=True)
+        def _on_capture(rec: dict, bar) -> None:
+            if rec.get("error"):
+                bar.write(
+                    f"ERR {rec['model']} {rec['name'][:32]}: {rec['error'][:60]}"
+                )
+
         with ProcessPoolExecutor(
             max_workers=workers,
             initializer=_worker_init,
             initargs=(weights_root,),
         ) as pool:
-            futures = {pool.submit(_capture_one, task): task for task in pending}
-            for fut in as_completed(futures):
-                rec = fut.result()
+            for rec in map_progress(
+                _capture_one,
+                pending,
+                pool=pool,
+                desc=f"capture ONNX ({workers}w, {len(pending)} pairs)",
+                unit="pair",
+                on_result=_on_capture,
+            ):
                 rows.append(rec)
                 added += 1
                 save_cache(args.cache, rows)
-                status = "ok" if not rec["error"] else f"ERR {rec['error'][:40]}"
-                print(
-                    f"[{added}/{len(pending)}] {rec['model']} {rec['name'][:32]} {status}",
-                    flush=True,
-                )
 
     dt = time.time() - t0
     print(f"cache {args.cache} total={len(rows)} new={added} ({dt:.1f}s)")

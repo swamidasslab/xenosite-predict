@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +25,7 @@ from tests.support import (  # noqa: E402
     load_golden_suite,
     serialize_molecule_results,
 )
+from tools.progress import iter_progress  # noqa: E402
 
 
 def _load_out(path: Path) -> list[dict]:
@@ -91,33 +91,35 @@ def main(argv: list[str] | None = None) -> int:
     added = 0
     errors: list[str] = []
 
-    for i, smiles in enumerate(smiles_list):
+    pending: list[tuple[str, str]] = []
+    for smiles in smiles_list:
         for model in models:
             key = (model, smiles)
             if key in done and not args.force:
                 continue
-            if args.force and key in done:
-                rows = [r for r in rows if (r.get("model"), r.get("smiles")) != key]
-                done.discard(key)
-            t0 = time.time()
-            try:
-                mol = predict(smiles, models=[model], backend=backend)
-                rec = {
-                    "smiles": mol.smiles,
-                    "name": _name_for(smiles, names),
-                    "model": model,
-                    "results": serialize_molecule_results(mol),
-                }
-                rows.append(rec)
-                done.add(key)
-                added += 1
-                _save_out(args.out, rows)
-                dt = time.time() - t0
-                print(f"[{added}] {model} {rec['name'][:32]} ({dt:.1f}s)", flush=True)
-            except Exception as exc:
-                msg = f"{model} {smiles[:32]}: {exc}"
-                errors.append(msg)
-                print(f"ERROR {msg}", file=sys.stderr, flush=True)
+            pending.append((smiles, model))
+
+    for smiles, model in iter_progress(pending, desc="gather golden", unit="pair"):
+        key = (model, smiles)
+        if args.force and key in done:
+            rows = [r for r in rows if (r.get("model"), r.get("smiles")) != key]
+            done.discard(key)
+        try:
+            mol = predict(smiles, models=[model], backend=backend)
+            rec = {
+                "smiles": mol.smiles,
+                "name": _name_for(smiles, names),
+                "model": model,
+                "results": serialize_molecule_results(mol),
+            }
+            rows.append(rec)
+            done.add(key)
+            added += 1
+            _save_out(args.out, rows)
+        except Exception as exc:
+            msg = f"{model} {smiles[:32]}: {exc}"
+            errors.append(msg)
+            print(f"ERROR {msg}", file=sys.stderr, flush=True)
 
     if args.merge_smoke:
         smoke = load_golden_suite(merge_smoke=False)
