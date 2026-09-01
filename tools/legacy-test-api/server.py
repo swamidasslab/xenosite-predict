@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/health"):
-            _json(self, 200, {"ok": True})
+            _json(self, 200, {"ok": True, "pid": os.getpid()})
             return
         _json(self, 404, {"error": "not found"})
 
@@ -122,8 +122,8 @@ class Handler(BaseHTTPRequestHandler):
         _json(self, 404, {"error": "not found"})
 
 
-def _load_predictor(model):
-    """Load one predictor only — avoid importing phase1/TF when serving epoxidation, etc."""
+def _load_predictor_impl(model):
+    """Load pickled nets once per process (warmup); duplicate requests cached by nginx."""
     if model == "epoxidation":
         from libridass.epoxidation1 import PyMolPredictor
 
@@ -153,6 +153,15 @@ def _load_predictor(model):
 
         return PyMolPredictor().BPD.APMP
     raise KeyError("unknown model %s" % model)
+
+
+_LOADED_PREDICTORS = {}
+
+
+def _load_predictor(model):
+    if model not in _LOADED_PREDICTORS:
+        _LOADED_PREDICTORS[model] = _load_predictor_impl(model)
+    return _LOADED_PREDICTORS[model]
 
 
 def _serialize(obj):
@@ -329,7 +338,7 @@ def features(model, smiles):
 def main():
     port = int(os.environ.get("PORT", "8099"))
     httpd = HTTPServer(("0.0.0.0", port), Handler)
-    sys.stderr.write("legacy-test-api listening on %s\n" % port)
+    sys.stderr.write("legacy-test-api listening on %s (pid=%s)\n" % (port, os.getpid()))
     httpd.serve_forever()
 
 

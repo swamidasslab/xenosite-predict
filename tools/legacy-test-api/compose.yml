@@ -1,16 +1,18 @@
+# N replicas of single-threaded legacy-test-api, nginx LB + response cache on :8099.
+#   make legacy-test-api LEGACY_REPLICAS=8
+
 services:
   legacy-test-api:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8099:8099"
+    expose:
+      - "8099"
     environment:
       PYTHONPATH: /src
       XENOSITE_LEGACY_DATA: /src
       PORT: "8099"
     volumes:
-      # Sibling ML tree (molecularNN, topological_descriptors, …); libridass below overrides.
       - ../../../../xenosite-legacy/src:/src:ro
       - ../../weights/legacy/sibling_libridass:/src/libridass:ro
       - ../../weights/legacy/tarball/libridass/epoxidation1/models:/src/libridass/epoxidation1/models:ro
@@ -24,3 +26,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
+
+  legacy-lb:
+    image: nginx:alpine
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    tmpfs:
+      - /var/cache/nginx/predict
+    depends_on:
+      - legacy-test-api
