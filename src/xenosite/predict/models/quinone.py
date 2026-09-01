@@ -89,6 +89,8 @@ class QuinoneRunner(BaseRunner):
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
         from ..numbering import (
             build_group_to_rdkit_from_rows,
+            build_ob_to_rdkit_from_rows,
+            legacy_ob_order_from_rows,
             legacy_site_to_atom_vector,
             map_legacy_quinone_site_pair_to_rdkit,
         )
@@ -102,6 +104,8 @@ class QuinoneRunner(BaseRunner):
         mol = self.rdkit_mol(molecule)
         rows = quinone_atom_rows(mol)
         group_to_rd = build_group_to_rdkit_from_rows(rows)
+        ob_to_rd = build_ob_to_rdkit_from_rows(rows)
+        row_ob_order = legacy_ob_order_from_rows(rows)
         n = molecule.atoms.num
 
         legacy_pair_scores: dict[tuple[int, int], float] = {}
@@ -114,7 +118,13 @@ class QuinoneRunner(BaseRunner):
                 continue
             score = 0.0 if val == {} else float(val)
             rd = map_legacy_quinone_site_pair_to_rdkit(
-                ia, ib, group_to_rd, zero_based_keys=True
+                ia,
+                ib,
+                group_to_rd,
+                zero_based_keys=True,
+                ob_to_rd=ob_to_rd,
+                legacy_ob_order=row_ob_order,
+                n_heavy=n,
             )
             legacy_pair_scores[rd] = score
 

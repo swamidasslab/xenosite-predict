@@ -224,19 +224,32 @@ def map_legacy_quinone_site_pair_to_rdkit(
     group_to_rd: Mapping[int, int],
     *,
     zero_based_keys: bool = True,
+    ob_to_rd: Mapping[int, int] | None = None,
+    legacy_ob_order: Sequence[int] | None = None,
+    n_heavy: int | None = None,
 ) -> tuple[int, int]:
     """Map legacy quinone site keys (topological group ids) to RDKit pair indices.
 
     ``legacy-test-api`` subtracts 1 from frozenset site keys before JSON encode,
     so keys from :class:`LegacyTestBackend` are 0-based group numbers.
+    Falls back to OB ``GetIdx()`` mapping when a group id is absent.
     """
     ga = int(a) + 1 if zero_based_keys else int(a)
     gb = int(b) + 1 if zero_based_keys else int(b)
     ra = group_to_rd.get(ga)
     rb = group_to_rd.get(gb)
-    if ra is None or rb is None:
-        raise KeyError(f"unknown quinone group pair ({ga}, {gb})")
-    return tuple(sorted((ra, rb)))
+    if ra is not None and rb is not None:
+        return tuple(sorted((ra, rb)))
+    if ob_to_rd is not None and legacy_ob_order is not None and n_heavy is not None:
+        return map_legacy_pair_to_rdkit(
+            a,
+            b,
+            legacy_ob_order=legacy_ob_order,
+            n_heavy=n_heavy,
+            ob_to_rd=ob_to_rd,
+            already_zero_based=zero_based_keys,
+        )
+    raise KeyError(f"unknown quinone group pair ({ga}, {gb})")
 
 
 def quinone_pairs_to_rdkit(
