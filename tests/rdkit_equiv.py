@@ -99,3 +99,85 @@ def assert_bond_scores_openbabel_principled(
             assert span <= atol, (
                 f"openbabel principled bond symmetry {key} members {members}: {active}"
             )
+
+
+def _descriptor_vectors(rows: list[dict], names: list[str]):
+    from xenosite.predict.features.names import select_columns
+
+    return [select_columns(r, names) for r in rows]
+
+
+def assert_atom_descriptor_rows_symmetric(
+    rows: list[dict],
+    rdmol: Chem.Mol,
+    names: list[str],
+    *,
+    atol: float = PARITY_ATOL,
+) -> None:
+    """ONNX atom-head columns must match within each multi-member RDKit atom class."""
+    import numpy as np
+
+    ranks = rdkit_atom_ranks(rdmol)
+    by_rank: dict[int, list[dict]] = defaultdict(list)
+    for row in rows:
+        if "_atom" not in row:
+            continue
+        by_rank[int(ranks[int(row["_atom"])])].append(row)
+    for rank, members in by_rank.items():
+        if len(members) < 2:
+            continue
+        vecs = _descriptor_vectors(members, names)
+        ref = vecs[0]
+        atoms = [int(m["_atom"]) for m in members]
+        for vec, atom in zip(vecs[1:], atoms[1:]):
+            if not np.allclose(ref, vec, atol=atol, rtol=0):
+                diff_cols = [
+                    names[i]
+                    for i in range(len(names))
+                    if not np.isclose(ref[i], vec[i], atol=atol, rtol=0)
+                ]
+                raise AssertionError(
+                    f"atom symmetry rank {rank} atoms {atoms}: "
+                    f"{len(diff_cols)} columns differ (e.g. {diff_cols[:5]})"
+                )
+
+
+def assert_bond_descriptor_rows_symmetric(
+    rows: list[dict],
+    rdmol: Chem.Mol,
+    names: list[str],
+    *,
+    pymol=None,
+    atol: float = PARITY_ATOL,
+) -> None:
+    """ONNX bond-head columns match within each directed OpenBabel bond class."""
+    import numpy as np
+
+    from xenosite.predict.features import _ob
+    from xenosite.predict.symmetry import directed_ob_bond_symmetry_key
+
+    if pymol is None:
+        pymol = _ob.from_rdkit_mol(rdmol)
+    by_key: dict[tuple[int, int, int], list[dict]] = defaultdict(list)
+    for row in rows:
+        if "_atoms" not in row or "_index" not in row:
+            continue
+        key = directed_ob_bond_symmetry_key(pymol, row, rdmol)
+        by_key[key].append(row)
+    for key, members in by_key.items():
+        if len(members) < 2:
+            continue
+        vecs = _descriptor_vectors(members, names)
+        ref = vecs[0]
+        bonds = [tuple(m["_atoms"]) for m in members]
+        for vec, bond in zip(vecs[1:], bonds[1:]):
+            if not np.allclose(ref, vec, atol=atol, rtol=0):
+                diff_cols = [
+                    names[i]
+                    for i in range(len(names))
+                    if not np.isclose(ref[i], vec[i], atol=atol, rtol=0)
+                ]
+                raise AssertionError(
+                    f"directed OB bond symmetry {key} pairs {bonds}: "
+                    f"{len(diff_cols)} columns differ (e.g. {diff_cols[:5]})"
+                )
