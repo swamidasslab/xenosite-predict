@@ -23,6 +23,7 @@ list_models()  # what this process can actually run (backend-aware)
 - **Indices** are 0-based RDKit atom/bond indices. Scores are floats (`atol=1e-4` in tests).
 - **Name lookup is omitted.** Pass SMILES, not drug names.
 - Import does **not** open ONNX, HTTP, or OpenBabel. Load on first use of that `(model, version)`. Callers never import `openbabel` / `pybel`.
+- **Legacy vs principled:** production defaults differ from golden-test-api parity in three internal `_parameter` flags (ndealk site keys, quinone OMP paths, bond symmetry). See [`docs/legacy-vs-principled.md`](docs/legacy-vs-principled.md) and the commented walkthrough `tests/test_legacy_vs_principled_guide.py`.
 
 ### `predict(inp, model=..., models=..., backend=..., backends=..., env=...)`
 
@@ -110,6 +111,7 @@ tools/                  # extract, convert, legacy-test-api (not in the wheel)
 weights/                # local only — README + .gitignore committed
 tests/                  # unit + @pytest.mark.live
 docs/vendored-diffs.md  # NN/feature hashes, MOPAC/SmartCYP gate
+docs/legacy-vs-principled.md  # production defaults vs golden legacy modes
 ```
 
 ## Development
