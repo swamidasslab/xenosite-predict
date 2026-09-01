@@ -170,14 +170,48 @@ def test_map_legacy_quinone_group_pair():
     from xenosite.predict.features import quinone_atom_rows
     from xenosite.predict.numbering import (
         build_group_to_rdkit_from_rows,
+        build_rdkit_to_group_from_rows,
+        legacy_quinone_site_key_for_rdkit_pair,
+        legacy_quinone_site_score,
         map_legacy_quinone_site_pair_to_rdkit,
     )
 
     mol, _ = parse_smiles(GAP_SMILES)
     rows = quinone_atom_rows(mol)
     group_to_rd = build_group_to_rdkit_from_rows(rows)
+    rd_to_group = build_rdkit_to_group_from_rows(rows)
     # legacy-test-api emits 0-based group ids (frozenset {3,4} -> "2-3")
     assert map_legacy_quinone_site_pair_to_rdkit(2, 3, group_to_rd) == (2, 3)
+    a, b = 2, 3
+    key = legacy_quinone_site_key_for_rdkit_pair(a, b, rd_to_group)
+    assert key is not None
+    site = {key: 0.42}
+    assert legacy_quinone_site_score(site, a, b, rd_to_group) == 0.42
+
+
+def test_legacy_quinone_site_ob_preferred_over_group():
+    """Site key 10-14 maps via OB ids to RDKit (10,14), not group (12,16)."""
+    from xenosite.predict.molecule import parse_smiles
+    from xenosite.predict.features import quinone_atom_rows
+    from xenosite.predict.numbering import (
+        build_group_to_rdkit_from_rows,
+        build_ob_to_rdkit_from_rows,
+        legacy_ob_order_from_rows,
+        map_legacy_quinone_site_pair_to_rdkit,
+    )
+
+    mol, _ = parse_smiles("CC(C)(C)NCC(O)COc1nsnc1N1CCOCC1")
+    rows = quinone_atom_rows(mol)
+    kw = dict(
+        zero_based_keys=True,
+        ob_to_rd=build_ob_to_rdkit_from_rows(rows),
+        legacy_ob_order=legacy_ob_order_from_rows(rows),
+        n_heavy=mol.GetNumAtoms(),
+    )
+    assert map_legacy_quinone_site_pair_to_rdkit(10, 14, build_group_to_rdkit_from_rows(rows), **kw) == (
+        10,
+        14,
+    )
 
 
 def test_from_legacy_quinone_pair_idx_matches_onnx():
@@ -197,6 +231,34 @@ def test_from_legacy_quinone_pair_idx_matches_onnx():
     lg = next(r for r in leg.results if r.model == "quinone")
     og = next(r for r in ort.results if r.model == "quinone")
     assert {tuple(p) for p in lg.pair_idx} == {tuple(p) for p in og.pair_idx}
+
+
+@pytest.mark.live
+def test_from_legacy_quinone_atom_vector_matches_onnx():
+    """Legacy ingest uses group-mapped pairs + or_combine (same as ONNX path)."""
+    from pathlib import Path
+
+    from xenosite.predict import predict
+    from xenosite.predict.backends.legacy import LegacyTestBackend
+    from xenosite.predict.backends.onnx import OnnxBackend
+
+    samples = [
+        OK_SMILES,
+        "O=C1C(Cl)=C(Cl)C(=O)C(Cl)=C1Cl",
+        "O=C1c2ccccc2C(=O)c2ccccc21",
+    ]
+    url = "http://127.0.0.1:8099"
+    be = LegacyTestBackend(url)
+    if not be.health():
+        pytest.skip("legacy-test-api not running")
+    onx = OnnxBackend(Path(__file__).resolve().parents[1] / "weights" / "onnx")
+    for smi in samples:
+        leg = predict(smi, models=["quinone"], backend=be)
+        ort = predict(smi, models=["quinone"], backend=onx)
+        lg = next(r for r in leg.results if r.model == "quinone")
+        og = next(r for r in ort.results if r.model == "quinone")
+        assert lg.pair_idx == og.pair_idx, smi
+        assert np.allclose(lg.atom, og.atom, atol=1e-4), smi
 
 
 def test_ok_smiles_dense():

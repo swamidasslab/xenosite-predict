@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -20,6 +20,21 @@ def _tf1_atom_scores(y: np.ndarray) -> np.ndarray:
     """Match TF1.15 float32 outputs ORT flushes to exact zero (quinone pair logit path)."""
     y = np.asarray(y, dtype=np.float64).reshape(-1)
     return np.where(y == 0.0, 3.022989607e-08, y)
+
+
+def _atom_scores_from_pairs(
+    pair_idx: Sequence[tuple[int, int]],
+    pair: Sequence[float],
+    n_atoms: int,
+) -> list[float]:
+    """Per-atom scores from pair logits (legacy ``or_combine`` / ONNX path)."""
+    collect: list[list[float]] = [[] for _ in range(n_atoms)]
+    for (a, b), s in zip(pair_idx, pair):
+        if 0 <= a < n_atoms:
+            collect[a].append(float(s))
+        if 0 <= b < n_atoms:
+            collect[b].append(float(s))
+    return [or_combine(p) for p in collect]
 
 
 class QuinoneRunner(BaseRunner):
@@ -64,11 +79,7 @@ class QuinoneRunner(BaseRunner):
             pair_scores = backend.run_head(self.name, "pair", px).reshape(-1)
 
         pair_keys = [tuple(r["_atoms"]) for r in pair_rows]
-        collect = [[] for _ in range(molecule.atoms.num)]
-        for (a, b), s in zip(pair_keys, pair_scores):
-            collect[a].append(float(s))
-            collect[b].append(float(s))
-        atom_pred = [or_combine(p) for p in collect]
+        atom_pred = _atom_scores_from_pairs(pair_keys, pair_scores, molecule.atoms.num)
 
         mol_names = load_names("quinone", "mol")
         mol_score = 0.0
@@ -91,7 +102,6 @@ class QuinoneRunner(BaseRunner):
             build_group_to_rdkit_from_rows,
             build_ob_to_rdkit_from_rows,
             legacy_ob_order_from_rows,
-            legacy_site_to_atom_vector,
             map_legacy_quinone_site_pair_to_rdkit,
         )
 
@@ -135,18 +145,9 @@ class QuinoneRunner(BaseRunner):
         }
 
         pair_rows = quinone_pair_rows(mol, rows, atom_scores_by_ob)
-        pair_idx = [list(r["_atoms"]) for r in pair_rows]
-        pair = [legacy_pair_scores.get(tuple(r["_atoms"]), 0.0) for r in pair_rows]
-
-        atom_pred = legacy_site_to_atom_vector(atom_site, n)
-        if not any(atom_pred) and pair:
-            collect = [[] for _ in range(n)]
-            for (a, b), s in zip(pair_idx, pair):
-                if 0 <= a < n:
-                    collect[a].append(s)
-                if 0 <= b < n:
-                    collect[b].append(s)
-            atom_pred = [or_combine(p) for p in collect]
+        pair_idx = [tuple(r["_atoms"]) for r in pair_rows]
+        pair = [legacy_pair_scores.get(idx, 0.0) for idx in pair_idx]
+        atom_pred = _atom_scores_from_pairs(pair_idx, pair, n)
 
         append_atom_pair(
             molecule,

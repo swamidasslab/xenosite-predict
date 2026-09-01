@@ -187,6 +187,48 @@ def build_group_to_rdkit_from_rows(rows: Sequence[Mapping[str, Any]]) -> dict[in
     return out
 
 
+def build_rdkit_to_group_from_rows(rows: Sequence[Mapping[str, Any]]) -> dict[int, int]:
+    """Map 0-based RDKit ``_atom`` → topological group id from feature rows."""
+    out: dict[int, int] = {}
+    for row in rows:
+        if "_index" not in row or "_atom" not in row:
+            continue
+        out[int(row["_atom"])] = parse_pattern_group(row["_index"])
+    return out
+
+
+def legacy_quinone_site_key_for_rdkit_pair(
+    a: int,
+    b: int,
+    rd_to_group: Mapping[int, int],
+) -> str | None:
+    """0-based ``site`` dict key for a RDKit atom pair (legacy-test-api format)."""
+    ga = rd_to_group.get(int(a))
+    gb = rd_to_group.get(int(b))
+    if ga is None or gb is None:
+        return None
+    ia, ib = int(ga) - 1, int(gb) - 1
+    if ia > ib:
+        ia, ib = ib, ia
+    return f"{ia}-{ib}"
+
+
+def legacy_quinone_site_score(
+    site: Mapping[Any, Any],
+    a: int,
+    b: int,
+    rd_to_group: Mapping[int, int],
+) -> float:
+    """Score from legacy ``site`` for the RDKit pair aligned to ``quinone_pair_rows``."""
+    key = legacy_quinone_site_key_for_rdkit_pair(a, b, rd_to_group)
+    if not key:
+        return 0.0
+    val = site.get(key)
+    if val is None or val == {}:
+        return 0.0
+    return float(val)
+
+
 def legacy_ob_order_from_rows(rows: Sequence[Mapping[str, Any]]) -> list[int]:
     return [parse_pattern_ob_index(r["_index"]) for r in rows if "_index" in r]
 
@@ -228,12 +270,17 @@ def map_legacy_quinone_site_pair_to_rdkit(
     legacy_ob_order: Sequence[int] | None = None,
     n_heavy: int | None = None,
 ) -> tuple[int, int]:
-    """Map legacy quinone site keys (topological group ids) to RDKit pair indices.
+    """Map legacy quinone site keys to RDKit pair indices.
 
-    ``legacy-test-api`` subtracts 1 from frozenset site keys before JSON encode,
-    so keys from :class:`LegacyTestBackend` are 0-based group numbers.
-    Falls back to OB ``GetIdx()`` mapping when a group id is absent.
+    ``legacy-test-api`` subtracts 1 from frozenset site keys before JSON encode.
+    Prefer OpenBabel ``GetIdx()`` when both ids exist in *ob_to_rd* (aligns with
+    ``quinone_pair_rows``); otherwise use topological group ids, then gapped OB.
     """
+    if ob_to_rd is not None:
+        ob_a = int(a) + 1 if zero_based_keys else int(a)
+        ob_b = int(b) + 1 if zero_based_keys else int(b)
+        if ob_a in ob_to_rd and ob_b in ob_to_rd:
+            return tuple(sorted((ob_to_rd[ob_a], ob_to_rd[ob_b])))
     ga = int(a) + 1 if zero_based_keys else int(a)
     gb = int(b) + 1 if zero_based_keys else int(b)
     ra = group_to_rd.get(ga)
