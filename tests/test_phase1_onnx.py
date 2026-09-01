@@ -51,8 +51,9 @@ def test_phase1_onnx_matches_numpy_mlp(head, pickle_name, spec_fn, fwd):
     np.testing.assert_allclose(y, y_ref, atol=1e-5, rtol=0)
 
 
-def test_phase1_smiles_needs_bond_lonepair_features():
+def test_phase1_smiles_predicts():
     assert onnx_weights_present("phase1"), "no ONNX for phase1 (run make convert-onnx MODEL=phase1)"
     be = OnnxBackend(ROOT / "weights" / "onnx")
-    with pytest.raises(WeightsNotFound, match="Bond_and_LonePair"):
-        predict("O=C(C)Oc1ccccc1C(=O)O", models=["phase1"], backend=be)
+    mol = predict("O=C(C)Oc1ccccc1C(=O)O", models=["phase1"], backend=be)
+    assert len(mol.results) == 5
+    assert all(r.model.startswith("phase1.") for r in mol.results)

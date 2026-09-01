@@ -86,7 +86,7 @@ def list_models(
         spec = (info.name, info.version)
         ok = spec in available and not info.blocked_reason
         reason = info.blocked_reason or ("" if ok else (default_reason or "not on this backend"))
-        if ok and bname == "onnx" and info.name not in ("phase1", "bioactivation"):
+        if ok and bname == "onnx" and info.name not in ("bioactivation",):
             from .features import _ob
 
             if not _ob.installed():

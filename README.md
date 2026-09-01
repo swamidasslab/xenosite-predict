@@ -76,7 +76,7 @@ Per-model override: `predict(..., backends={("bioactivation", "0"): "http"})`.
 | `ugt` | `AtomResult` | Internal OpenBabel topological + mol descriptors. No MOPAC/SmartCYP on the inference path. |
 | `ndealk` | `BondResult` (HLM slice) | Same ONNX as isozyme. Check `CCCC1CCCNC1C=O` for off-by-1. |
 | `isozyme` | ten `BondResult` (`isozyme.3a4`, … `isozyme.hlm`) | Production Flask uses **ndealk1** for `metabolism1`, not the MOPAC metabolism predictor. |
-| `phase1` | five `AtomBondResult` | TF `molecularNN` converted to ONNX (`site` + `mol`). No TF at runtime. SMILES still needs Bond_and_LonePair features. |
+| `phase1` | five `AtomBondResult` | TF `molecularNN` → ONNX (`site` + `mol`). Bond_and_LonePair descriptors + topology-group pooling. |
 | `bioactivation` | `MolAtomResult` + metabolites | **Pipeline last** (enumeration + other models), not a single ONNX. |
 
 ## Makefile (tools are not in the sdist)

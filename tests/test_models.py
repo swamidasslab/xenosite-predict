@@ -16,7 +16,7 @@ NDEALK_OFFBY = "CCCC1CCCNC1C=O"
 
 @pytest.mark.parametrize(
     "model",
-    ["epoxidation", "quinone", "ugt", "ndealk", "isozyme", "reactivity"],
+    ["epoxidation", "quinone", "ugt", "ndealk", "isozyme", "reactivity", "phase1"],
 )
 def test_onnx_predicts(model):
     key = "ndealk" if model == "isozyme" else model
