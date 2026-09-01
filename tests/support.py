@@ -20,10 +20,20 @@ PARITY_ATOL = 3e-4  # TF1 float32 vs ORT on quinone near-zero atom scores
 # Golden rows were captured from legacy-test-api; ONNX bond vectors need legacy site keys.
 GOLDEN_NDEALK_PARAMETER = {"ndealk_site_mode": "legacy"}
 GOLDEN_QUINONE_PARAMETER = {"quinone_omp_mode": "legacy"}
-GOLDEN_PARAMETER = {**GOLDEN_NDEALK_PARAMETER, **GOLDEN_QUINONE_PARAMETER}
+GOLDEN_SYMMETRY_PARAMETER = {"symmetry_group_mode": "openbabel"}
+GOLDEN_PARAMETER = {
+    **GOLDEN_NDEALK_PARAMETER,
+    **GOLDEN_QUINONE_PARAMETER,
+    **GOLDEN_SYMMETRY_PARAMETER,
+}
 PRINCIPLED_NDEALK_PARAMETER = {"ndealk_site_mode": "principled"}
 PRINCIPLED_QUINONE_PARAMETER = {"quinone_omp_mode": "principled"}
-PRINCIPLED_PARAMETER = {**PRINCIPLED_NDEALK_PARAMETER, **PRINCIPLED_QUINONE_PARAMETER}
+PRINCIPLED_SYMMETRY_PARAMETER = {"symmetry_group_mode": "rdkit"}
+PRINCIPLED_PARAMETER = {
+    **PRINCIPLED_NDEALK_PARAMETER,
+    **PRINCIPLED_QUINONE_PARAMETER,
+    **PRINCIPLED_SYMMETRY_PARAMETER,
+}
 
 
 def onnx_weights_present(model: str | None = None) -> bool:

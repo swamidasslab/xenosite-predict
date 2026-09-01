@@ -502,6 +502,23 @@ def _attach_ndealk_topo_gid_pairs(pymol, rows: list[dict]) -> None:
         row["_topo_gid_pair"] = ndealk_row_topo_gid_pair(pymol, row)
 
 
+def _attach_bond_symmetry_classes(
+    rdkit_mol,
+    pymol,
+    rows: list[dict],
+    *,
+    symmetry_group_mode: Literal["rdkit", "openbabel"] = "rdkit",
+) -> None:
+    from ..symmetry import rdkit_bond_symmetry_key
+
+    for row in rows:
+        if symmetry_group_mode == "openbabel":
+            row["_symmetry_class"] = ndealk_row_topo_gid_pair(pymol, row)
+            continue
+        a, b = row["_atoms"]
+        row["_symmetry_class"] = rdkit_bond_symmetry_key(rdkit_mol, int(a), int(b))
+
+
 def ndealk_row_site_key_legacy(row: dict, *, n_atoms: int, seen_topo: set[tuple[int, ...]]) -> str:
     """Legacy-test parity site key (``prediction_df_to_dict`` + orphan keys).
 
@@ -531,8 +548,10 @@ def ndealk_site_from_row_scores(
 ) -> dict[str, float]:
     """Bond site map from BondTD rows and per-row ONNX scores.
 
-    ``principled`` (default, production API): one site key per unordered topo-GID
-    bond class — first BondTD row in each class only.
+    ``principled`` (default, production API): one site key per symmetry class
+    (RDKit by default; OpenBabel GID when ``symmetry_group_mode="openbabel"``).
+    The runner broadcasts the representative score to all bonds in the class when
+    using RDKit grouping.
 
     ``legacy`` (golden tests): emit a site key per row like ``prediction_df_to_dict``,
     including orphan ``max+1`` keys for some topo duplicates so bond vectors match
@@ -545,13 +564,15 @@ def ndealk_site_from_row_scores(
         seen: set[tuple[int, ...]] = set()
         site: dict[str, float] = {}
         for i, row in enumerate(rows):
-            gid = row.get("_topo_gid_pair")
-            if gid is None:
+            cls = row.get("_symmetry_class")
+            if cls is None:
+                cls = row.get("_topo_gid_pair")
+            if cls is None:
                 site[ndealk_row_site_key(row)] = scores[i]
                 continue
-            if gid in seen:
+            if cls in seen:
                 continue
-            seen.add(gid)
+            seen.add(cls)
             site[ndealk_row_site_key(row)] = scores[i]
         return site
 
@@ -564,7 +585,11 @@ def ndealk_site_from_row_scores(
     return site
 
 
-def ndealk_bond_rows(rdkit_mol) -> list[dict]:
+def ndealk_bond_rows(
+    rdkit_mol,
+    *,
+    symmetry_group_mode: Literal["rdkit", "openbabel"] = "rdkit",
+) -> list[dict]:
     """ndealk1 Heuristic + BondTD (``BondDesc__`` prefix, C–N / min-idx order).
 
     Join Heuristic onto BondTD by unordered atom pair, then keep BondTD row
@@ -593,4 +618,7 @@ def ndealk_bond_rows(rdkit_mol) -> list[dict]:
         for k in keys:
             r[k] = float(h.get(k, 0.0))
     _attach_ndealk_topo_gid_pairs(pymol, rows)
+    _attach_bond_symmetry_classes(
+        rdkit_mol, pymol, rows, symmetry_group_mode=symmetry_group_mode
+    )
     return rows

@@ -48,7 +48,9 @@ def predict(
         read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
         for golden parity tests and ``principled`` (default) for production;
         ``quinone_omp_mode`` is ``legacy`` (deterministic sorted BFS) for golden
-        tests and ``principled`` (mean over all shortest-path indicators) for production.
+        tests and ``principled`` (mean over all shortest-path indicators) for production;
+        ``symmetry_group_mode`` is ``openbabel`` for golden parity and ``rdkit``
+        (default) for production bond-class deduplication and broadcast.
 
     Notes
     -----
