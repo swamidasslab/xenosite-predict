@@ -85,6 +85,8 @@ Per-model override: `predict(..., backends={("bioactivation", "0"): "http"})`.
 ```
 make extract-weights          # Docker image or fallback tarball → weights/legacy/
 make convert-onnx             # pickle → ONNX; MODEL=epoxidation for one model
+make pack-onnx                # weights/xenosite_onnx.tgz (runtime graphs, no _dump)
+make extract-onnx             # unpack that tarball into weights/onnx/
 make test                     # pytest -m "not live"  (no Docker)
 make test-live                # pytest -m live; fixture skips if Docker/image missing
 make py2-dump-image           # python:2.7-slim + numpy + Debian OpenBabel 2.4

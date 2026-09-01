@@ -17,7 +17,14 @@ From the package root:
 ```
 make extract-weights    # copy from xenosite-legacy:api (or fallback tarball)
 make convert-onnx       # pickle → safetensors → ONNX (needs the extract)
+make pack-onnx          # weights/xenosite_onnx.tgz  (*.onnx + *.meta.json, no _dump)
+make extract-onnx       # unpack that tarball into weights/onnx/
 ```
+
+`make pack-onnx` is the runtime-weight tarball: `epoxidation/bond.onnx` and friends.
+It omits `_dump/` (Python-2 pickle dump intermediates). Feature-name JSON stays in
+the Python package. Inference only needs the `.onnx` files; `.meta.json` is packed
+for tests/debugging.
 
 The Docker image is `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api`.
 If the registry is unreachable, `make extract-weights` tries
