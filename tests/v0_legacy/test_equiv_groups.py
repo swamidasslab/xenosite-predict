@@ -17,7 +17,7 @@ from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.molecule import parse_smiles
 
-from tests.rdkit_equiv import (
+from tests.v0_legacy.rdkit_equiv import (
     assert_atom_scores_symmetric,
     assert_bond_scores_openbabel_principled,
     assert_bond_scores_symmetric,
@@ -26,7 +26,7 @@ from tests.rdkit_equiv import (
     atom_symmetry_groups,
     bond_symmetry_groups,
 )
-from tests.sampling import equiv_pairs, equiv_smiles, equiv_smiles_model, molecule_sample_settings
+from tests.v0_legacy.sampling import equiv_pairs, equiv_smiles, equiv_smiles_model, molecule_sample_settings
 from tests.support import (
     GOLDEN,
     GOLDEN_SYMMETRY_PARAMETER,

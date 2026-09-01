@@ -19,7 +19,7 @@ from xenosite.predict import predict
 from xenosite.predict.backends.legacy import LegacyTestBackend
 from xenosite.predict.backends.onnx import OnnxBackend
 
-from tests.sampling import (
+from tests.v0_legacy.sampling import (
     golden_parity_smiles,
     golden_parity_smiles_model,
     molecule_sample_settings,

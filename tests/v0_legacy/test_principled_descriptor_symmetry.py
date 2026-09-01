@@ -19,11 +19,11 @@ from hypothesis import strategies as st
 from xenosite.predict.features import load_names
 from xenosite.predict.molecule import parse_smiles
 
-from tests.rdkit_equiv import (
+from tests.v0_legacy.rdkit_equiv import (
     assert_atom_descriptor_rows_symmetric,
     assert_bond_descriptor_rows_symmetric,
 )
-from tests.sampling import (
+from tests.v0_legacy.sampling import (
     molecule_sample_settings,
     ob_dump_smiles,
     principled_descriptor_smiles_model,

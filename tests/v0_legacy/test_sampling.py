@@ -6,7 +6,7 @@ from hypothesis import given
 from hypothesis import settings as hyp_settings
 from hypothesis import strategies as st
 
-from tests.sampling import (
+from tests.v0_legacy.sampling import (
     _SCORE_MODELS,
     equiv_models_for_smiles,
     equiv_pairs,

@@ -64,7 +64,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["xenosite.predict", "tests.sampling"]
+source = ["xenosite.predict", "tests.v0_legacy.sampling"]
 parallel = true
 concurrency = ["multiprocessing"]
 

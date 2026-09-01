@@ -35,7 +35,7 @@ from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.compare import assert_equiv_results
 from xenosite.predict.molecule import parse_smiles
 
-from tests.rdkit_equiv import (
+from tests.v0_legacy.rdkit_equiv import (
     assert_bond_descriptor_rows_symmetric,
     assert_bond_scores_openbabel_principled,
     assert_bond_scores_symmetric,

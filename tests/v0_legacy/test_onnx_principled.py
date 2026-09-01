@@ -123,7 +123,7 @@ def test_predict_default_differs_from_legacy(model, smiles):
 def test_ndealk_rdkit_symmetry_pooling():
     """Production path pools one class score to all RDKit-symmetric bonds."""
     from xenosite.predict.molecule import parse_smiles
-    from tests.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
+    from tests.v0_legacy.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
 
     rdmol, _ = parse_smiles(NDEALK_PRINCIPLED_FEWER)
     mol = _onnx_predict(NDEALK_PRINCIPLED_FEWER, "ndealk")
@@ -135,7 +135,7 @@ def test_ndealk_rdkit_symmetry_pooling():
 def test_epoxidation_rdkit_symmetry_pooling():
     """Production epoxidation pools within RDKit bond classes."""
     from xenosite.predict.molecule import parse_smiles
-    from tests.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
+    from tests.v0_legacy.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
 
     smiles = "c1ccc2c(c1)oc1ccccc12"
     rdmol, _ = parse_smiles(smiles)

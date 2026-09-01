@@ -20,7 +20,7 @@ from hypothesis import strategies as st
 
 from xenosite.predict.molecule import parse_smiles
 
-from tests.sampling import (
+from tests.v0_legacy.sampling import (
     molecule_sample_settings,
     ob_dump_pairs,
     ob_dump_smiles,

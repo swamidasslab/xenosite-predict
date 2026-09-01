@@ -13,7 +13,7 @@ from hypothesis import strategies as st
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 
-from tests.sampling import golden_suite_smiles, golden_suite_smiles_model, molecule_sample_settings
+from tests.v0_legacy.sampling import golden_suite_smiles, golden_suite_smiles_model, molecule_sample_settings
 from tests.support import (
     GOLDEN_PARAMETER,
     GOLDEN_SUITE,
