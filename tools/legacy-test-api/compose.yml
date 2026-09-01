@@ -15,6 +15,7 @@ services:
       - ../../weights/legacy/sibling_libridass:/src/libridass:ro
       - ../../weights/legacy/tarball/libridass/epoxidation1/models:/src/libridass/epoxidation1/models:ro
       - ../../weights/legacy/tarball/libridass/quinone1/models:/src/libridass/quinone1/models:ro
+      - ../../weights/legacy/tarball/libridass/quinone1/data:/src/libridass/quinone1/data:ro
       - ../../weights/legacy/tarball/libridass/reactivity1/models:/src/libridass/reactivity1/models:ro
       - ../../weights/legacy/tarball/libridass/ugt1/models:/src/libridass/ugt1/models:ro
       - ../../weights/legacy/tarball/libridass/ndealk1/models:/src/libridass/ndealk1/models:ro

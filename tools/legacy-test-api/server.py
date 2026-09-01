@@ -113,6 +113,9 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) >= 2 and parts[0] == "features":
                 _json(self, 200, features(parts[1], payload.get("smiles")))
                 return
+            if len(parts) >= 2 and parts[0] == "moldesc":
+                _json(self, 200, moldesc(parts[1], payload.get("smiles")))
+                return
         except Exception as exc:
             _json(self, 500, {"error": str(exc)})
             return
@@ -182,14 +185,50 @@ def _rdkit_site_dict(site):
     for k, v in site.items():
         if isinstance(k, frozenset):
             out[frozenset(int(x) - 1 for x in k)] = v
+        elif isinstance(k, str) and "-" in k:
+            # Some legacy predictors emit string keys (still 1-based OB).
+            parts = k.split("-", 1)
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                a, b = int(parts[0]) - 1, int(parts[1]) - 1
+                out["%d-%d" % (a, b)] = v
+            else:
+                out[k] = v
         else:
             out[k] = v
     return out
 
 
+def _normalize_smiles(smiles):
+    if smiles is None:
+        raise ValueError("missing smiles")
+    try:
+        unicode_type = unicode  # py2
+    except NameError:
+        unicode_type = str
+    if isinstance(smiles, unicode_type) and unicode_type is not str:
+        smiles = smiles.encode("utf-8")
+    return smiles
+
+
 def predict(model, smiles):
+    from libridass.base import XvalSub
+
+    smiles = _normalize_smiles(smiles)
     P = _load_predictor(model)
-    raw = P.predict(smiles) if hasattr(P, "predict") else P(smiles)
+    if model in ("ndealk", "isozyme"):
+        pymol = XvalSub.cast_pymol(smiles)
+        raw = P.predict(pymol, indexed_zero=True)
+    elif model == "epoxidation":
+        raw = P.predict(smiles)
+    elif model in ("quinone", "reactivity"):
+        pymol = XvalSub.cast_pymol(smiles)
+        raw = P.predict(pymol, xval_sub=False)
+    elif hasattr(P, "predict"):
+        pymol = XvalSub.cast_pymol(smiles)
+        raw = P.predict(pymol)
+    else:
+        pymol = XvalSub.cast_pymol(smiles)
+        raw = P(pymol)
     if isinstance(raw, dict):
         for key in ("site", "bond"):
             if key in raw:
@@ -229,26 +268,55 @@ def _head_model(P, model, head):
     raise KeyError("no nn head %s/%s" % (model, head))
 
 
-def features(model, smiles):
-    """Dump OpenBabel feature rows for RDKit-vs-OB tests."""
-    P = _load_predictor(model)
+def moldesc(model, smiles):
+    """Dump two-stage mol-head input row (legacy ``MolDesc`` / ``MolData``)."""
     from libridass.base import XvalSub
 
-    mol = XvalSub.cast_pymol(smiles)
+    smiles = _normalize_smiles(smiles)
+    pymol = XvalSub.cast_pymol(smiles)
+    if model == "reactivity":
+        from libridass.reactivity1 import PyMolPredictor
+        from libridass.reactivity1.code.moldesc import MolDesc
+
+        P = PyMolPredictor()
+        atom_data = P.atom_descriptors(pymol)
+        atom_pred = P.apply_model(atom_data, P.atom_model)
+        mol_data = MolDesc().run(
+            atom_data, atom_pred, P.mol_header, "Training__MolDesc__AtomTop5"
+        )
+        row = mol_data.iloc[0]
+        return {
+            "columns": list(row.index),
+            "row": [float(row[c]) if row[c] == row[c] else 0.0 for c in row.index],
+        }
+    raise KeyError("no moldesc dump for %s" % model)
+
+
+def features(model, smiles):
+    """Dump OpenBabel feature rows for RDKit-vs-OB tests."""
+    from libridass.base import XvalSub
+
+    smiles = _normalize_smiles(smiles)
+    P = _load_predictor(model)
+    pymol = XvalSub.cast_pymol(smiles)
     if model == "epoxidation":
-        df = P.bond_descriptors(mol, original_atom_ordering=True)
+        df = P.bond_descriptors(pymol, original_atom_ordering=True)
         return {"columns": list(df.columns), "rows": df.fillna(0).values.tolist(),
                 "index": list(df.index)}
     if model == "ugt":
-        df = P.atom_descriptors(mol)
+        df = P.atom_descriptors(pymol)
+        return {"columns": list(df.columns), "rows": df.fillna(0).values.tolist(),
+                "index": list(df.index)}
+    if model == "quinone":
+        df = P.atom_descriptors(pymol)
         return {"columns": list(df.columns), "rows": df.fillna(0).values.tolist(),
                 "index": list(df.index)}
     if model == "reactivity":
-        df = P.atom_descriptors(mol)
+        df = P.atom_descriptors(pymol)
         return {"columns": list(df.columns), "rows": df.fillna(0).values.tolist(),
                 "index": list(df.index)}
     if model in ("ndealk", "isozyme"):
-        df = P.bond_descriptors(mol)
+        df = P.bond_descriptors(pymol)
         return {"columns": list(df.columns), "rows": df.fillna(0).values.tolist(),
                 "index": list(df.index)}
     raise KeyError("no feature dump for %s" % model)
