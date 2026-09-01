@@ -249,23 +249,85 @@ class QuinoneNormalizeContext:
     ob_to_rd: tuple[tuple[int, int], ...]
 
 
-@lru_cache(maxsize=512)
-def quinone_normalize_context(smiles: str) -> QuinoneNormalizeContext:
-    """Parse *smiles* once and reuse for quinone ``pair_idx`` normalization."""
-    from .features import quinone_atom_rows
-    from .molecule import parse_smiles
-
-    mol, _ = parse_smiles(smiles)
-    rows = quinone_atom_rows(mol)
+def quinone_normalize_context_from_rows(
+    rows: Sequence[Mapping[str, Any]],
+    n_heavy: int,
+) -> QuinoneNormalizeContext:
+    """Build OB→RDKit pair map from quinone feature rows (same source as predict)."""
     ob_to_rd = build_ob_to_rdkit_from_rows(rows)
     return QuinoneNormalizeContext(
         legacy_ob_order=tuple(legacy_ob_order_from_rows(rows)),
-        n_heavy=mol.GetNumAtoms(),
+        n_heavy=n_heavy,
         ob_to_rd=tuple(sorted(ob_to_rd.items())),
     )
 
 
+def quinone_normalize_context_from_mol(mol: Any) -> QuinoneNormalizeContext:
+    """Build pair-index context from the RDKit mol used for quinone features."""
+    from .features import quinone_atom_rows
+
+    rows = quinone_atom_rows(mol)
+    return quinone_normalize_context_from_rows(rows, mol.GetNumAtoms())
+
+
+def _resolve_quinone_context(
+    *,
+    mol: Any = None,
+    rows: Sequence[Mapping[str, Any]] | None = None,
+    n_heavy: int | None = None,
+    smiles: str | None = None,
+) -> QuinoneNormalizeContext:
+    if rows is not None:
+        if n_heavy is None:
+            raise ValueError("n_heavy is required when rows are provided")
+        return quinone_normalize_context_from_rows(rows, n_heavy)
+    if mol is not None:
+        return quinone_normalize_context_from_mol(mol)
+    if smiles:
+        return quinone_normalize_context(smiles)
+    raise ValueError("need mol, rows, or smiles for quinone pair normalization")
+
+
+@lru_cache(maxsize=512)
+def quinone_normalize_context(smiles: str) -> QuinoneNormalizeContext:
+    """Parse canonical SMILES once (fallback when no mol is available)."""
+    from .molecule import parse_smiles
+
+    mol, _ = parse_smiles(smiles)
+    return quinone_normalize_context_from_mol(mol)
+
+
+def _pair_ids_already_rdkit(
+    raw_ids: Sequence[int],
+    n_heavy: int,
+    ob_to_rd: Mapping[int, int] | None = None,
+) -> bool:
+    """True when *raw_ids* look like 0-based RDKit indices (not legacy OB ids)."""
+    if not raw_ids:
+        return True
+    if min(raw_ids) < 0:
+        return False
+    # Legacy REST uses 1-based OB GetIdx(); id n_heavy only appears as OB, not RDKit.
+    if max(raw_ids) >= n_heavy:
+        return False
+    return True
+
+
+def quinone_pair_idx_needs_legacy_normalize(
+    pair_idx: Sequence[Sequence[int]],
+    n_heavy: int,
+    ob_to_rd: Mapping[int, int] | None = None,
+) -> bool:
+    """True when stored ``pair_idx`` still uses legacy OB atom ids."""
+    if not pair_idx or ob_to_rd is None:
+        return False
+    raw_ids = [int(v) for pair in pair_idx for v in pair]
+    return not _pair_ids_already_rdkit(raw_ids, n_heavy, ob_to_rd)
+
+
 def _apply_quinone_context(fields: dict[str, Any], ctx: QuinoneNormalizeContext) -> None:
+    if "pair_idx" not in fields or "pair" not in fields:
+        return
     normalize_legacy_quinone_fields(
         fields,
         legacy_ob_order=ctx.legacy_ob_order,
@@ -274,20 +336,43 @@ def _apply_quinone_context(fields: dict[str, Any], ctx: QuinoneNormalizeContext)
     )
 
 
+def normalize_quinone_legacy_pair_fields(
+    fields: dict[str, Any],
+    *,
+    mol: Any = None,
+    rows: Sequence[Mapping[str, Any]] | None = None,
+    n_heavy: int | None = None,
+    smiles: str | None = None,
+) -> None:
+    """Map legacy quinone ``pair_idx`` in *fields* to 0-based RDKit indices."""
+    ctx = _resolve_quinone_context(mol=mol, rows=rows, n_heavy=n_heavy, smiles=smiles)
+    _apply_quinone_context(fields, ctx)
+
+
 def normalize_quinone_fields_for_smiles(fields: dict[str, Any], smiles: str) -> None:
     """Map quinone ``pair_idx`` in *fields* to 0-based RDKit for *smiles*."""
-    _apply_quinone_context(fields, quinone_normalize_context(smiles))
+    normalize_quinone_legacy_pair_fields(fields, smiles=smiles)
 
 
 def normalize_quinone_pair_fields(
     want: dict[str, Any],
     have: dict[str, Any],
-    smiles: str,
+    *,
+    mol: Any = None,
+    rows: Sequence[Mapping[str, Any]] | None = None,
+    n_heavy: int | None = None,
+    smiles: str | None = None,
+    normalize_have: bool = False,
 ) -> None:
-    """Normalize golden and ONNX quinone fields with one molecule parse."""
-    ctx = quinone_normalize_context(smiles)
-    _apply_quinone_context(want, ctx)
-    _apply_quinone_context(have, ctx)
+    """Normalize golden legacy pairs; ONNX ``have`` is already RDKit by default."""
+    ctx = _resolve_quinone_context(mol=mol, rows=rows, n_heavy=n_heavy, smiles=smiles)
+    ob_map = dict(ctx.ob_to_rd)
+    if quinone_pair_idx_needs_legacy_normalize(want.get("pair_idx") or [], ctx.n_heavy, ob_map):
+        _apply_quinone_context(want, ctx)
+    if normalize_have and quinone_pair_idx_needs_legacy_normalize(
+        have.get("pair_idx") or [], ctx.n_heavy, ob_map
+    ):
+        _apply_quinone_context(have, ctx)
 
 
 def legacy_predictions_atom_vector(

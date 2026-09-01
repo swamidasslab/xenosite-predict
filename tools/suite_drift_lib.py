@@ -168,7 +168,10 @@ def _analyze_golden_row(task: tuple[dict, dict | None]) -> DriftReport:
         want = golden_score_fields(gr)
         have = golden_score_fields(onnx_results[head])
         if head == "quinone":
-            normalize_quinone_pair_fields(want, have, smiles)
+            from xenosite.predict.molecule import parse_smiles
+
+            mol, _ = parse_smiles(smiles)
+            normalize_quinone_pair_fields(want, have, mol=mol)
 
         d = max_diff(want, have)
         row_max = max(row_max, d)

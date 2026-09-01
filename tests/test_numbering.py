@@ -118,6 +118,7 @@ def test_quinone_normalize_parses_smiles_once(monkeypatch):
         normalize_quinone_pair_fields,
         quinone_normalize_context,
     )
+    from xenosite.predict.molecule import parse_smiles
 
     quinone_normalize_context.cache_clear()
     calls: list[str] = []
@@ -129,8 +130,39 @@ def test_quinone_normalize_parses_smiles_once(monkeypatch):
 
     monkeypatch.setattr(mol_mod, "parse_smiles", counted)
     fields = {"pair_idx": [[1, 2]], "pair": [0.5]}
-    normalize_quinone_pair_fields(dict(fields), dict(fields), OK_SMILES)
+    mol, _ = real_parse(OK_SMILES)
+    normalize_quinone_pair_fields(dict(fields), dict(fields), mol=mol)
+    assert len(calls) == 0
+
+    quinone_normalize_context.cache_clear()
+    calls.clear()
+    normalize_quinone_pair_fields(dict(fields), dict(fields), smiles=OK_SMILES)
     assert len(calls) == 1
+
+
+def test_quinone_pair_fields_leaves_onnx_rdkit_indices():
+    """ONNX pair_idx is already 0-based RDKit; only golden legacy ids remap."""
+    from xenosite.predict.molecule import parse_smiles
+    from xenosite.predict.numbering import normalize_quinone_pair_fields
+
+    want = {"pair_idx": [[19, 22]], "pair": [0.5]}
+    have = {"pair_idx": [[18, 21]], "pair": [0.5]}
+    mol, _ = parse_smiles(GAP_SMILES)
+    normalize_quinone_pair_fields(want, have, mol=mol)
+    assert want["pair_idx"] == [[18, 21]]
+    assert have["pair_idx"] == [[18, 21]]
+
+
+def test_quinone_pair_fields_skips_already_rdkit_golden():
+    from xenosite.predict.molecule import parse_smiles
+    from xenosite.predict.numbering import normalize_quinone_pair_fields
+
+    want = {"pair_idx": [[2, 20]], "pair": [0.5]}
+    have = {"pair_idx": [[2, 17]], "pair": [0.5]}
+    mol, _ = parse_smiles(GAP_SMILES)
+    normalize_quinone_pair_fields(want, have, mol=mol)
+    assert want["pair_idx"] == [[2, 20]]
+    assert have["pair_idx"] == [[2, 17]]
 
 
 def test_ok_smiles_dense():
