@@ -39,6 +39,7 @@ exclude = [
 dev = [
     "pytest>=8",
     "pytest-xdist>=3.5",
+    "pytest-sugar>=1",
     "msgpack>=1.0",
     "hypothesis>=6.100",
     "tqdm>=4.66",
