@@ -3,9 +3,8 @@
 Dumps come from committed ``ob_dumps.json.gz`` (Git LFS) or ``make dump-ob``.
 Missing dumps fail. Each (model, molecule) dump is its own test. Do not loosen atol.
 
-Quinone ortho/meta/para mismatches that are *only* those columns are xfailed:
-the dump picked one BFS path via Python 2 ``set`` order; we use any shortest
-path on an aromatic ring instead. Revisit if golden scores move.
+Quinone dump comparison uses ``quinone_omp_mode=legacy`` (deterministic sorted
+BFS). Regather with ``make regather-ob-dumps`` after OMP port changes.
 
 Phase1 dumps concatenate Bond_and_LonePair with Possible_Sites SMARTS masks.
 We port BLP only (404 site.onnx inputs); dump comparison skips Possible_Sites.
@@ -20,6 +19,7 @@ import pytest
 from xenosite.predict.molecule import parse_smiles
 
 from tests.support import (
+    GOLDEN_QUINONE_PARAMETER,
     MODELS,
     OB_ASPIRIN,
     OB_DUMPS_GZ,
@@ -138,8 +138,13 @@ def test_internal_ob_vs_dump(smiles, model):
     dump_mol = next(d for d in _dumps() if d.get("smiles") == smiles)
     payload = dump_mol["models"][model]
     mol, _ = parse_smiles(smiles)
+    rows = rows_for_model(
+        model,
+        mol,
+        _parameter=GOLDEN_QUINONE_PARAMETER if model == "quinone" else None,
+    )
     mm = compare_feature_dump_rows(
-        rows_for_model(model, mol),
+        rows,
         payload,
         skip_columns=dump_compare_skip_columns(model),
     )
@@ -147,7 +152,7 @@ def test_internal_ob_vs_dump(smiles, model):
         pytest.xfail(
             "ortho/meta/para uses any shortest path on an aromatic ring; "
             "the 2.4 dump picked one BFS path via Python 2 set order "
-            f"({', '.join(mm)}). See docs/vendored-diffs.md."
+            f"({', '.join(mm)}). Run make regather-ob-dumps for quinone."
         )
     assert not mm, (
         f"internal OpenBabel vs dump mismatch for {model} {smiles} "

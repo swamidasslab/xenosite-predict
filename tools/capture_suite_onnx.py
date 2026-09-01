@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tests.support import (  # noqa: E402
+    GOLDEN_PARAMETER,
     SUITE_MODELS,
     load_golden_suite,
     serialize_molecule_results,
@@ -54,9 +55,12 @@ def _capture_one(task: tuple[str, str, str]) -> dict:
         "smiles": smiles,
         "name": name or smiles[:40],
     }
+    kwargs = {}
+    if model in ("ndealk", "isozyme", "quinone"):
+        kwargs["_parameter"] = dict(GOLDEN_PARAMETER)
     try:
         backend = OnnxBackend(_WEIGHTS_ROOT)
-        mol = predict(smiles, models=[model], backend=backend)
+        mol = predict(smiles, models=[model], backend=backend, **kwargs)
         rec["results"] = serialize_molecule_results(mol)
         rec["error"] = None
     except Exception as exc:

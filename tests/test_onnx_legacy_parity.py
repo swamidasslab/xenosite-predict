@@ -18,6 +18,7 @@ from xenosite.predict.backends.legacy import LegacyTestBackend
 from xenosite.predict.backends.onnx import OnnxBackend
 
 from tests.support import (
+    GOLDEN_PARAMETER,
     ROOT,
     assert_golden_molecule,
     assert_predictions_parity,
@@ -104,7 +105,15 @@ def _onnx_predict(model: str, smiles: str):
     key = onnx_model_key(model)
     if not onnx_weights_present(key):
         pytest.skip(f"no ONNX for {key}")
-    return predict(smiles, models=[model], backend=OnnxBackend(ROOT / "weights" / "onnx"))
+    kwargs = {}
+    if model in ("ndealk", "isozyme", "quinone"):
+        kwargs["_parameter"] = GOLDEN_PARAMETER
+    return predict(
+        smiles,
+        models=[model],
+        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+        **kwargs,
+    )
 
 
 @pytest.mark.parametrize("model,smiles", SMOKE_DESCRIPTOR_PASSING)
@@ -138,12 +147,20 @@ def _predict_pair_live(smiles: str, model: str, legacy_url: str):
         pytest.skip(f"no ONNX for {key}")
     legacy = LegacyTestBackend(legacy_url)
     onnx = OnnxBackend(ROOT / "weights" / "onnx")
+    kwargs = {}
+    if model in ("ndealk", "isozyme", "quinone"):
+        kwargs["_parameter"] = GOLDEN_PARAMETER
     try:
         leg = predict(smiles, models=[model], backend=legacy)
     except Exception as exc:
         pytest.skip(f"legacy predict unavailable for {model} {smiles}: {exc}")
     try:
-        got = predict(smiles, models=[model], backend=onnx)
+        got = predict(
+            smiles,
+            models=[model],
+            backend=onnx,
+            **kwargs,
+        )
     except Exception as exc:
         pytest.fail(f"onnx predict failed for {model} {smiles}: {exc}")
     assert leg.results and got.results
@@ -161,9 +178,10 @@ def test_onnx_legacy_api_parity_descriptor_passing_smoke(legacy_api_url, model, 
 @pytest.mark.live
 @pytest.mark.parametrize("model,smiles", _omp_failing_sample())
 def test_onnx_legacy_api_parity_descriptor_non_passing(legacy_api_url, model, smiles):
-    """OMP ortho/meta/para drift: legacy OMP vs ported OB descriptors may diverge."""
+    """OMP ortho/meta/para: legacy API uses py2 hash BFS; ONNX uses legacy OMP mode."""
     assert descriptor_omp_only(smiles, model)
-    pytest.skip("OMP-only descriptor drift; ONNX run verified offline")
+    leg, got = _predict_pair_live(smiles, model, legacy_api_url)
+    assert_predictions_parity(leg, got, smiles=smiles, model=model)
 
 
 @pytest.mark.live

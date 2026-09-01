@@ -17,9 +17,10 @@ ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
 MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1")
 SUITE_MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme", "phase1")
 PARITY_ATOL = 3e-4  # TF1 float32 vs ORT on quinone near-zero atom scores
-PARITY_ATOL_OMP = 0.02  # quinone OMP descriptor drift (mol head can lag ~0.02)
 # Golden rows were captured from legacy-test-api; ONNX bond vectors need legacy site keys.
 GOLDEN_NDEALK_PARAMETER = {"ndealk_site_mode": "legacy"}
+GOLDEN_QUINONE_PARAMETER = {"quinone_omp_mode": "legacy"}
+GOLDEN_PARAMETER = {**GOLDEN_NDEALK_PARAMETER, **GOLDEN_QUINONE_PARAMETER}
 
 
 def onnx_weights_present(model: str | None = None) -> bool:
@@ -98,9 +99,7 @@ def load_golden_suite(*, merge_smoke: bool = True) -> list[dict]:
 
 
 def parity_atol(smiles: str, model: str) -> float:
-    """Score compare tolerance: looser for quinone OMP-only descriptor drift."""
-    if model == "quinone" and descriptor_omp_only(smiles, "quinone"):
-        return PARITY_ATOL_OMP
+    """Score compare tolerance for golden / legacy parity tests."""
     return PARITY_ATOL
 
 
@@ -159,7 +158,13 @@ def load_ob_dumps() -> list[dict]:
     return [dump] if dump else []
 
 
-def rows_for_model(model: str, mol) -> list[dict]:
+def rows_for_model(
+    model: str,
+    mol,
+    *,
+    omp_mode: str | None = None,
+    _parameter: dict | None = None,
+) -> list[dict]:
     from xenosite.predict.features import (
         bond_rows,
         ndealk_bond_rows,
@@ -176,7 +181,15 @@ def rows_for_model(model: str, mol) -> list[dict]:
     if model == "ugt":
         return ugt_atom_rows(mol)
     if model == "quinone":
-        return quinone_atom_rows(mol)
+        mode = omp_mode
+        if mode is None and _parameter is not None:
+            mode = _parameter.get("quinone_omp_mode")
+        if mode is None and hasattr(mol, "_parameter"):
+            mode = mol._parameter.get("quinone_omp_mode")
+        kwargs = {}
+        if mode in ("legacy", "principled"):
+            kwargs["omp_mode"] = mode
+        return quinone_atom_rows(mol, **kwargs)
     if model == "reactivity":
         return reactivity_atom_rows(mol)
     if model == "phase1":
@@ -290,7 +303,12 @@ def onnx_model_key(model: str) -> str:
     return "ndealk" if model == "isozyme" else model
 
 
-def descriptor_mismatch_columns(smiles: str, model: str) -> list[str]:
+def descriptor_mismatch_columns(
+    smiles: str,
+    model: str,
+    *,
+    _parameter: dict | None = None,
+) -> list[str]:
     """Overlapping dump columns that disagree with internal OpenBabel (no ``_`` meta)."""
     from xenosite.predict.molecule import parse_smiles
 
@@ -300,9 +318,12 @@ def descriptor_mismatch_columns(smiles: str, model: str) -> list[str]:
     )
     if dump_mol is None or model not in (dump_mol.get("models") or {}):
         return ["_missing_dump"]
-    mol, _ = parse_smiles(smiles)
+    rdmol, _mol = parse_smiles(smiles)
+    param = _parameter
+    if param is None and model == "quinone":
+        param = GOLDEN_QUINONE_PARAMETER
     mm = compare_feature_dump_rows(
-        rows_for_model(model, mol),
+        rows_for_model(model, rdmol, _parameter=param),
         dump_mol["models"][model],
         skip_columns=dump_compare_skip_columns(model),
     )

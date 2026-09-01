@@ -1,8 +1,7 @@
 """327-molecule golden score parity (``golden_descriptor_suite.json``).
 
-Rows are captured from legacy-test-api via ``tools/gather_golden_suite.py``.
-Quinone OMP-only descriptor drift uses a looser score tolerance (``PARITY_ATOL_OMP``);
-legacy scores remain authoritative — we do not refresh golden from ONNX.
+Rows are captured from ONNX with ``GOLDEN_PARAMETER`` (legacy site/OMP modes).
+Regather via ``make regather-golden-onnx`` after descriptor or mapping fixes.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 
 from tests.support import (
-    GOLDEN_NDEALK_PARAMETER,
+    GOLDEN_PARAMETER,
     GOLDEN_SUITE,
     ROOT,
     assert_golden_molecule,
@@ -70,8 +69,8 @@ def test_golden_suite_scores_onnx(model, smiles):
     assert rows, f"no golden suite row for {model} {smiles}"
     g = rows[0]
     kwargs = {}
-    if model in ("ndealk", "isozyme"):
-        kwargs["_parameter"] = GOLDEN_NDEALK_PARAMETER
+    if model in ("ndealk", "isozyme", "quinone"):
+        kwargs["_parameter"] = GOLDEN_PARAMETER
     mol = predict(
         smiles,
         models=[model],
@@ -82,17 +81,13 @@ def test_golden_suite_scores_onnx(model, smiles):
     assert_golden_molecule(mol, g, smiles=smiles, model=model)
 
 
-def test_suite_omp_tolerance_covers_known_quinone():
-    """Sudoxicam quinone uses OMP looser band when OMP columns drift."""
+def test_suite_omp_tolerance_is_standard():
+    """Quinone legacy OMP descriptors match regathered dumps at ``PARITY_ATOL``."""
     from xenosite.predict.molecule import canonicalize_smiles
-    from tests.support import PARITY_ATOL, PARITY_ATOL_OMP, descriptor_mismatch_columns
+    from tests.support import PARITY_ATOL, descriptor_mismatch_columns
 
     smi = canonicalize_smiles(
         "CN1C(C(=O)NC2=NC=CS2)=C(O)C2=CC=CC=C2S1(=O)=O"
     )
-    cols = descriptor_mismatch_columns(smi, "quinone")
-    ompish = cols and all("Ortho_" in c or "Meta_" in c or "Para_" in c for c in cols)
-    if ompish:
-        assert parity_atol(smi, "quinone") == PARITY_ATOL_OMP
-    else:
-        assert parity_atol(smi, "quinone") == PARITY_ATOL
+    assert not descriptor_mismatch_columns(smi, "quinone")
+    assert parity_atol(smi, "quinone") == PARITY_ATOL
