@@ -30,8 +30,10 @@ def test_ndealk_site_modes_cn1ccn_and_coc1():
     from xenosite.predict.backends.adapters import canonical_bond_site_pair, reorder_by_bond
     from xenosite.predict.backends.onnx import OnnxBackend
     from xenosite.predict.features import load_names, matrix_from_rows, ndealk_bond_rows, ndealk_site_from_row_scores
-    from tests.support import ROOT
+    from tests.support import onnx_root, onnx_weights_present
 
+    if not onnx_weights_present("ndealk"):
+        pytest.skip("no ONNX for ndealk")
     backend = OnnxBackend(onnx_root())
     names = load_names("ndealk", "bond")
     cases = [

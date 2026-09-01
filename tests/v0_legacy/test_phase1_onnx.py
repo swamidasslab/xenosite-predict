@@ -40,7 +40,11 @@ def test_phase1_onnx_heads_present():
 def test_phase1_onnx_matches_numpy_mlp(head, pickle_name, spec_fn, fwd):
     assert onnx_weights_present("phase1"), "no ONNX for phase1 (run make convert-onnx MODEL=phase1)"
     pkl = find_pickle(ROOT / "weights" / "legacy", pickle_name)
-    assert pkl is not None, f"missing {pickle_name} under weights/legacy"
+    if pkl is None:
+        pytest.skip(
+            f"missing {pickle_name} under weights/legacy "
+            "(run make extract-weights)"
+        )
     _g, _kw, params, trains = load_tf_pickle(pkl)
     spec = spec_fn(params, trains)
     rng = np.random.default_rng(20260830)
