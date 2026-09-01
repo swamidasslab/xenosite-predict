@@ -13,9 +13,9 @@ from xenosite.predict.backends.onnx import OnnxBackend
 
 from tests.support import (
     GOLDEN,
-    GOLDEN_PARAMETER,
     ROOT,
     assert_golden_molecule,
+    golden_predict_kwargs,
     load_golden,
     onnx_weights_present,
 )
@@ -54,14 +54,11 @@ def test_golden_scores_onnx(model, smiles):
     ]
     assert rows, f"no golden row for {model} {smiles}"
     g = rows[0]
-    kwargs = {}
-    if model in ("ndealk", "isozyme", "quinone"):
-        kwargs["_parameter"] = GOLDEN_PARAMETER
     mol = predict(
         smiles,
         models=[model],
         backend=OnnxBackend(ROOT / "weights" / "onnx"),
-        **kwargs,
+        **golden_predict_kwargs(model),
     )
     assert mol.results
     assert_golden_molecule(mol, g, smiles=smiles, model=model)

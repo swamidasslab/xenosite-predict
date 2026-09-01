@@ -35,6 +35,17 @@ PRINCIPLED_PARAMETER = {
     **PRINCIPLED_SYMMETRY_PARAMETER,
 }
 
+_GOLDEN_SCORE_MODELS = frozenset(
+    {"epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme"}
+)
+
+
+def golden_predict_kwargs(model: str) -> dict:
+    """``predict`` kwargs for ONNX golden parity (legacy site/OMP/symmetry modes)."""
+    if model in _GOLDEN_SCORE_MODELS:
+        return {"_parameter": dict(GOLDEN_PARAMETER)}
+    return {}
+
 
 def onnx_weights_present(model: str | None = None) -> bool:
     root = ROOT / "weights" / "onnx"

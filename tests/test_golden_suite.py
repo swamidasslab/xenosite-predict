@@ -16,6 +16,7 @@ from tests.support import (
     GOLDEN_SUITE,
     ROOT,
     assert_golden_molecule,
+    golden_predict_kwargs,
     load_descriptor_smiles,
     load_golden_suite,
     onnx_weights_present,
@@ -68,14 +69,11 @@ def test_golden_suite_scores_onnx(model, smiles):
     ]
     assert rows, f"no golden suite row for {model} {smiles}"
     g = rows[0]
-    kwargs = {}
-    if model in ("ndealk", "isozyme", "quinone"):
-        kwargs["_parameter"] = GOLDEN_PARAMETER
     mol = predict(
         smiles,
         models=[model],
         backend=OnnxBackend(ROOT / "weights" / "onnx"),
-        **kwargs,
+        **golden_predict_kwargs(model),
     )
     assert mol.results
     assert_golden_molecule(mol, g, smiles=smiles, model=model)
