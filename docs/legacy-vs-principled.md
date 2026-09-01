@@ -14,7 +14,7 @@ which models are affected.
 | `_parameter` key | Production default | Golden / parity value | Affects |
 |---|---|---|---|
 | `ndealk_site_mode` | `"principled"` | `"legacy"` | `ndealk`, `isozyme` |
-| `quinone_omp_mode` | `"principled"` | `"legacy"` | `quinone` |
+| `quinone_omp_mode` | `"principled"` (max/any over tied shortest paths) | `"legacy"` (single sorted-BFS path) | `quinone` |
 | `symmetry_group_mode` | `"rdkit"` | `"openbabel"` | `ndealk`, `isozyme`, `epoxidation` |
 | `bond_nrings_mode` | `"principled"` | `"legacy"` | `epoxidation`, `ndealk`, `isozyme` |
 
@@ -63,6 +63,74 @@ Golden tests therefore pass `GOLDEN_PARAMETER` so bitwise parity with fixtures
 holds. Application code should call `predict()` without `_parameter` unless
 reproducing legacy numbers intentionally.
 
+## Expected score impact (production vs legacy)
+
+These numbers compare **`predict()` defaults** vs **`GOLDEN_PARAMETER`** on the
+327-molecule golden suite (`PARITY_ATOL = 0.005`, max absolute delta across
+mol/atom/bond/pair heads). Same ONNX weights in both cases — differences are
+descriptor tie-breaking and **how row scores map onto bond vectors**, not model
+retraining.
+
+| Model | Within atol | Median max Δ | P95 max Δ | Worst max Δ | Primary cause |
+|---|---:|---:|---:|---:|---|
+| `reactivity` | 100% | 0 | 0 | 0 | flags are no-ops |
+| `ugt` | 100% | 0 | 0 | 0 | flags are no-ops |
+| `phase1` | 100% | 0 | 0 | 0 | separate pipeline |
+| `epoxidation` | ~83% | 0 | ~0.018 | ~0.039 | `bond_nrings_mode` (DFS vs RDKit ring counts on fused PAHs) |
+| `quinone` | ~89% | ~0.008 | ~0.04 | ~0.64 | `quinone_omp_mode` (path tie-breaking for ortho/meta/para) |
+| `ndealk` / `isozyme` | ~77% | ~0.0005 | ~0.34 | ~0.96 | `symmetry_group_mode` + `ndealk_site_mode` (RDKit pooling vs per-row legacy sites) |
+
+Regenerate with `uv run python tools/study_legacy_vs_default.py --json docs/legacy_vs_default_parity.json`.
+Flag-level attribution: `uv run python tools/study_fix_attribution.py`.
+
+### What changes in practice
+
+**Epoxidation** — Usually a small shift on polycyclic aromatics. Legacy DFS
+back-edge ring counts can differ on fusion atoms; production uses RDKit
+`NumAtomRings` per bond endpoint. Mol-level scores typically move by ≤4% on
+outliers.
+
+**Quinone** — OMP ortho/meta/para descriptors feed atom → pair → mol heads.
+Production enumerates **all** tied shortest paths and sets the indicator to **1
+if any path qualifies** (binary, deterministic). Legacy follows **one** sorted-BFS
+path; when ties disagree, atom features (and mol scores) can diverge. Highly
+hydroxylated / fused aromatics see the largest gaps. Pass `quinone_omp_mode="legacy"`
+to match golden captures exactly. The older fractional average is available as
+`quinone_omp_mode="mean"`.
+
+**N-dealkylation / isozyme** — Largest production-vs-legacy gaps. Legacy emits
+**one site score per BondTD row** and **does not broadcast** to RDKit-symmetric
+sibling bonds — symmetric partners often stay at zero. Production **collapses**
+rows per symmetry class, then **pools** the class mean onto **every** sibling,
+which can activate bonds legacy left at zero (worst-case bond score delta ≈0.96).
+This is post-ONNX score mapping, not different neural-network weights. To
+approximate legacy site collapse without sibling broadcast, use
+`ndealk_site_mode="principled"` and `symmetry_group_mode="openbabel"` (see
+`tests/v0_legacy/test_legacy_vs_principled_guide.py` chapter 3).
+
+**Unaffected models** — `reactivity`, `ugt`, and `phase1` scores are identical
+with or without `GOLDEN_PARAMETER`.
+
+### When to pass legacy flags
+
+| Situation | Recommendation |
+|---|---|
+| New rankings, UI, or chemistry-facing APIs | Omit `_parameter` (production defaults) |
+| Diffing against committed golden JSON | `golden_predict_kwargs(model)` from `tests/support.py` |
+| Matching legacy-test-api Docker output | Full `GOLDEN_PARAMETER` |
+| Quinone only: closer to golden without full bundle | `quinone_omp_mode="legacy"` |
+| Ndealk: principled dedup but no sibling broadcast | `ndealk_site_mode="principled"`, `symmetry_group_mode="openbabel"` |
+
+```python
+from tests.support import GOLDEN_PARAMETER, golden_predict_kwargs
+
+# Full legacy parity (golden tests)
+predict(smiles, models=["ndealk"], _parameter=GOLDEN_PARAMETER)
+
+# Shorthand for golden score models
+predict(smiles, **golden_predict_kwargs("quinone"))
+```
+
 ## `ndealk_site_mode` (ndealk / isozyme)
 
 Bond models run one ONNX score per BondTD feature row, then collapse rows into a
@@ -89,11 +157,13 @@ BondTD rows because duplicates are deduplicated before mapping to RDKit bonds.
 2. For duplicate OpenBabel topo-GID classes, sometimes use synthetic orphan keys
    (`max(site)+1`) so the resulting bond vector matches historical captures even
    when the frozenset does not map cleanly to an RDKit bond index.
-3. No RDKit symmetry pooling after mapping.
+3. **No RDKit symmetry pooling** after mapping — scores are **not** copied to
+   symmetric sibling bonds. Within a RDKit bond symmetry class you typically see
+   **one non-zero site** (or zero), with siblings left at zero.
 
 Golden ndealk/isozyme bond vectors match legacy-test-api because of this path.
-Production principled mode can assign non-zero scores to fewer bonds on molecules
-where legacy kept duplicate keys.
+Production principled + RDKit pooling can **increase** the number of active bonds
+and assign the **same** pooled score to all siblings in a class.
 
 **Example SMILES where modes diverge:**  
 `COc1ccc2nc(C)cc(NCCCN3CCOCC3)c2c1` (see `tests/test_legacy_vs_principled_guide.py`).
@@ -114,10 +184,18 @@ legacy arbitrarily picks the path visit order from BFS neighbor sorting.
 ### Principled (default)
 
 - Enumerate **all** shortest paths (`MolGraph.all_shortest_paths`).
-- OMP indicator is the **mean** of per-path `{0,1}` values.
+- OMP indicator is **1.0 if any tied shortest path qualifies**, else 0.0
+  (deterministic max over per-path `{0,1}` indicators; binary like legacy).
 
 When only one shortest path exists, principled equals legacy. When several ties
-exist, principled averages ambiguity instead of picking one BFS branch.
+exist, principled avoids arbitrary BFS tie-break: if any equal-length path
+qualifies, the feature is on.
+
+### Mean (optional: ``quinone_omp_mode="mean"``)
+
+- Same path set as principled, but indicator is the **mean** of per-path values
+  (fractional in `(0, 1)` when paths disagree). Closer to legacy on ~45% of golden
+  molecules vs ~89% for principled max; use only if fractional OMP is desired.
 
 **Example SMILES where modes diverge:**  
 `c1ccc2ccccc2c1` (naphthalene).
@@ -200,7 +278,10 @@ Ndealk/isozyme also use `ndealk_site_mode`.
 | `tests/test_onnx_principled.py` | Concise regressions: default == principled, default ≠ legacy on known molecules. |
 | `tests/test_equiv_groups.py` | Global RDKit symmetry invariants on `ob_dumps` (production path). |
 | `tests/test_principled_descriptor_symmetry.py` | Principled atom/bond descriptor identity within symmetry classes. |
-| `tests/test_legacy_vs_principled_guide.py` | **Readable walkthrough** of each flag with commented examples (human-first). |
+| `tests/v0_legacy/test_legacy_vs_principled_guide.py` | **Readable walkthrough** of each flag with commented examples (human-first). |
+| `tests/v0_legacy/test_bond_nrings_ablation.py` | Epoxidation NRings semantics and single-flag score attribution. |
+| `tests/v0_legacy/test_quinone_omp_ablation.py` | Quinone OMP path aggregation vs legacy. |
+| `tests/v0_legacy/test_ndealk_principled_ablation.py` | Ndealk site collapse + RDKit pooling vs legacy. |
 
 ## Choosing a mode
 
