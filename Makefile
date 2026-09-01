@@ -100,4 +100,5 @@ regather-golden-onnx:
 	  --workers $(GATHER_WORKERS) \
 	  --force \
 	  --include-smoke \
+	  --models epoxidation,quinone,reactivity,ugt,ndealk,isozyme \
 	  $(if $(GATHER_MODEL),--models $(GATHER_MODEL),)
