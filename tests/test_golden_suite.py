@@ -7,10 +7,13 @@ Regather via ``make regather-golden-onnx`` after descriptor or mapping fixes.
 from __future__ import annotations
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 
+from tests.sampling import golden_suite_smiles, golden_suite_smiles_model, molecule_sample_settings
 from tests.support import (
     GOLDEN_PARAMETER,
     GOLDEN_SUITE,
@@ -60,8 +63,7 @@ def test_golden_suite_fixture_growing():
     )
 
 
-@pytest.mark.parametrize("model,smiles", _suite_params())
-def test_golden_suite_scores_onnx(model, smiles):
+def _assert_golden_suite_scores_onnx(model: str, smiles: str) -> None:
     rows = [
         g
         for g in load_golden_suite(merge_smoke=True)
@@ -77,6 +79,23 @@ def test_golden_suite_scores_onnx(model, smiles):
     )
     assert mol.results
     assert_golden_molecule(mol, g, smiles=smiles, model=model)
+
+
+def test_golden_suite_smiles_nonempty():
+    assert len(golden_suite_smiles()) >= 10
+
+
+@molecule_sample_settings(golden_suite_smiles)
+@given(data=st.data())
+def test_golden_suite_scores_onnx_sampled(data):
+    model, smiles = data.draw(golden_suite_smiles_model())
+    _assert_golden_suite_scores_onnx(model, smiles)
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("model,smiles", _suite_params())
+def test_golden_suite_scores_onnx(model, smiles):
+    _assert_golden_suite_scores_onnx(model, smiles)
 
 
 def test_suite_omp_tolerance_is_standard():

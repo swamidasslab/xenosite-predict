@@ -13,6 +13,8 @@ ob dump / golden parity (``test_ob_features.py``).
 from __future__ import annotations
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from xenosite.predict.features import load_names
 from xenosite.predict.molecule import parse_smiles
@@ -20,6 +22,11 @@ from xenosite.predict.molecule import parse_smiles
 from tests.rdkit_equiv import (
     assert_atom_descriptor_rows_symmetric,
     assert_bond_descriptor_rows_symmetric,
+)
+from tests.sampling import (
+    molecule_sample_settings,
+    ob_dump_smiles,
+    principled_descriptor_smiles_model,
 )
 from tests.support import (
     PRINCIPLED_PARAMETER,
@@ -65,8 +72,7 @@ def test_principled_descriptor_symmetry_fixture_present():
     assert len(atom_params) >= 100
 
 
-@pytest.mark.parametrize("smiles,model", _params(_ATOM_MODELS, "_ATOM_PARAMS_CACHE"))
-def test_principled_atom_descriptors_identical_within_rdkit_class(smiles, model):
+def _assert_principled_atom_descriptors(smiles: str, model: str) -> None:
     rdmol, _ = parse_smiles(smiles)
     rows = rows_for_model(
         model,
@@ -79,10 +85,35 @@ def test_principled_atom_descriptors_identical_within_rdkit_class(smiles, model)
     assert_atom_descriptor_rows_symmetric(rows, rdmol, names)
 
 
-@pytest.mark.parametrize("smiles,model", _params(_BOND_MODELS, "_BOND_PARAMS_CACHE"))
-def test_principled_bond_descriptors_identical_within_directed_ob_class(smiles, model):
+def _assert_principled_bond_descriptors(smiles: str, model: str) -> None:
     rdmol, _ = parse_smiles(smiles)
     rows = rows_for_model(model, rdmol, _parameter=PRINCIPLED_PARAMETER)
     names = load_names(model, "bond")
     assert names, f"missing {model}_bond_names.json"
     assert_bond_descriptor_rows_symmetric(rows, rdmol, names)
+
+
+@molecule_sample_settings(lambda: ob_dump_smiles(_ATOM_MODELS))
+@given(data=st.data())
+def test_principled_atom_descriptors_identical_within_rdkit_class_sampled(data):
+    smiles, model = data.draw(principled_descriptor_smiles_model(_ATOM_MODELS))
+    _assert_principled_atom_descriptors(smiles, model)
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("smiles,model", _params(_ATOM_MODELS, "_ATOM_PARAMS_CACHE"))
+def test_principled_atom_descriptors_identical_within_rdkit_class(smiles, model):
+    _assert_principled_atom_descriptors(smiles, model)
+
+
+@molecule_sample_settings(lambda: ob_dump_smiles(_BOND_MODELS))
+@given(data=st.data())
+def test_principled_bond_descriptors_identical_within_directed_ob_class_sampled(data):
+    smiles, model = data.draw(principled_descriptor_smiles_model(_BOND_MODELS))
+    _assert_principled_bond_descriptors(smiles, model)
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("smiles,model", _params(_BOND_MODELS, "_BOND_PARAMS_CACHE"))
+def test_principled_bond_descriptors_identical_within_directed_ob_class(smiles, model):
+    _assert_principled_bond_descriptors(smiles, model)

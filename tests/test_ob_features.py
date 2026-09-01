@@ -15,9 +15,17 @@ Revive ``possible_site_flags`` and OB 2.4 SMARTS parity if we expose legacy
 from __future__ import annotations
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from xenosite.predict.molecule import parse_smiles
 
+from tests.sampling import (
+    molecule_sample_settings,
+    ob_dump_pairs,
+    ob_dump_smiles,
+    ob_dump_smiles_model,
+)
 from tests.support import (
     GOLDEN_QUINONE_PARAMETER,
     MODELS,
@@ -33,21 +41,11 @@ from tests.support import (
 )
 
 
-_DUMPS_CACHE: list[dict] | None = None
-
-
-def _dumps() -> list[dict]:
-    global _DUMPS_CACHE
-    if _DUMPS_CACHE is None:
-        _DUMPS_CACHE = load_ob_dumps()
-    return _DUMPS_CACHE
-
-
 def _dump_params():
     names = golden_name_by_smiles()
     params = []
     used: set[str] = set()
-    for mol in _dumps():
+    for mol in load_ob_dumps():
         smi = mol.get("smiles") or ""
         label = names.get(smi) or smi[:32]
         for model in MODELS:
@@ -109,7 +107,7 @@ def test_descriptor_smiles_chemistry_coverage():
 def test_ob_dumps_present():
     from xenosite.predict.molecule import canonicalize_smiles
 
-    dumps = _dumps()
+    dumps = load_ob_dumps()
     assert dumps, f"missing {OB_DUMPS_GZ} (git lfs pull, or run make dump-ob)"
     smiles = {d["smiles"] for d in dumps}
     assert "CC(=O)Oc1ccccc1C(=O)O" in smiles
@@ -133,9 +131,8 @@ def _omp_dump_mismatch(columns: list[str]) -> bool:
     )
 
 
-@pytest.mark.parametrize("smiles,model", _dump_params())
-def test_internal_ob_vs_dump(smiles, model):
-    dump_mol = next(d for d in _dumps() if d.get("smiles") == smiles)
+def _assert_internal_ob_vs_dump(smiles: str, model: str) -> None:
+    dump_mol = next(d for d in load_ob_dumps() if d.get("smiles") == smiles)
     payload = dump_mol["models"][model]
     mol, _ = parse_smiles(smiles)
     rows = rows_for_model(
@@ -158,6 +155,24 @@ def test_internal_ob_vs_dump(smiles, model):
         f"internal OpenBabel vs dump mismatch for {model} {smiles} "
         f"(do not loosen atol): " + ", ".join(mm)
     )
+
+
+def test_ob_dump_corpus_nonempty():
+    assert len(ob_dump_smiles(MODELS)) >= 100
+    assert len(ob_dump_pairs(MODELS)) >= 100
+
+
+@molecule_sample_settings(lambda: ob_dump_smiles(MODELS))
+@given(data=st.data())
+def test_internal_ob_vs_dump_sampled(data):
+    smiles, model = data.draw(ob_dump_smiles_model(MODELS))
+    _assert_internal_ob_vs_dump(smiles, model)
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("smiles,model", _dump_params())
+def test_internal_ob_vs_dump(smiles, model):
+    _assert_internal_ob_vs_dump(smiles, model)
 
 
 def test_ndealk_ob_dump_has_net_columns():

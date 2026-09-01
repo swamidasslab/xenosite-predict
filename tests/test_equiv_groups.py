@@ -10,6 +10,8 @@ tests pass ``GOLDEN_PARAMETER`` (``symmetry_group_mode=openbabel``) via
 from __future__ import annotations
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
@@ -24,6 +26,7 @@ from tests.rdkit_equiv import (
     atom_symmetry_groups,
     bond_symmetry_groups,
 )
+from tests.sampling import equiv_pairs, equiv_smiles, equiv_smiles_model, molecule_sample_settings
 from tests.support import (
     GOLDEN,
     GOLDEN_SYMMETRY_PARAMETER,
@@ -72,8 +75,7 @@ def test_equiv_groups_fixture_present():
     assert len(params) >= 100, f"expected many (model, SMILES) pairs, got {len(params)}"
 
 
-@pytest.mark.parametrize("smiles,model", _equiv_params())
-def test_onnx_scores_respect_rdkit_symmetry(smiles, model):
+def _assert_onnx_scores_respect_rdkit_symmetry(smiles: str, model: str) -> None:
     rdmol, molecule = parse_smiles(smiles)
     atom_groups = atom_symmetry_groups(rdmol)
     bond_groups = bond_symmetry_groups(rdmol)
@@ -121,6 +123,24 @@ def test_onnx_scores_respect_rdkit_symmetry(smiles, model):
 
     else:
         pytest.fail(f"unhandled model {model}")
+
+
+def test_equiv_corpus_nonempty():
+    assert len(equiv_smiles()) >= 100
+    assert len(equiv_pairs()) >= 100
+
+
+@molecule_sample_settings(equiv_smiles)
+@given(data=st.data())
+def test_onnx_scores_respect_rdkit_symmetry_sampled(data):
+    smiles, model = data.draw(equiv_smiles_model())
+    _assert_onnx_scores_respect_rdkit_symmetry(smiles, model)
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("smiles,model", _equiv_params())
+def test_onnx_scores_respect_rdkit_symmetry(smiles, model):
+    _assert_onnx_scores_respect_rdkit_symmetry(smiles, model)
 
 
 def test_ndealk_openbabel_symmetry_allows_zero_fill():
