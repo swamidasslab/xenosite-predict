@@ -11,7 +11,8 @@ TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
-	capture-suite-onnx gather-golden drift-report help
+	capture-suite-onnx gather-golden drift-report help \
+	regather-ob-dumps regather-golden-onnx
 
 help:
 	@echo "extract-weights     copy pickles/TSV/source from $(IMAGE) into weights/legacy/"
@@ -24,6 +25,8 @@ help:
 	@echo "dump-ob             fill descriptor suite incrementally (skip dumps already present)"
 	@echo "capture-suite-onnx  cache ONNX scores (CAPTURE_WORKERS=24 default; CAPTURE_MODEL/SMILES to filter)"
 	@echo "gather-golden        regather failing suite rows from legacy-test-api (GATHER_WORKERS=24)"
+	@echo "regather-ob-dumps    refresh quinone rows in ob_dumps from py3 legacy OMP port"
+	@echo "regather-golden-onnx refresh golden scores from ONNX + GOLDEN_PARAMETER"
 	@echo "drift-report        classify ONNX vs golden from cache (DRIFT_WORKERS=24 default)"
 	@echo "legacy-test-api     nginx LB + cache, scale API with LEGACY_REPLICAS=24"
 	@echo "legacy-test-api-down"
@@ -88,3 +91,13 @@ drift-report:
 	  --workers $(DRIFT_WORKERS) \
 	  $(if $(CAPTURE_MODEL),--model $(CAPTURE_MODEL),) \
 	  $(if $(REFRESH),--refresh,)
+
+regather-ob-dumps:
+	$(PYTHON) tools/regather_internal_ob_dumps.py --models quinone
+
+regather-golden-onnx:
+	$(PYTHON) tools/regather_golden_from_onnx.py \
+	  --workers $(GATHER_WORKERS) \
+	  --force \
+	  --include-smoke \
+	  $(if $(GATHER_MODEL),--models $(GATHER_MODEL),)
