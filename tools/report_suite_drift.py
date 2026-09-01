@@ -34,6 +34,7 @@ from tools.suite_drift_lib import (  # noqa: E402
     default_workers,
     format_report,
     load_cache,
+    save_failing_smiles,
 )
 
 
@@ -86,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         models=models,
         workers=max(1, args.workers),
     )
+    save_failing_smiles(report)
 
     if args.fail_only and report.pytest_fail_rows == 0:
         return 0

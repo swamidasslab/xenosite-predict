@@ -49,7 +49,7 @@ convert = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-m \"not live\""
+addopts = "-m \"not live\" -n auto"
 testpaths = ["tests"]
 pythonpath = ["src", "."]
 markers = [

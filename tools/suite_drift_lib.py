@@ -14,6 +14,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CACHE = ROOT / "tests" / "fixtures" / "suite_onnx_cache.json"
+FAILING_SMILES_JSON = ROOT / "tests" / "fixtures" / "failing_suite_smiles.json"
 
 NH_SMILES = re.compile(r"\[[nN][Hh]")
 
@@ -268,6 +269,15 @@ def analyze_suite(
             unit="row",
         )
     return merge_reports(parts)
+
+
+def save_failing_smiles(report: DriftReport, path: Path = FAILING_SMILES_JSON) -> None:
+    """Write unique failing SMILES for ``gather_golden_suite.py --failing-only``."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(sorted(report.unique_failing_smiles), indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def format_report(report: DriftReport, *, top_n: int = 15) -> str:

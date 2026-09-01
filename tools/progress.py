@@ -6,10 +6,12 @@ import os
 import sys
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Sized
-from typing import Any, TypeVar
+from typing import Any, TextIO, TypeVar
 
 T = TypeVar("T")
 U = TypeVar("U")
+
+_tty_stream: TextIO | None = None
 
 
 def _truthy_env(name: str) -> bool:
@@ -20,9 +22,17 @@ def _progress_disabled(explicit: bool) -> bool:
     return explicit or _truthy_env("XENOSITE_NO_PROGRESS")
 
 
-def _progress_stream():
-    """Always stderr for the bar; report text goes to stdout separately."""
-    return sys.stderr
+def _progress_stream() -> TextIO:
+    """Progress bars on /dev/tty when available; fallback stderr."""
+    global _tty_stream
+    if _truthy_env("XENOSITE_PROGRESS_STDERR"):
+        return sys.stderr
+    if _tty_stream is None:
+        try:
+            _tty_stream = open("/dev/tty", "w")
+        except OSError:
+            return sys.stderr
+    return _tty_stream
 
 
 def worker_quiet() -> None:

@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +27,11 @@ from tests.support import (  # noqa: E402
     load_golden_suite,
     serialize_molecule_results,
 )
-from tools.progress import iter_progress  # noqa: E402
+from tools.progress import iter_progress, map_progress, worker_quiet  # noqa: E402
+from tools.suite_drift_lib import DEFAULT_CACHE, FAILING_SMILES_JSON, analyze_suite, default_workers, load_cache  # noqa: E402
+
+_LEGACY_URL: str = ""
+_NAMES: dict[str, str] = {}
 
 
 def _load_out(path: Path) -> list[dict]:
@@ -39,8 +45,47 @@ def _save_out(path: Path, rows: list[dict]) -> None:
     path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
 
 
-def _name_for(smiles: str, names: dict[str, str]) -> str:
-    return names.get(smiles) or smiles[:40]
+def _name_for(smiles: str) -> str:
+    return _NAMES.get(smiles) or smiles[:40]
+
+
+def _worker_init(url: str, names: dict[str, str]) -> None:
+    worker_quiet()
+    global _LEGACY_URL, _NAMES
+    _LEGACY_URL = url
+    _NAMES = names
+
+
+def _gather_one(task: tuple[str, str]) -> dict:
+    """Run one (smiles, model) pair in a worker process."""
+    smiles, model = task
+    from xenosite.predict import predict
+    from xenosite.predict.backends.legacy import LegacyTestBackend
+
+    rec: dict = {
+        "smiles": smiles,
+        "name": _name_for(smiles),
+        "model": model,
+        "error": None,
+        "results": [],
+    }
+    try:
+        mol = predict(smiles, models=[model], backend=LegacyTestBackend(_LEGACY_URL))
+        rec["smiles"] = mol.smiles
+        rec["results"] = serialize_molecule_results(mol)
+    except Exception as exc:
+        rec["error"] = str(exc)
+    return rec
+
+
+def _failing_smiles() -> list[str]:
+    if FAILING_SMILES_JSON.is_file():
+        return json.loads(FAILING_SMILES_JSON.read_text(encoding="utf-8"))
+    golden = load_golden_suite(merge_smoke=True)
+    cache = load_cache(DEFAULT_CACHE)
+    models = [m for m in SUITE_MODELS if m not in ("phase1", "bioactivation")]
+    report = analyze_suite(golden, cache, models=models, workers=default_workers())
+    return sorted(report.unique_failing_smiles)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,13 +105,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--smiles", default="", help="single SMILES only")
     p.add_argument("--force", action="store_true", help="redo even if present")
     p.add_argument(
+        "--failing-only",
+        action="store_true",
+        help="regather SMILES that fail drift vs ONNX cache (implies --force)",
+    )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=default_workers(),
+        help="parallel worker processes (default: min(cpu_count, 8))",
+    )
+    p.add_argument(
         "--merge-smoke",
         action="store_true",
         help="also copy rows from golden_smiles.json at the end",
     )
     args = p.parse_args(argv)
 
-    from xenosite.predict import predict
     from xenosite.predict.backends.legacy import LegacyTestBackend
 
     try:
@@ -76,8 +131,22 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         names = {}
 
+    if args.failing_only:
+        args.force = True
+
     models = [m.strip() for m in args.models.split(",") if m.strip()]
-    smiles_list = [args.smiles] if args.smiles else load_descriptor_smiles()
+    if args.failing_only:
+        models = [m for m in SUITE_MODELS if m not in ("phase1", "bioactivation")]
+    if args.smiles:
+        smiles_list = [args.smiles]
+    elif args.failing_only:
+        smiles_list = _failing_smiles()
+        if not smiles_list:
+            print("no failing SMILES from drift cache", file=sys.stderr)
+            return 0
+        print(f"regather {len(smiles_list)} failing SMILES", flush=True)
+    else:
+        smiles_list = load_descriptor_smiles()
     if args.limit:
         smiles_list = smiles_list[: args.limit]
 
@@ -88,9 +157,6 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = _load_out(args.out)
     done = {(r.get("model"), r.get("smiles")) for r in rows}
-    added = 0
-    errors: list[str] = []
-
     pending: list[tuple[str, str]] = []
     for smiles in smiles_list:
         for model in models:
@@ -99,30 +165,66 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             pending.append((smiles, model))
 
-    for smiles, model in iter_progress(pending, desc="gather golden", unit="pair"):
-        key = (model, smiles)
-        if args.force and key in done:
-            rows = [r for r in rows if (r.get("model"), r.get("smiles")) != key]
-            done.discard(key)
-        try:
-            mol = predict(smiles, models=[model], backend=backend)
-            rec = {
-                "smiles": mol.smiles,
-                "name": _name_for(smiles, names),
-                "model": model,
-                "results": serialize_molecule_results(mol),
+    if not pending:
+        print(f"{args.out} total={len(rows)} new=0 (nothing pending)")
+        return 0
+
+    if args.force:
+        pending_keys = {(m, s) for s, m in pending}
+        rows = [r for r in rows if (r.get("model"), r.get("smiles")) not in pending_keys]
+        done = {(r.get("model"), r.get("smiles")) for r in rows}
+
+    workers = max(1, args.workers)
+    added = 0
+    errors: list[str] = []
+    t0 = time.time()
+
+    def _apply(rec: dict) -> None:
+        nonlocal added
+        key = (rec["model"], rec["smiles"])
+        if rec.get("error"):
+            errors.append(f"{rec['model']} {rec['smiles'][:32]}: {rec['error']}")
+            return
+        rows.append(
+            {
+                "smiles": rec["smiles"],
+                "name": rec["name"],
+                "model": rec["model"],
+                "results": rec["results"],
             }
-            rows.append(rec)
-            done.add(key)
-            added += 1
-            _save_out(args.out, rows)
-        except Exception as exc:
-            msg = f"{model} {smiles[:32]}: {exc}"
-            errors.append(msg)
-            print(f"ERROR {msg}", file=sys.stderr, flush=True)
+        )
+        done.add(key)
+        added += 1
+        _save_out(args.out, rows)
+
+    if workers == 1:
+        _worker_init(args.url, names)
+        for task in iter_progress(pending, desc="gather golden", unit="pair"):
+            rec = _gather_one(task)
+            _apply(rec)
+            if rec.get("error"):
+                print(f"ERROR {errors[-1]}", file=sys.stderr, flush=True)
+    else:
+        def _on_gather(rec: dict, bar) -> None:
+            if rec.get("error"):
+                bar.write(f"ERR {rec['model']} {rec['name'][:32]}: {rec['error'][:60]}")
+
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_worker_init,
+            initargs=(args.url, names),
+        ) as pool:
+            for rec in map_progress(
+                _gather_one,
+                pending,
+                pool=pool,
+                desc=f"gather golden ({workers}w, {len(pending)} pairs)",
+                unit="pair",
+                on_result=_on_gather,
+            ):
+                _apply(rec)
 
     if args.merge_smoke:
-        smoke = load_golden_suite(merge_smoke=False)
         from tests.support import load_golden
 
         for r in load_golden():
@@ -132,7 +234,8 @@ def main(argv: list[str] | None = None) -> int:
                 done.add(key)
         _save_out(args.out, rows)
 
-    print(f"wrote {args.out} total={len(rows)} new={added} errors={len(errors)}")
+    dt = time.time() - t0
+    print(f"wrote {args.out} total={len(rows)} new={added} errors={len(errors)} ({dt:.1f}s)")
     if errors:
         print("first errors:", file=sys.stderr)
         for e in errors[:10]:
