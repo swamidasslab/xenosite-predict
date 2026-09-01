@@ -11,7 +11,7 @@ TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
-	capture-suite-onnx gather-golden drift-report help \
+	capture-suite-onnx gather-golden drift-report drift-descriptors help \
 	regather-ob-dumps regather-golden-onnx
 
 help:
@@ -28,6 +28,7 @@ help:
 	@echo "regather-ob-dumps    refresh quinone rows in ob_dumps from py3 legacy OMP port"
 	@echo "regather-golden-onnx refresh golden scores from ONNX + GOLDEN_PARAMETER"
 	@echo "drift-report        classify ONNX vs golden from cache (DRIFT_WORKERS=24 default)"
+	@echo "drift-descriptors   cross-tab descriptor vs score drift for one model"
 	@echo "legacy-test-api     nginx LB + cache, scale API with LEGACY_REPLICAS=24"
 	@echo "legacy-test-api-down"
 
@@ -91,6 +92,13 @@ drift-report:
 	  --workers $(DRIFT_WORKERS) \
 	  $(if $(CAPTURE_MODEL),--model $(CAPTURE_MODEL),) \
 	  $(if $(REFRESH),--refresh,)
+
+DRIFT_MODEL ?= quinone
+
+drift-descriptors:
+	$(PYTHON) tools/analyze_descriptor_score_drift.py \
+	  --model $(DRIFT_MODEL) \
+	  --workers $(DRIFT_WORKERS)
 
 regather-ob-dumps:
 	$(PYTHON) tools/regather_internal_ob_dumps.py --models quinone
