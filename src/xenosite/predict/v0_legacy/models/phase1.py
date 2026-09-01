@@ -13,15 +13,15 @@ from typing import Any
 
 import numpy as np
 
-from ..backends.adapters import append_atom_bond
-from ..backends.onnx import OnnxBackend
-from ..errors import WeightsNotFound
+from xenosite.predict.backends.adapters import append_atom_bond
+from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import WeightsNotFound
 from ..features import load_names, matrix_from_rows, phase1_rows
 from ..features.bond_lonepair import phase1_pymol
 from ..features.phase1_mol import phase1_mol_features
-from ..registry import register_model
+from xenosite.predict.registry import register_model
 from ..symmetry import collapse_opposite_direction_rows
-from ..types import Molecule
+from xenosite.predict.types import Molecule
 from ._base import BaseRunner
 
 PHASE1_HEADS = (

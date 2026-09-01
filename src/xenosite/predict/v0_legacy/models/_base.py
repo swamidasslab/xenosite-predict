@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..backends.onnx import OnnxBackend
-from ..errors import ModelNotAvailable, WeightsNotFound
-from ..molecule import parse_smiles
-from ..registry import ModelRunner
+from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import ModelNotAvailable, WeightsNotFound
+from xenosite.predict.molecule import parse_smiles
+from xenosite.predict.registry import ModelRunner
 from ..symmetry import apply_atom_symmetry, apply_bond_symmetry, resolve_bond_nrings_mode, resolve_symmetry_group_mode
-from ..types import Molecule as Mol
+from xenosite.predict.types import Molecule as Mol
 
 
 class BaseRunner(ModelRunner):

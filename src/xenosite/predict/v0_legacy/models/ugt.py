@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..backends.adapters import append_atom, legacy_atom_vector
-from ..backends.onnx import OnnxBackend
-from ..errors import WeightsNotFound
+from xenosite.predict.backends.adapters import append_atom, legacy_atom_vector
+from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import WeightsNotFound
 from ..features import load_names, matrix_from_rows
 from ..features.ugt import ugt_inference_rows
-from ..registry import register_model
-from ..types import Molecule
+from xenosite.predict.registry import register_model
+from xenosite.predict.types import Molecule
 from ._base import BaseRunner
 
 

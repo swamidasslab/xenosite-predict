@@ -6,12 +6,12 @@ from typing import Any
 
 import numpy as np
 
-from ..backends.adapters import append_mol_bond, reorder_by_bond
-from ..backends.onnx import OnnxBackend
-from ..errors import WeightsNotFound
+from xenosite.predict.backends.adapters import append_mol_bond, reorder_by_bond
+from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import WeightsNotFound
 from ..features import bond_rows, load_names, matrix_from_rows, topn_site_features
-from ..registry import register_model
-from ..types import Molecule
+from xenosite.predict.registry import register_model
+from xenosite.predict.types import Molecule
 from ._base import BaseRunner
 
 

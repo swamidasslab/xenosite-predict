@@ -103,7 +103,7 @@ class AtomTD:
         self._init_rows()
 
     def _init_rows(self) -> None:
-        from ..numbering import numbering_mode, pattern_ob_index
+        from xenosite.predict.numbering import numbering_mode, pattern_ob_index
 
         ob = self.ob
         vec = ob.vectorUnsignedInt()

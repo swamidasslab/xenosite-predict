@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..errors import OpenBabelNotAvailable
+from xenosite.predict.errors import OpenBabelNotAvailable
 
 _CACHE: tuple[Any, Any] | None = None
 
@@ -205,13 +205,13 @@ class _ModuleElementTable:
 
 def ob_numbering_mode():
     """Configured heavy-atom numbering policy (see ``xenosite.predict.numbering``)."""
-    from ..numbering import numbering_mode
+    from xenosite.predict.numbering import numbering_mode
 
     return numbering_mode()
 
 
 def ob_numbering_is_gapped(obmol: Any) -> bool:
     """True when this molecule's heavy-atom ``GetIdx()`` values are gapped."""
-    from ..numbering import ObNumberingMode, detect_raw_numbering_mode
+    from xenosite.predict.numbering import ObNumberingMode, detect_raw_numbering_mode
 
     return detect_raw_numbering_mode(obmol) == ObNumberingMode.RAW

@@ -6,13 +6,13 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from ..backends.adapters import append_atom_pair, or_combine
-from ..backends.onnx import OnnxBackend
-from ..errors import WeightsNotFound
+from xenosite.predict.backends.adapters import append_atom_pair, or_combine
+from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import WeightsNotFound
 from ..features import load_names, matrix_from_rows, quinone_atom_rows
 from ..features.quinone import eligible_atom_rows, quinone_mol_features, quinone_pair_rows
-from ..registry import register_model
-from ..types import Molecule
+from xenosite.predict.registry import register_model
+from xenosite.predict.types import Molecule
 from ._base import BaseRunner
 
 
@@ -102,7 +102,7 @@ class QuinoneRunner(BaseRunner):
         )
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
-        from ..numbering import (
+        from xenosite.predict.numbering import (
             build_group_to_rdkit_from_rows,
             build_ob_to_rdkit_from_rows,
             legacy_ob_order_from_rows,

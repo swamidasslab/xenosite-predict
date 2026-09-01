@@ -25,7 +25,7 @@ build-backend = "hatchling.build"
 packages = ["src/xenosite"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/xenosite/predict/features" = "xenosite/predict/features"
+"src/xenosite/predict/v0_legacy/features" = "xenosite/predict/v0_legacy/features"
 
 [tool.hatch.build.targets.sdist]
 exclude = [

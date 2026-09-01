@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..backends.adapters import append_mol_atom, or_combine
-from ..backends.onnx import OnnxBackend
-from ..errors import ModelNotAvailable
-from ..registry import register_model
-from ..types import Metabolite, Molecule
+from xenosite.predict.backends.adapters import append_mol_atom, or_combine
+from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.errors import ModelNotAvailable
+from xenosite.predict.registry import register_model
+from xenosite.predict.types import Metabolite, Molecule
 from ._base import BaseRunner
 
 _BLOCKED = (
