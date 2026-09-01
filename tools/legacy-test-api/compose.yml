@@ -13,7 +13,7 @@ services:
       XENOSITE_LEGACY_DATA: /src
       PORT: "8099"
     volumes:
-      - ../../../../xenosite-legacy/src:/src:ro
+      - ../../../xenosite-legacy/src:/src:ro
       - ../../weights/legacy/sibling_libridass:/src/libridass:ro
       - ../../weights/legacy/tarball/libridass/epoxidation1/models:/src/libridass/epoxidation1/models:ro
       - ../../weights/legacy/tarball/libridass/quinone1/models:/src/libridass/quinone1/models:ro

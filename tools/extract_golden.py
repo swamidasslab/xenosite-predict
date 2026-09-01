@@ -28,7 +28,7 @@ def main() -> int:
     p.add_argument(
         "--src",
         type=Path,
-        default=Path("../.test_data/test_data.mpk.gz"),
+        default=Path("../xenosite-api/.test_data/test_data.mpk.gz"),
     )
     p.add_argument("--out", type=Path, default=Path("tests/fixtures/golden_smiles.json"))
     args = p.parse_args()

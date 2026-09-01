@@ -26,9 +26,8 @@ from tools.progress import iter_progress  # noqa: E402
 DUMP_IMAGE = os.environ.get("XENOSITE_PY2_DUMP_IMAGE", "xenosite-predict-py2:dump")
 DUMP_DOCKERFILE = ROOT / "tools" / "py2-dump" / "Dockerfile"
 HELPER = ROOT / "tools" / "py2-dump" / "dump_ob_features.py"
-# Nested repo sits at …/xenosite/xenosite-api/xenosite-predict; sibling ML tree is
-# …/xenosite/xenosite-legacy/src (libridass + xenosite.finger).
-DEFAULT_SRC = ROOT.parent.parent / "xenosite-legacy" / "src"
+# Sibling ML tree: …/xenosite/xenosite-legacy/src (libridass + xenosite.finger).
+DEFAULT_SRC = ROOT.parent / "xenosite-legacy" / "src"
 MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1")
 GOLDEN = ROOT / "tests" / "fixtures" / "golden_smiles.json"
 DESCRIPTOR = ROOT / "tests" / "fixtures" / "descriptor_smiles.json"

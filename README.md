@@ -1,6 +1,6 @@
 # xenosite.predict
 
-Python 3.11+ RDKit + ONNX predictors for XenoSite. Dist name **xenosite-predict**; import **`xenosite.predict`** (PEP 420 namespace). This repo is nested under `xenosite-api` and gitignored there; origin is [github.com/swamidasslab/xenosite-predict](https://github.com/swamidasslab/xenosite-predict).
+Python 3.11+ RDKit + ONNX predictors for XenoSite. Dist name **xenosite-predict**; import **`xenosite.predict`** (PEP 420 namespace). Checkout as a sibling of `xenosite-api` and `xenosite-legacy`; origin is [github.com/swamidasslab/xenosite-predict](https://github.com/swamidasslab/xenosite-predict).
 
 Publish **sdist only** (no wheel): ONNX weights stay local (`weights/`, gitignored). OpenBabel comes from PyPI (`uv add openbabel`, currently 3.2.x wheels). `make test` is Docker-free. Feature tests compare the installed OpenBabel to the committed `tests/fixtures/ob_dumps.json.gz` (Git LFS). `make test-live` skips if Docker, the legacy image, or ONNX files are missing. Do not commit model weights, pickles, or extracted `libridass/` trees.
 
