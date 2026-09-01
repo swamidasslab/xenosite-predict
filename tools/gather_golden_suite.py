@@ -119,7 +119,13 @@ def main(argv: list[str] | None = None) -> int:
         "--workers",
         type=int,
         default=default_workers(),
-        help="parallel worker processes (default: min(cpu_count, 8))",
+        help="parallel worker processes (default: min(cpu_count, 24) or XENOSITE_WORKERS)",
+    )
+    p.add_argument(
+        "--save-every",
+        type=int,
+        default=50,
+        help="flush golden JSON every N successful pairs (0 = end only)",
     )
     p.add_argument(
         "--merge-smoke",
@@ -183,9 +189,14 @@ def main(argv: list[str] | None = None) -> int:
         done = {(r.get("model"), r.get("smiles")) for r in rows}
 
     workers = max(1, args.workers)
+    save_every = max(0, int(args.save_every))
     added = 0
     errors: list[str] = []
     t0 = time.time()
+
+    def _maybe_save() -> None:
+        if save_every and added % save_every == 0:
+            _save_out(args.out, rows)
 
     def _apply(rec: dict) -> None:
         nonlocal added
@@ -203,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         done.add(key)
         added += 1
-        _save_out(args.out, rows)
+        _maybe_save()
 
     if workers == 1:
         _worker_init(args.url, names)
@@ -231,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
                 on_result=_on_gather,
             ):
                 _apply(rec)
+
+    _save_out(args.out, rows)
 
     if args.merge_smoke:
         from tests.support import load_golden

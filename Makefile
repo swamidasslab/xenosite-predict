@@ -6,6 +6,7 @@ PYTEST ?= uv run pytest
 CONVERT ?= uv run --group convert python
 IMAGE ?= dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api
 LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
+LEGACY_REPLICAS ?= 24
 TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) test test-golden test-live \
@@ -21,10 +22,10 @@ help:
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4 + RDKit)"
 	@echo "dump-ob             fill descriptor suite incrementally (skip dumps already present)"
-	@echo "capture-suite-onnx  cache ONNX scores (CAPTURE_WORKERS=8 default; CAPTURE_MODEL/SMILES to filter)"
-	@echo "gather-golden        regather failing suite rows from legacy-test-api (GATHER_WORKERS=8)"
-	@echo "drift-report        classify ONNX vs golden from cache (DRIFT_WORKERS=8 default)"
-	@echo "legacy-test-api     build/run derived test image"
+	@echo "capture-suite-onnx  cache ONNX scores (CAPTURE_WORKERS=24 default; CAPTURE_MODEL/SMILES to filter)"
+	@echo "gather-golden        regather failing suite rows from legacy-test-api (GATHER_WORKERS=24)"
+	@echo "drift-report        classify ONNX vs golden from cache (DRIFT_WORKERS=24 default)"
+	@echo "legacy-test-api     nginx LB + cache, scale API with LEGACY_REPLICAS=24"
 	@echo "legacy-test-api-down"
 
 extract-weights:
@@ -43,7 +44,7 @@ test-live:
 	$(PYTEST) -m live
 
 legacy-test-api:
-	docker compose -f $(LEGACY_COMPOSE) up --build -d
+	docker compose -f $(LEGACY_COMPOSE) up --build -d --scale legacy-test-api=$(LEGACY_REPLICAS)
 
 legacy-test-api-down:
 	docker compose -f $(LEGACY_COMPOSE) down
@@ -57,9 +58,9 @@ MODEL ?= epoxidation
 # Optional filters for capture-suite-onnx (empty = full golden suite)
 CAPTURE_MODEL ?=
 CAPTURE_SMILES ?=
-CAPTURE_WORKERS ?= 8
-DRIFT_WORKERS ?= 8
-GATHER_WORKERS ?= 8
+CAPTURE_WORKERS ?= 24
+DRIFT_WORKERS ?= 24
+GATHER_WORKERS ?= 24
 GATHER_MODEL ?=
 
 dump-ob-features:

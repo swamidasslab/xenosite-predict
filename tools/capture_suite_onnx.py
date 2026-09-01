@@ -32,14 +32,9 @@ from tests.support import (  # noqa: E402
     serialize_molecule_results,
 )
 from tools.progress import iter_progress, map_progress, worker_quiet  # noqa: E402
-from tools.suite_drift_lib import DEFAULT_CACHE, cache_index, load_cache, save_cache  # noqa: E402
+from tools.suite_drift_lib import DEFAULT_CACHE, cache_index, default_workers, load_cache, save_cache  # noqa: E402
 
 _WEIGHTS_ROOT: str = ""
-
-
-def _default_workers() -> int:
-    n = os.cpu_count() or 4
-    return max(1, min(n, 8))
 
 
 def _worker_init(weights_root: str) -> None:
@@ -85,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--workers",
         type=int,
-        default=_default_workers(),
-        help="parallel worker processes (default: min(cpu_count, 8))",
+        default=default_workers(),
+        help="parallel worker processes (default: min(cpu_count, 24) or XENOSITE_WORKERS)",
     )
     args = p.parse_args(argv)
 
