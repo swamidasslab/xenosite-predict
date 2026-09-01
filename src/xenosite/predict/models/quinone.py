@@ -112,8 +112,9 @@ class QuinoneRunner(BaseRunner):
             raw_ids.extend([ia, ib])
             parsed.append((ia, ib, 0.0 if val == {} else float(val)))
         n = molecule.atoms.num
-        already_zero = bool(raw_ids) and max(raw_ids) < n
-        legacy_ob_order = sorted({i + 1 if already_zero else i for i in raw_ids}) or row_ob_order
+        # Legacy REST site keys are always 1-based OpenBabel GetIdx() atom ids.
+        already_zero = False
+        legacy_ob_order = sorted(set(raw_ids)) or row_ob_order
         pair_idx = []
         pair = []
         for ia, ib, score in parsed:
