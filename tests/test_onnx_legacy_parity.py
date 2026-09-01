@@ -12,19 +12,26 @@ Optional ``@pytest.mark.live`` tests hit ``legacy-test-api`` when
 from __future__ import annotations
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from xenosite.predict import predict
 from xenosite.predict.backends.legacy import LegacyTestBackend
 from xenosite.predict.backends.onnx import OnnxBackend
 
+from tests.sampling import (
+    golden_parity_smiles,
+    golden_parity_smiles_model,
+    molecule_sample_settings,
+)
 from tests.support import (
-    GOLDEN_PARAMETER,
     ROOT,
     assert_golden_molecule,
     assert_predictions_parity,
     descriptor_omp_only,
     descriptor_passes,
     golden_name_by_smiles,
+    golden_predict_kwargs,
     load_golden,
     load_ob_dumps,
     onnx_model_key,
@@ -105,14 +112,11 @@ def _onnx_predict(model: str, smiles: str):
     key = onnx_model_key(model)
     if not onnx_weights_present(key):
         pytest.skip(f"no ONNX for {key}")
-    kwargs = {}
-    if model in ("ndealk", "isozyme", "quinone"):
-        kwargs["_parameter"] = GOLDEN_PARAMETER
     return predict(
         smiles,
         models=[model],
         backend=OnnxBackend(ROOT / "weights" / "onnx"),
-        **kwargs,
+        **golden_predict_kwargs(model),
     )
 
 
@@ -134,11 +138,27 @@ def test_onnx_runs_descriptor_non_passing(model, smiles):
     assert got.results
 
 
-@pytest.mark.parametrize("model,smiles", _golden_parity_params())
-def test_onnx_matches_legacy_golden_full(model, smiles):
+def _assert_onnx_matches_legacy_golden(model: str, smiles: str) -> None:
     got = _onnx_predict(model, smiles)
     assert got.results
     assert_golden_molecule(got, _golden_row(model, smiles), smiles=smiles, model=model)
+
+
+def test_golden_parity_smiles_nonempty():
+    assert len(golden_parity_smiles()) >= 10
+
+
+@molecule_sample_settings(golden_parity_smiles)
+@given(data=st.data())
+def test_onnx_matches_legacy_golden_sampled(data):
+    model, smiles = data.draw(golden_parity_smiles_model())
+    _assert_onnx_matches_legacy_golden(model, smiles)
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("model,smiles", _golden_parity_params())
+def test_onnx_matches_legacy_golden_full(model, smiles):
+    _assert_onnx_matches_legacy_golden(model, smiles)
 
 
 def _predict_pair_live(smiles: str, model: str, legacy_url: str):
@@ -147,9 +167,7 @@ def _predict_pair_live(smiles: str, model: str, legacy_url: str):
         pytest.skip(f"no ONNX for {key}")
     legacy = LegacyTestBackend(legacy_url)
     onnx = OnnxBackend(ROOT / "weights" / "onnx")
-    kwargs = {}
-    if model in ("ndealk", "isozyme", "quinone"):
-        kwargs["_parameter"] = GOLDEN_PARAMETER
+    kwargs = golden_predict_kwargs(model)
     try:
         leg = predict(smiles, models=[model], backend=legacy)
     except Exception as exc:
@@ -185,6 +203,7 @@ def test_onnx_legacy_api_parity_descriptor_non_passing(legacy_api_url, model, sm
 
 
 @pytest.mark.live
+@pytest.mark.full
 @pytest.mark.parametrize("model,smiles", _golden_parity_params())
 def test_onnx_legacy_api_parity_golden_full(legacy_api_url, model, smiles):
     leg, got = _predict_pair_live(smiles, model, legacy_api_url)
