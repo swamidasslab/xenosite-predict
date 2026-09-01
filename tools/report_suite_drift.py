@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         "--workers",
         type=int,
         default=default_workers(),
-        help="parallel worker processes (default: min(cpu_count, 8))",
+        help="parallel worker processes (default: min(cpu_count, 24) or XENOSITE_WORKERS)",
     )
     args = p.parse_args(argv)
 

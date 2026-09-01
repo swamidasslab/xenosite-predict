@@ -31,6 +31,24 @@ class FieldFailure:
 
 
 @dataclass
+class AlignmentDiagnostic:
+    """Positional compare failed but index-free matching may explain the gap."""
+
+    model: str
+    smiles: str
+    name: str
+    head: str
+    field: str
+    positional_diff: float
+    matched_diff: float
+    atol: float
+
+    @property
+    def ordering_only(self) -> bool:
+        return self.positional_diff > self.atol and self.matched_diff <= self.atol
+
+
+@dataclass
 class DriftReport:
     pytest_fail_rows: int = 0
     pytest_pass_rows: int = 0
@@ -44,6 +62,9 @@ class DriftReport:
     field_failures: list[FieldFailure] = field(default_factory=list)
     predict_errors: list[tuple[str, str, str]] = field(default_factory=list)
     stats_by_model: dict[str, list[float]] = field(default_factory=dict)
+    alignment_ordering_only: Counter = field(default_factory=Counter)
+    alignment_real_drift: Counter = field(default_factory=Counter)
+    alignment_diagnostics: list[AlignmentDiagnostic] = field(default_factory=list)
 
 
 def load_cache(path: Path) -> list[dict]:
@@ -62,8 +83,12 @@ def cache_index(rows: list[dict]) -> dict[tuple[str, str], dict]:
 
 
 def default_workers() -> int:
+    """Default pool size: ``XENOSITE_WORKERS``, else min(cpu_count, 24)."""
+    env = os.environ.get("XENOSITE_WORKERS", "").strip()
+    if env.isdigit():
+        return max(1, int(env))
     n = os.cpu_count() or 4
-    return max(1, min(n, 8))
+    return max(1, min(n, 24))
 
 
 def mol_class(smiles: str) -> str:
@@ -95,6 +120,53 @@ def max_diff(want: dict, have: dict) -> float:
         if wa.size:
             m = max(m, float(np.max(np.abs(wa - ha))))
     return m
+
+
+def index_free_max_diff(want: np.ndarray, have: np.ndarray) -> float:
+    """Minimax score gap over bijections, ignoring vector order (sorted matching).
+
+    For equal-length vectors this equals ``min_π max_i |want[i] - have[π(i)]|``.
+    Different lengths return ``inf`` (cannot align as a pure reordering issue).
+    """
+    a = np.asarray(want, dtype=float).reshape(-1)
+    b = np.asarray(have, dtype=float).reshape(-1)
+    if a.size != b.size:
+        return float("inf")
+    if a.size == 0:
+        return 0.0
+    return float(np.max(np.abs(np.sort(a) - np.sort(b))))
+
+
+def marriage_assignment_max_diff(want: np.ndarray, have: np.ndarray) -> float:
+    """Maximum edge cost in a minimum-sum bipartite matching (Hungarian).
+
+    Ignores index alignment when pairing scores. Falls back to
+    :func:`index_free_max_diff` when SciPy is unavailable.
+    """
+    a = np.asarray(want, dtype=float).reshape(-1)
+    b = np.asarray(have, dtype=float).reshape(-1)
+    if a.size != b.size:
+        return float("inf")
+    if a.size == 0:
+        return 0.0
+    if a.size == 1:
+        return float(abs(a[0] - b[0]))
+    try:
+        from scipy.optimize import linear_sum_assignment
+    except ImportError:
+        return index_free_max_diff(a, b)
+    cost = np.abs(a[:, None] - b[None, :])
+    row, col = linear_sum_assignment(cost)
+    return float(np.max(cost[row, col]))
+
+
+def classify_alignment(positional_diff: float, matched_diff: float, atol: float) -> str | None:
+    """``ordering_only``, ``real_drift``, or None when positional compare passed."""
+    if positional_diff <= atol:
+        return None
+    if matched_diff <= atol:
+        return "ordering_only"
+    return "real_drift"
 
 
 def failing_fields(
@@ -202,6 +274,33 @@ def _analyze_golden_row(task: tuple[dict, dict | None]) -> DriftReport:
                         atol=atol,
                     )
                 )
+                if fld in ("pair_idx", "mol") or not np.isfinite(fd):
+                    continue
+                wa = np.asarray(want.get(fld, []), dtype=float).reshape(-1)
+                ha = np.asarray(have.get(fld, []), dtype=float).reshape(-1)
+                if wa.size != ha.size:
+                    continue
+                matched = marriage_assignment_max_diff(wa, ha)
+                kind = classify_alignment(fd, matched, atol)
+                if kind is None:
+                    continue
+                key = (model, fld)
+                if kind == "ordering_only":
+                    report.alignment_ordering_only[key] += 1
+                else:
+                    report.alignment_real_drift[key] += 1
+                report.alignment_diagnostics.append(
+                    AlignmentDiagnostic(
+                        model=model,
+                        smiles=smiles,
+                        name=g.get("name") or smiles[:40],
+                        head=head,
+                        field=fld,
+                        positional_diff=fd,
+                        matched_diff=matched,
+                        atol=atol,
+                    )
+                )
 
     if not row_failed:
         report.pytest_pass_rows += 1
@@ -225,6 +324,9 @@ def merge_reports(reports: list[DriftReport]) -> DriftReport:
         out.unique_failing_smiles |= r.unique_failing_smiles
         out.field_failures.extend(r.field_failures)
         out.predict_errors.extend(r.predict_errors)
+        out.alignment_ordering_only.update(r.alignment_ordering_only)
+        out.alignment_real_drift.update(r.alignment_real_drift)
+        out.alignment_diagnostics.extend(r.alignment_diagnostics)
         for model, vals in r.stats_by_model.items():
             out.stats_by_model.setdefault(model, []).extend(vals)
     return out
@@ -328,4 +430,51 @@ def format_report(report: DriftReport, *, top_n: int = 15) -> str:
         lines.append(
             f"  {f.model}/{f.field} {f.name[:30]} diff={f.max_diff:.6g} atol={f.atol:g}"
         )
+    if report.alignment_diagnostics:
+        ordering = [d for d in report.alignment_diagnostics if d.ordering_only]
+        real = [d for d in report.alignment_diagnostics if not d.ordering_only]
+        lines.append("")
+        lines.append("=== score alignment (index-free marriage match) ===")
+        lines.append(
+            "Positional fail but matched≤atol ⇒ ordering/alignment; "
+            "matched>atol ⇒ real score drift."
+        )
+        lines.append(
+            f"  ordering_only field hits: {sum(report.alignment_ordering_only.values())}"
+        )
+        lines.append(f"  real_drift field hits: {sum(report.alignment_real_drift.values())}")
+        if report.alignment_ordering_only:
+            lines.append("  ordering_only by model/field:")
+            for (m, fld), c in sorted(
+                report.alignment_ordering_only.items(), key=lambda x: -x[1]
+            )[:top_n]:
+                lines.append(f"    {m}/{fld}: {c}")
+        if report.alignment_real_drift:
+            lines.append("  real_drift by model/field:")
+            for (m, fld), c in sorted(
+                report.alignment_real_drift.items(), key=lambda x: -x[1]
+            )[:top_n]:
+                lines.append(f"    {m}/{fld}: {c}")
+        if ordering:
+            lines.append("")
+            lines.append(f"=== ordering-only examples (top {min(top_n, len(ordering))}) ===")
+            for d in sorted(
+                ordering, key=lambda x: -(x.positional_diff - x.matched_diff)
+            )[:top_n]:
+                lines.append(
+                    f"  {d.model}/{d.field} {d.name[:28]} "
+                    f"pos={d.positional_diff:.6g} matched={d.matched_diff:.6g} "
+                    f"atol={d.atol:g}"
+                )
+        if real:
+            lines.append("")
+            lines.append(
+                f"=== real drift (matched still fails, top {min(top_n, len(real))}) ==="
+            )
+            for d in sorted(real, key=lambda x: -x.matched_diff)[:top_n]:
+                lines.append(
+                    f"  {d.model}/{d.field} {d.name[:28]} "
+                    f"pos={d.positional_diff:.6g} matched={d.matched_diff:.6g} "
+                    f"atol={d.atol:g}"
+                )
     return "\n".join(lines)
