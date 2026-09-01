@@ -21,14 +21,21 @@ from tests.support import (
 
 
 def _golden_params():
-    return [
-        pytest.param(
-            g["model"],
-            g["smiles"],
-            id=f"{g['model']}:{g.get('name') or g['smiles'][:24]}",
+    out = []
+    for g in load_golden():
+        model = g.get("model") or ""
+        smiles = g.get("smiles") or ""
+        weight_key = "ndealk" if model == "isozyme" else model
+        if not onnx_weights_present(weight_key):
+            continue
+        out.append(
+            pytest.param(
+                model,
+                smiles,
+                id=f"{model}:{g.get('name') or smiles[:24]}",
+            )
         )
-        for g in load_golden()
-    ]
+    return out
 
 
 def test_golden_fixture_present():
@@ -48,7 +55,7 @@ def test_golden_scores_onnx(model, smiles):
     g = rows[0]
     mol = predict(smiles, models=[model], backend=OnnxBackend(ROOT / "weights" / "onnx"))
     assert mol.results
-    assert_golden_molecule(mol, g)
+    assert_golden_molecule(mol, g, smiles=smiles, model=model)
 
 
 def test_quinone_null_pair_predicts():
