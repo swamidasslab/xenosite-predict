@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from enum import Enum
 from functools import lru_cache
-from typing import Iterator, Optional
+from typing import Collection, Iterator, Optional
 
 from rdkit import Chem
 from xenosite.forest import load_ruleset
@@ -76,6 +76,16 @@ def ruleset_for_model(model: str) -> Optional[str]:
     if model.startswith("isozyme."):
         return "UO.Dealkylation"
     return None
+
+
+def metabolite_supported(model: str) -> bool:
+    """True when forest can attach metabolite structures for ``result.model``."""
+    return ruleset_for_model(model) is not None
+
+
+def supported_metabolite_models() -> frozenset[str]:
+    """``result.model`` names with explicit forest ruleset mappings."""
+    return frozenset(_MODEL_RULESETS)
 
 
 def pathway_name(rule: str) -> str:
@@ -335,6 +345,7 @@ def enumerate_metabolites(
 def attach_metabolites(
     molecule: Molecule,
     *,
+    models: Optional[Collection[str]] = None,
     min_score: Optional[float] = None,
     mapped_smiles: bool = False,
     rdmol: Chem.Mol | None = None,
@@ -347,14 +358,23 @@ def attach_metabolites(
     (descending). Each metabolite always includes ``map_idx`` (1-based parent
     atom numbers via AtomTracker). When ``mapped_smiles`` is ``True``, also set
     ``mapped_smiles`` with ``:N`` atom-map labels in the SMILES string.
+
+    Parameters
+    ----------
+    models:
+        When set, only results whose ``model`` is in this collection are
+        considered. ``None`` (default) considers every forest-supported result.
     """
     if rdmol is None:
         rdmol, _ = parse_smiles(molecule.smiles)
 
     map_mode = forest_map_indexing()
     enumerated: dict[str, list[tuple[str, frozenset[int], str, Chem.Mol]]] = {}
+    allowed = None if models is None else set(models)
 
     for result in molecule.results:
+        if allowed is not None and result.model not in allowed:
+            continue
         spec = ruleset_for_model(result.model)
         if spec is None or result.metabolite:
             continue
