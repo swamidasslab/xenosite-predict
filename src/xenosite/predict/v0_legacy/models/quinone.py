@@ -44,7 +44,7 @@ class QuinoneRunner(BaseRunner):
 
     def _quinone_omp_mode(self, molecule: Molecule) -> str:
         mode = molecule._parameter.get("quinone_omp_mode", "principled")
-        return mode if mode in ("legacy", "principled") else "principled"
+        return mode if mode in ("legacy", "principled", "mean") else "principled"
 
     def from_onnx(self, molecule: Molecule, backend: OnnxBackend) -> None:
         if not all(backend.has_head(self.name, h) for h in self.onnx_heads):

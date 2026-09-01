@@ -54,12 +54,14 @@ class AtomTD:
         reduced_descriptor_set: bool = False,
         add_possible_site: bool = False,
         max_depth: int = 5,
-        omp_mode: Literal["principled", "legacy"] = "principled",
+        omp_mode: Literal["principled", "legacy", "mean"] = "principled",
     ) -> None:
         self.pymol = pymol
         self.molnum = molnum
         self.reduced_descriptor_set = reduced_descriptor_set
-        self.omp_mode = omp_mode if omp_mode in ("principled", "legacy") else "principled"
+        self.omp_mode = (
+            omp_mode if omp_mode in ("principled", "legacy", "mean") else "principled"
+        )
         self.add_possible_site = add_possible_site
         self.max_depth = max_depth
         self.broken = False
@@ -342,17 +344,20 @@ class AtomTD:
     def _omp_paths(self, ends_for_start, *, site: bool) -> list[float]:
         """OMP ring feature from shortest-path tie sets.
 
-        Legacy: 1.0 if any single BFS path qualifies (one path per end).
-        Principled: mean of per-path indicators over all shortest paths
-        (same [0, 1] scale; equals legacy when only one path exists).
+        Legacy: 1.0 if one sorted-BFS shortest path qualifies.
+        Principled (default): enumerate all shortest paths; 1.0 if **any** qualifies
+        (deterministic max over path indicators; binary like legacy).
+        Mean: average per-path indicators over all shortest paths (fractional [0, 1]).
         """
         add: list[float] = []
         for paths in ends_for_start:
             hits = [self._path_on_aromatic_ring(p, site=site) for p in paths if p]
             if not hits:
                 add.append(0.0)
-            elif self.omp_mode == "principled":
+            elif self.omp_mode == "mean":
                 add.append(sum(hits) / len(hits))
+            elif self.omp_mode == "principled":
+                add.append(1.0 if any(hits) else 0.0)
             else:
                 add.append(1.0 if any(hits) else 0.0)
         return add

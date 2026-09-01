@@ -271,7 +271,7 @@ def test_quinone_omp_invariant_legacy_uses_single_path():
 
 
 def test_quinone_omp_invariant_principled_uses_all_shortest_paths():
-    """Principled: every tied minimum-length path contributes to the mean."""
+    """Principled: every tied minimum-length path is considered (then max/any)."""
     td = _atom_td(NAPHTHALENE, omp_mode="principled")
     for sym in "C N O S".split():
         paths = td._paths_for_omp(1, 4, sym)
@@ -279,8 +279,17 @@ def test_quinone_omp_invariant_principled_uses_all_shortest_paths():
     assert len(td._paths_for_omp(1, 4, "C")) == 2
 
 
-def test_quinone_omp_invariant_principled_mean_over_path_indicators():
+def test_quinone_omp_invariant_principled_max_over_path_indicators():
     td = _atom_td(NAPHTHALENE, omp_mode="principled")
+    paths = td._paths_for_omp(1, 4, "C")
+    hits = [td._path_on_aromatic_ring(p, site=False) for p in paths]
+    expected = 1.0 if any(hits) else 0.0
+    got = td._omp_paths([paths], site=False)[0]
+    assert got == expected
+
+
+def test_quinone_omp_invariant_mean_averages_path_indicators():
+    td = _atom_td(NAPHTHALENE, omp_mode="mean")
     paths = td._paths_for_omp(1, 4, "C")
     hits = [td._path_on_aromatic_ring(p, site=False) for p in paths]
     expected = sum(hits) / len(hits)

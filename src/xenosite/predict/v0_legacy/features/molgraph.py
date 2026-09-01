@@ -83,7 +83,7 @@ class MolGraph:
         """Every minimum-length path (sorted neighbor order).
 
         Quinone ortho/meta/para is true if **any** of these paths lies on an
-        aromatic ring; principled mode averages the per-path indicator.
+        aromatic ring; principled mode takes the max (any) over per-path indicators.
         """
         if s == e:
             return [[s]]

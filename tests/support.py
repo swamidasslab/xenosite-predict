@@ -239,7 +239,7 @@ def rows_for_model(
         if mode is None and hasattr(mol, "_parameter"):
             mode = mol._parameter.get("quinone_omp_mode")
         kwargs = {}
-        if mode in ("legacy", "principled"):
+        if mode in ("legacy", "principled", "mean"):
             kwargs["omp_mode"] = mode
         return quinone_atom_rows(mol, **kwargs)
     if model == "reactivity":
