@@ -21,6 +21,10 @@ class WeightsNotFound(XenositePredictError, FileNotFoundError):
     """ONNX (or other local) weights are missing for a model head."""
 
 
+class WeightsDownloadError(XenositePredictError, OSError):
+    """Failed to download or extract ONNX weights."""
+
+
 class ModelNotAvailable(XenositePredictError, RuntimeError):
     """The model is registered but blocked (MOPAC, missing convert, pipeline)."""
 

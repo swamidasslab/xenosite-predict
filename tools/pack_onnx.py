@@ -71,27 +71,13 @@ def pack(src: Path, out: Path) -> None:
     )
 
 
-def _safe_member(member: tarfile.TarInfo) -> bool:
-    name = Path(member.name)
-    if name.is_absolute() or ".." in name.parts:
-        return False
-    if not member.isfile():
-        return False
-    return (
-        member.name == "README.txt"
-        or name.suffix == ".onnx"
-        or name.name.endswith(".meta.json")
-    )
-
-
 def extract(tarball: Path, dest: Path) -> None:
-    if not tarball.is_file():
-        raise SystemExit(f"tarball not found: {tarball}")
-    dest.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(tarball, "r:*") as tf:
-        members = [m for m in tf.getmembers() if _safe_member(m)]
-        tf.extractall(dest, members=members)
-        n = len(members)
+    from xenosite.predict.weights import extract_onnx_archive
+
+    try:
+        n = extract_onnx_archive(tarball, dest)
+    except Exception as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"extracted {n} files from {tarball} -> {dest}")
 
 

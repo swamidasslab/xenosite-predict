@@ -50,8 +50,9 @@ class OnnxBackend:
             path = self.path_for(model, head)
             if not path.is_file():
                 raise WeightsNotFound(
-                    f"Missing ONNX weights {path}. Run `make extract-weights` "
-                    "and `make convert-onnx` (not shipped in the wheel)."
+                    f"Missing ONNX weights {path}. Set XENOSITE_ONNX_URL "
+                    "(auto-downloaded on first predict()) or "
+                    "XENOSITE_MODELS_WEIGHTS to a directory of *.onnx files."
                 )
             self._sessions[key] = ort.InferenceSession(
                 str(path), providers=["CPUExecutionProvider"]

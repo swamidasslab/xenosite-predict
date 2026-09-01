@@ -14,8 +14,10 @@ from .errors import (
     ModelNotAvailable,
     OpenBabelNotAvailable,
     UnknownModel,
+    WeightsDownloadError,
     WeightsNotFound,
 )
+from .weights import download_weights, ensure_weights
 from .types import (
     AtomBondResult,
     AtomResult,
@@ -51,6 +53,9 @@ __all__ = [
     "UnknownModel",
     "BackendNotConfigured",
     "WeightsNotFound",
+    "WeightsDownloadError",
     "ModelNotAvailable",
     "OpenBabelNotAvailable",
+    "download_weights",
+    "ensure_weights",
 ]

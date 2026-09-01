@@ -23,6 +23,7 @@ list_models()  # what this process can actually run (backend-aware)
 - **Indices** are 0-based RDKit atom/bond indices. Scores are floats (`atol=1e-4` in tests).
 - **Name lookup is omitted.** Pass SMILES, not drug names.
 - Import does **not** open ONNX, HTTP, or OpenBabel. Load on first use of that `(model, version)`. Callers never import `openbabel` / `pybel`.
+- First `predict()` downloads ONNX weights when `XENOSITE_ONNX_URL` is set and none are cached (an **INFO** line reports when they are found or downloaded). No separate `download_weights()` call is required.
 - **Legacy vs principled:** production defaults differ from golden-test-api parity in four internal `_parameter` flags (ndealk site keys, quinone OMP paths, bond symmetry, bond NRings). **Score impact summary:** [`docs/legacy-vs-principled.md`](docs/legacy-vs-principled.md#expected-score-impact-production-vs-legacy). Walkthrough: `tests/v0_legacy/test_legacy_vs_principled_guide.py`.
 
 ### `predict(inp, model=..., models=..., backend=..., backends=..., env=...)`
@@ -44,9 +45,19 @@ Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Re
 
 Returns dicts `{name, version, available, backend, reason, heads, two_stage, pipeline}` for **this process**, not a fictional union of every backend.
 
+### ONNX weights
+
+ONNX graphs are not in the sdist. Set `XENOSITE_ONNX_URL` to an https tarball
+or a local `.tgz` path (the URL is not stored in this repo). The first
+`predict()` (or `list_models()`) downloads into `$XDG_CACHE_HOME/xenosite/onnx`
+(or `~/.cache/xenosite/onnx`, or `XENOSITE_MODELS_WEIGHTS` if set) and prints
+an INFO line when weights are found or downloaded. Tests that pass `env={}`
+never fetch. `python -m xenosite.predict download` and `make download-onnx`
+are optional pre-fetch helpers.
+
 ### Errors
 
-`InvalidMolecule`, `UnknownModel`, `BackendNotConfigured`, `WeightsNotFound`, `ModelNotAvailable`, `OpenBabelNotAvailable`.
+`InvalidMolecule`, `UnknownModel`, `BackendNotConfigured`, `WeightsNotFound`, `WeightsDownloadError`, `ModelNotAvailable`, `OpenBabelNotAvailable`.
 
 ## Backends
 
@@ -55,7 +66,9 @@ Picker (explicit env wins; first match):
 1. `XENOSITE_BACKEND` is an `http://` / `https://` URL → **HTTP** against that deployed **xenosite-api**. Optional `XENOSITE_API_KEY` as Bearer.
 2. Else `XENOSITE_MODELS_WEIGHTS` → local **ONNX** directory.
 3. Else auto-detect `./weights/onnx` if `*.onnx` exist → local ONNX.
-4. Else raise `BackendNotConfigured`.
+4. Else user cache (`$XDG_CACHE_HOME/xenosite/onnx`) if `*.onnx` exist.
+5. Else, when `XENOSITE_ONNX_URL` is set in the process env, download that archive into the cache (INFO on found/download).
+6. Else raise `BackendNotConfigured`.
 
 Live parity compares **ONNX vs the legacy test-API**, not vs production HTTP. Tests must pass `backend=` and must not inherit a developer shell (`XENOSITE_*` are cleared in `conftest.py`).
 
@@ -87,6 +100,7 @@ make extract-weights          # Docker image or fallback tarball → weights/leg
 make convert-onnx             # pickle → ONNX; MODEL=epoxidation for one model
 make pack-onnx                # weights/xenosite_onnx.tgz (runtime graphs, no _dump)
 make extract-onnx             # unpack that tarball into weights/onnx/
+make download-onnx            # fetch $XENOSITE_ONNX_URL into weights/onnx/
 make test                     # pytest -m "not live"  (no Docker)
 make test-live                # pytest -m live; fixture skips if Docker/image missing
 make py2-dump-image           # python:2.7-slim + numpy + Debian OpenBabel 2.4

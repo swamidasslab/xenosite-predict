@@ -10,7 +10,7 @@ LEGACY_REPLICAS ?= 24
 TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
 ONNX_TARBALL ?= weights/xenosite_onnx.tgz
 
-.PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx test test-golden test-live \
+.PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx download-onnx test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
 	capture-suite-onnx gather-golden drift-report drift-descriptors help \
 	regather-ob-dumps regather-golden-onnx
@@ -21,6 +21,7 @@ help:
 	@echo "convert-onnx MODEL=epoxidation"
 	@echo "pack-onnx           tarball of *.onnx + *.meta.json (no _dump) → $(ONNX_TARBALL)"
 	@echo "extract-onnx        unpack $(ONNX_TARBALL) into weights/onnx/"
+	@echo "download-onnx       fetch $$XENOSITE_ONNX_URL into weights/onnx/"
 	@echo "test                unit tests, Docker-free (-n auto via pyproject.toml)"
 	@echo "test-golden         golden_descriptor_suite ONNX parity (-n auto)"
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
@@ -46,6 +47,9 @@ pack-onnx:
 
 extract-onnx:
 	$(PYTHON) tools/pack_onnx.py --extract --src weights/onnx --out $(ONNX_TARBALL)
+
+download-onnx:
+	$(PYTHON) -m xenosite.predict download --dest weights/onnx
 
 test:
 	$(PYTEST) -m "not live"

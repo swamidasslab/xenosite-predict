@@ -19,7 +19,13 @@ make extract-weights    # copy from xenosite-legacy:api (or fallback tarball)
 make convert-onnx       # pickle → safetensors → ONNX (needs the extract)
 make pack-onnx          # weights/xenosite_onnx.tgz  (*.onnx + *.meta.json, no _dump)
 make extract-onnx       # unpack that tarball into weights/onnx/
+make download-onnx      # fetch $XENOSITE_ONNX_URL into weights/onnx/
 ```
+
+Installed-package users should set `XENOSITE_ONNX_URL`. The first `predict()`
+downloads into the user cache (`$XDG_CACHE_HOME/xenosite/onnx`) and prints an
+INFO line when weights are found or downloaded. No manual download call is
+required. `make download-onnx` pre-fetches into this checkout directory.
 
 `make pack-onnx` is the runtime-weight tarball: `epoxidation/bond.onnx` and friends.
 It omits `_dump/` (Python-2 pickle dump intermediates). Feature-name JSON stays in

@@ -6,10 +6,15 @@ Picker (explicit env wins; first match):
    (deployed xenosite-api). Optional ``XENOSITE_API_KEY`` as Bearer.
 2. Else ``XENOSITE_MODELS_WEIGHTS`` → local ONNX directory.
 3. Else auto-detect ``./weights/onnx`` if model files exist → local ONNX.
-4. Else raise :class:`BackendNotConfigured`.
+4. Else user cache (``$XDG_CACHE_HOME/xenosite/onnx``) if ``*.onnx`` exist.
+5. Else, when ``XENOSITE_ONNX_URL`` is set, fetch that archive into the cache
+   (an INFO line reports when weights are found or downloaded).
+6. Else raise :class:`BackendNotConfigured`.
 
+The archive URL is never compiled into this package; set ``XENOSITE_ONNX_URL``.
 Tests must pass ``backend=`` / ``env={}`` and must not inherit a developer
 shell. ``conftest.py`` clears ``XENOSITE_*`` unless a test opts in.
+An isolated ``env={}`` does not auto-download.
 
 Per-``(model, version)`` override: ``predict(..., backend=...)`` applies to all
 models in the call; ``predict(..., backends={(name, version): backend})`` pins
@@ -23,13 +28,11 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Protocol, runtime_checkable
 
 from ..errors import BackendNotConfigured
+from ..weights import ENV_ONNX_URL, ENV_WEIGHTS, resolve_onnx_dir
 
 ENV_BACKEND = "XENOSITE_BACKEND"
 ENV_API_KEY = "XENOSITE_API_KEY"
-ENV_WEIGHTS = "XENOSITE_MODELS_WEIGHTS"
 ENV_LEGACY_URL = "XENOSITE_LEGACY_TEST_URL"
-
-DEFAULT_ONNX_DIR = Path("weights/onnx")
 
 Spec = tuple[str, str]
 
@@ -51,19 +54,18 @@ def is_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
 
 
-def _onnx_dir_has_files(path: Path) -> bool:
-    if not path.is_dir():
-        return False
-    return any(path.rglob("*.onnx"))
-
-
 def resolve_backend(
     backend: Optional[str | PredictBackend] = None,
     *,
     env: Optional[Mapping[str, str]] = None,
     cwd: Optional[Path] = None,
+    auto_download: Optional[bool] = None,
 ) -> PredictBackend:
-    """Resolve a backend. ``env=None`` uses ``os.environ``; tests should pass a dict."""
+    """Resolve a backend. ``env=None`` uses ``os.environ``; tests should pass a dict.
+
+    ``auto_download`` defaults on only when ``env is None`` and
+    ``XENOSITE_ONNX_URL`` is set. Isolated ``env`` mappings do not fetch.
+    """
     if isinstance(backend, PredictBackend) and not isinstance(backend, str):
         return backend
 
@@ -76,9 +78,14 @@ def resolve_backend(
             return HttpBackend(backend)
         key = backend.lower()
         if key in {"onnx", "local"}:
-            weights = Path(os.environ.get(ENV_WEIGHTS, DEFAULT_ONNX_DIR))
-            if env is not None:
-                weights = Path(env.get(ENV_WEIGHTS, str(DEFAULT_ONNX_DIR)))
+            weights = resolve_onnx_dir(
+                env=env, cwd=cwd, auto_download=auto_download, fallback=True
+            )
+            if weights is None:
+                raise BackendNotConfigured(
+                    "backend='onnx' needs local *.onnx files, "
+                    f"{ENV_WEIGHTS}, or {ENV_ONNX_URL} (auto-downloaded on first use)."
+                )
             return OnnxBackend(weights)
         if key in {"legacy", "legacy-test", "test-api"}:
             url = (env or os.environ).get(ENV_LEGACY_URL, "http://127.0.0.1:8099")
@@ -100,18 +107,15 @@ def resolve_backend(
     if is_url(url):
         return HttpBackend(url, api_key=e.get(ENV_API_KEY))
 
-    weights = e.get(ENV_WEIGHTS, "").strip()
-    if weights:
-        return OnnxBackend(Path(weights))
-
-    auto = cwd / DEFAULT_ONNX_DIR
-    if _onnx_dir_has_files(auto):
-        return OnnxBackend(auto)
+    weights = resolve_onnx_dir(env=env, cwd=cwd, auto_download=auto_download)
+    if weights is not None:
+        return OnnxBackend(weights)
 
     raise BackendNotConfigured(
         "No predictor backend configured. Set XENOSITE_BACKEND to an http(s) "
         "xenosite-api URL, XENOSITE_MODELS_WEIGHTS to an ONNX directory, put "
-        "*.onnx files under ./weights/onnx, or pass backend= to predict()."
+        "*.onnx files under ./weights/onnx, or set XENOSITE_ONNX_URL "
+        "(weights download on first predict())."
     )
 
 

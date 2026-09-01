@@ -75,6 +75,7 @@ def predict(
     Notes
     -----
     One molecule at a time (no batch API). Import does not open ONNX, HTTP, or OpenBabel.
+    First use downloads ONNX weights when XENOSITE_ONNX_URL is set.
     """
     ensure_builtins()
     if models is None:
