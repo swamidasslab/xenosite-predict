@@ -426,10 +426,9 @@ def assert_golden_molecule(
         want = golden_score_fields(g)
         have = golden_score_fields(by_model[name])
         if name == "quinone" and smiles:
-            from xenosite.predict.numbering import normalize_quinone_fields_for_smiles
+            from xenosite.predict.numbering import normalize_quinone_pair_fields
 
-            normalize_quinone_fields_for_smiles(want, smiles)
-            normalize_quinone_fields_for_smiles(have, smiles)
+            normalize_quinone_pair_fields(want, have, smiles)
         subset = {k: want[k] for k in want if k in have and have.get(k) is not None}
         got_subset = {k: have[k] for k in subset}
         assert subset, (

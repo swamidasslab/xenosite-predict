@@ -18,7 +18,9 @@ Set ``XENOSITE_OB_NUMBERING``:
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
 
@@ -240,20 +242,52 @@ def normalize_legacy_quinone_fields(
     fields["pair"] = norm["pair"]
 
 
-def normalize_quinone_fields_for_smiles(fields: dict[str, Any], smiles: str) -> None:
-    """Map quinone ``pair_idx`` in *fields* to 0-based RDKit for *smiles*."""
+@dataclass(frozen=True)
+class QuinoneNormalizeContext:
+    legacy_ob_order: tuple[int, ...]
+    n_heavy: int
+    ob_to_rd: tuple[tuple[int, int], ...]
+
+
+@lru_cache(maxsize=512)
+def quinone_normalize_context(smiles: str) -> QuinoneNormalizeContext:
+    """Parse *smiles* once and reuse for quinone ``pair_idx`` normalization."""
     from .features import quinone_atom_rows
     from .molecule import parse_smiles
 
     mol, _ = parse_smiles(smiles)
     rows = quinone_atom_rows(mol)
     ob_to_rd = build_ob_to_rdkit_from_rows(rows)
+    return QuinoneNormalizeContext(
+        legacy_ob_order=tuple(legacy_ob_order_from_rows(rows)),
+        n_heavy=mol.GetNumAtoms(),
+        ob_to_rd=tuple(sorted(ob_to_rd.items())),
+    )
+
+
+def _apply_quinone_context(fields: dict[str, Any], ctx: QuinoneNormalizeContext) -> None:
     normalize_legacy_quinone_fields(
         fields,
-        legacy_ob_order=legacy_ob_order_from_rows(rows),
-        n_heavy=mol.GetNumAtoms(),
-        ob_to_rd=ob_to_rd,
+        legacy_ob_order=ctx.legacy_ob_order,
+        n_heavy=ctx.n_heavy,
+        ob_to_rd=dict(ctx.ob_to_rd),
     )
+
+
+def normalize_quinone_fields_for_smiles(fields: dict[str, Any], smiles: str) -> None:
+    """Map quinone ``pair_idx`` in *fields* to 0-based RDKit for *smiles*."""
+    _apply_quinone_context(fields, quinone_normalize_context(smiles))
+
+
+def normalize_quinone_pair_fields(
+    want: dict[str, Any],
+    have: dict[str, Any],
+    smiles: str,
+) -> None:
+    """Normalize golden and ONNX quinone fields with one molecule parse."""
+    ctx = quinone_normalize_context(smiles)
+    _apply_quinone_context(want, ctx)
+    _apply_quinone_context(have, ctx)
 
 
 def legacy_predictions_atom_vector(

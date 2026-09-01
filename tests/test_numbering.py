@@ -112,6 +112,27 @@ def test_legacy_reactivity_gapped_smiles_aligns_with_onnx(legacy_api_url):
     assert diff < 0.05, f"legacy vs onnx gsh max diff {diff}"
 
 
+def test_quinone_normalize_parses_smiles_once(monkeypatch):
+    from xenosite.predict import molecule as mol_mod
+    from xenosite.predict.numbering import (
+        normalize_quinone_pair_fields,
+        quinone_normalize_context,
+    )
+
+    quinone_normalize_context.cache_clear()
+    calls: list[str] = []
+    real_parse = mol_mod.parse_smiles
+
+    def counted(smiles: str, *, detailed: bool = False):
+        calls.append(smiles)
+        return real_parse(smiles, detailed=detailed)
+
+    monkeypatch.setattr(mol_mod, "parse_smiles", counted)
+    fields = {"pair_idx": [[1, 2]], "pair": [0.5]}
+    normalize_quinone_pair_fields(dict(fields), dict(fields), OK_SMILES)
+    assert len(calls) == 1
+
+
 def test_ok_smiles_dense():
     site = {i: 0.1 for i in range(1, 14)}
     vec = legacy_site_to_atom_vector(site, 13)
