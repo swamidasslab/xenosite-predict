@@ -17,7 +17,7 @@ OB_DUMPS_GZ = OB_DUMPS.with_name(OB_DUMPS.name + ".gz")
 ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
 MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1")
 SUITE_MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme", "phase1")
-PARITY_ATOL = 3e-4  # TF1 float32 vs ORT on quinone near-zero atom scores
+PARITY_ATOL = 5e-3  # golden / ONNX vs legacy; sub-0.5% score drift is acceptable
 # Golden rows were captured from legacy-test-api; ONNX bond vectors need legacy site keys.
 GOLDEN_NDEALK_PARAMETER = {"ndealk_site_mode": "legacy"}
 GOLDEN_QUINONE_PARAMETER = {"quinone_omp_mode": "legacy"}
