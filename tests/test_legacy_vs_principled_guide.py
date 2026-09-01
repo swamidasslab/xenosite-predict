@@ -11,7 +11,7 @@ Run it like any other test file::
 For a prose overview see ``docs/legacy-vs-principled.md``. For tight regressions
 see ``tests/test_onnx_principled.py`` and golden parity in ``test_golden*.py``.
 
-The three internal flags (all on ``molecule._parameter`` via ``_parameter=``):
+The four internal flags (all on ``molecule._parameter`` via ``_parameter=``):
 
 ``ndealk_site_mode``
     How BondTD rows collapse into ndealk/isozyme site keys before bond mapping.
@@ -21,6 +21,9 @@ The three internal flags (all on ``molecule._parameter`` via ``_parameter=``):
 ``symmetry_group_mode``
     RDKit ``CanonicalRankAtoms`` bond classes + score pooling (production) vs
     OpenBabel GID classes without RDKit pooling (golden).
+``bond_nrings_mode``
+    Whether ``Atom1_NRings`` / ``Atom2_NRings`` use legacy DFS back-edge atom
+    counts (dump parity) or RDKit ``RingInfo.NumAtomRings`` (principled).
 """
 
 from __future__ import annotations
@@ -33,11 +36,13 @@ from xenosite.predict.compare import assert_equiv_results
 from xenosite.predict.molecule import parse_smiles
 
 from tests.rdkit_equiv import (
+    assert_bond_descriptor_rows_symmetric,
     assert_bond_scores_openbabel_principled,
     assert_bond_scores_symmetric,
     bond_symmetry_groups,
 )
 from tests.support import (
+    GOLDEN_BOND_NRINGS_PARAMETER,
     GOLDEN_PARAMETER,
     GOLDEN_SYMMETRY_PARAMETER,
     PRINCIPLED_PARAMETER,
@@ -45,6 +50,7 @@ from tests.support import (
     golden_predict_kwargs,
     golden_score_fields,
     onnx_weights_present,
+    rows_for_model,
 )
 
 BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
@@ -54,6 +60,7 @@ BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
 NAPHTHALENE = "c1ccc2ccccc2c1"
 NDEALK_DIVERGENT = "COc1ccc2nc(C)cc(NCCCN3CCOCC3)c2c1"
 DIBENZOFURAN = "c1ccc2c(c1)oc1ccccc12"
+PHENANTHRENE = "c1ccc2c(c1)ccc1ccccc12"
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 
 
@@ -120,6 +127,7 @@ def test_chapter_0_golden_tests_use_legacy_bundle():
     assert kwargs["_parameter"]["ndealk_site_mode"] == "legacy"
     assert kwargs["_parameter"]["quinone_omp_mode"] == "legacy"
     assert kwargs["_parameter"]["symmetry_group_mode"] == "openbabel"
+    assert kwargs["_parameter"]["bond_nrings_mode"] == "legacy"
 
 
 # ---------------------------------------------------------------------------
@@ -200,13 +208,14 @@ def test_chapter_2_ndealk_principled_deduplicates_symmetry_classes():
 
 
 def test_chapter_2_ndealk_legacy_site_mode_alone_reproduces_golden_ndealk_flags():
-    """Golden ndealk parity is ``ndealk_site_mode=legacy`` + ``symmetry_group_mode=openbabel``."""
+    """Golden ndealk parity needs legacy site keys, OB symmetry, and legacy NRings."""
     legacy_site_only = _predict(
         NDEALK_DIVERGENT,
         "ndealk",
         parameter={
             "ndealk_site_mode": "legacy",
             **GOLDEN_SYMMETRY_PARAMETER,
+            **GOLDEN_BOND_NRINGS_PARAMETER,
         },
     )
     golden = _predict(NDEALK_DIVERGENT, "ndealk", parameter=GOLDEN_PARAMETER)
@@ -289,12 +298,90 @@ def test_chapter_3_openbabel_principled_allows_single_active_bond_per_class():
 
 
 # ---------------------------------------------------------------------------
-# Chapter 4 — models outside the three-flag surface
+# Chapter 4 — bond_nrings_mode (Atom1_/Atom2_ NRings in BondTD)
+# ---------------------------------------------------------------------------
+
+
+def _bond_row_nrings(rows: list[dict], atoms: tuple[int, int]) -> tuple[float, float]:
+    for row in rows:
+        if tuple(row["_atoms"]) == atoms:
+            return float(row["Atom1_NRings"]), float(row["Atom2_NRings"])
+    raise AssertionError(f"no bond row for {atoms}")
+
+
+def test_chapter_4_bond_nrings_counts_endpoint_atoms_not_the_bond():
+    """``Atom*_NRings`` is how many rings contain that endpoint atom, not the bond.
+
+    BondTD fills one row per heavy-atom bond with directed ``Atom1_`` / ``Atom2_``
+    columns. Confusing these with ``RingInfo.NumBondRings`` leads to wrong
+    expectations about symmetry.
+    """
+    from xenosite.predict.features import ndealk_bond_rows
+
+    rdmol, _ = parse_smiles(PHENANTHRENE)
+    rows = ndealk_bond_rows(rdmol, symmetry_group_mode="openbabel", bond_nrings_mode="principled")
+    a1, a2 = _bond_row_nrings(rows, (0, 1))
+    b1, b2 = _bond_row_nrings(rows, (10, 11))
+    assert (a1, a2) == (b1, b2) == (1.0, 1.0)
+
+
+def test_chapter_4_bond_nrings_legacy_dfs_breaks_fused_polycyclic_symmetry():
+    """Legacy DFS back-edge counts differ on symmetric bonds; principled RDKit does not.
+
+    Phenanthrene bonds ``(0,1)`` and ``(10,11)`` share the same directed OpenBabel
+    class but legacy ``dfs_cycles()`` assigns different ``Atom*_NRings`` because
+    fusion atoms pick up extra perimeter cycles in the DFS walk. That is faithful
+    to the 2.4 dump oracle but breaks descriptor symmetry — so dumps keep
+    ``bond_nrings_mode=legacy`` while production defaults to principled.
+    """
+    from xenosite.predict.features import ndealk_bond_rows
+
+    rdmol, _ = parse_smiles(PHENANTHRENE)
+    legacy = ndealk_bond_rows(rdmol, symmetry_group_mode="openbabel", bond_nrings_mode="legacy")
+    principled = ndealk_bond_rows(
+        rdmol, symmetry_group_mode="openbabel", bond_nrings_mode="principled"
+    )
+    assert _bond_row_nrings(legacy, (0, 1)) == (1.0, 1.0)
+    assert _bond_row_nrings(legacy, (10, 11)) == (2.0, 2.0)
+    assert _bond_row_nrings(principled, (0, 1)) == (1.0, 1.0)
+    assert _bond_row_nrings(principled, (10, 11)) == (1.0, 1.0)
+
+
+def test_chapter_4_bond_nrings_principled_rows_match_within_directed_ob_class():
+    """Principled NRings + directed OB class ⇒ identical full bond descriptor rows.
+
+    ``tests/test_principled_descriptor_symmetry.py`` runs this over all ob_dumps;
+    here we spell out the reasoning on one fused polycyclic example.
+    """
+    from xenosite.predict.features import load_names
+
+    rdmol, _ = parse_smiles(PHENANTHRENE)
+    rows = rows_for_model("ndealk", rdmol, _parameter=PRINCIPLED_PARAMETER)
+    names = load_names("ndealk", "bond")
+    assert names
+    assert_bond_descriptor_rows_symmetric(rows, rdmol, names)
+
+
+def test_chapter_4_bond_nrings_legacy_flag_required_for_ob_dump_parity():
+    """``rows_for_model`` defaults to legacy NRings unless ``PRINCIPLED_PARAMETER`` is set."""
+    rdmol, _ = parse_smiles(PHENANTHRENE)
+    dump_rows = rows_for_model("ndealk", rdmol)
+    legacy_rows = rows_for_model(
+        "ndealk",
+        rdmol,
+        _parameter={"bond_nrings_mode": "legacy"},
+    )
+    assert _bond_row_nrings(dump_rows, (10, 11)) == _bond_row_nrings(legacy_rows, (10, 11))
+    assert _bond_row_nrings(dump_rows, (10, 11)) == (2.0, 2.0)
+
+
+# ---------------------------------------------------------------------------
+# Chapter 5 — models outside the four-flag surface
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("model", ["reactivity", "ugt"])
-def test_chapter_4_reactivity_and_ugt_ignore_legacy_parameter_bundle(model: str):
+def test_chapter_5_reactivity_and_ugt_ignore_legacy_parameter_bundle(model: str):
     """Reactivity and UGT have no site/OMP/symmetry branches — scores are unchanged.
 
     Passing ``GOLDEN_PARAMETER`` on aspirin is a no-op for these models, which is
@@ -306,16 +393,18 @@ def test_chapter_4_reactivity_and_ugt_ignore_legacy_parameter_bundle(model: str)
 
 
 # ---------------------------------------------------------------------------
-# Chapter 5 — mental model checklist (documentation-as-test)
+# Chapter 6 — mental model checklist (documentation-as-test)
 # ---------------------------------------------------------------------------
 
 
-def test_chapter_5_checklist_defaults_vs_golden():
-    """Sanity checklist tying the three flags to their production vs golden values."""
+def test_chapter_6_checklist_defaults_vs_golden():
+    """Sanity checklist tying the flags to their production vs golden values."""
     assert PRINCIPLED_PARAMETER["ndealk_site_mode"] == "principled"
     assert PRINCIPLED_PARAMETER["quinone_omp_mode"] == "principled"
     assert PRINCIPLED_PARAMETER["symmetry_group_mode"] == "rdkit"
+    assert PRINCIPLED_PARAMETER["bond_nrings_mode"] == "principled"
 
     assert GOLDEN_PARAMETER["ndealk_site_mode"] == "legacy"
     assert GOLDEN_PARAMETER["quinone_omp_mode"] == "legacy"
     assert GOLDEN_PARAMETER["symmetry_group_mode"] == "openbabel"
+    assert GOLDEN_PARAMETER["bond_nrings_mode"] == "legacy"

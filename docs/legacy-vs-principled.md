@@ -16,6 +16,7 @@ which models are affected.
 | `ndealk_site_mode` | `"principled"` | `"legacy"` | `ndealk`, `isozyme` |
 | `quinone_omp_mode` | `"principled"` | `"legacy"` | `quinone` |
 | `symmetry_group_mode` | `"rdkit"` | `"openbabel"` | `ndealk`, `isozyme`, `epoxidation` |
+| `bond_nrings_mode` | `"principled"` | `"legacy"` | `epoxidation`, `ndealk`, `isozyme` |
 
 Pass options on the internal `_parameter` mapping (not exposed on the public HTTP
 API today):
@@ -34,6 +35,7 @@ mol = predict(
         "ndealk_site_mode": "legacy",
         "quinone_omp_mode": "legacy",
         "symmetry_group_mode": "openbabel",
+        "bond_nrings_mode": "legacy",
     },
 )
 ```
@@ -157,6 +159,27 @@ member carries the score (see `assert_bond_scores_openbabel_principled` in
 **Epoxidation + openbabel:** no pooling step; bond vectors match golden
 fixtures that predate symmetry pooling.
 
+## `bond_nrings_mode` (epoxidation / ndealk / isozyme)
+
+BondTD exposes `Atom1_NRings` / `Atom2_NRings`: the number of rings containing
+each **bond endpoint atom** (not the bond itself).
+
+### Legacy (golden / ob dumps)
+
+Uses `MolGraph.dfs_cycles()` (DFS back-edge cycles). Fusion atoms in polycyclic
+aromatics can sit in extra perimeter cycles, so symmetric atoms get different
+counts — this matches the OpenBabel 2.4 dump oracle.
+
+### Principled (default)
+
+Uses RDKit `RingInfo.NumAtomRings` for each BondTD endpoint (Atom1/Atom2 order
+from `_index`). Counts are aromatization/SSSR-based and invariant within
+directed OpenBabel bond classes `(GID(Atom1), GID(Atom2), bond order)`.
+
+`tests/test_principled_descriptor_symmetry.py` asserts identical ONNX bond-head
+columns within those directed classes. `tests/test_ob_features.py` keeps legacy
+DFS counts for dump parity.
+
 ## Models not affected by these flags
 
 | Model | Notes |
@@ -166,7 +189,8 @@ fixtures that predate symmetry pooling.
 | `phase1` | Separate descriptor pipeline; not part of the three-flag bundle. |
 | `bioactivation` | Pipeline model, not a single ONNX head. |
 
-Epoxidation is affected only by `symmetry_group_mode` (not ndealk/quinone flags).
+Epoxidation is affected by `symmetry_group_mode` and `bond_nrings_mode`.
+Ndealk/isozyme also use `ndealk_site_mode`.
 
 ## Testing layout
 
@@ -175,6 +199,7 @@ Epoxidation is affected only by `symmetry_group_mode` (not ndealk/quinone flags)
 | `tests/test_golden.py`, `test_golden_suite.py` | Fixture parity at `PARITY_ATOL` with `GOLDEN_PARAMETER`. |
 | `tests/test_onnx_principled.py` | Concise regressions: default == principled, default ≠ legacy on known molecules. |
 | `tests/test_equiv_groups.py` | Global RDKit symmetry invariants on `ob_dumps` (production path). |
+| `tests/test_principled_descriptor_symmetry.py` | Principled atom/bond descriptor identity within symmetry classes. |
 | `tests/test_legacy_vs_principled_guide.py` | **Readable walkthrough** of each flag with commented examples (human-first). |
 
 ## Choosing a mode
@@ -187,8 +212,7 @@ Epoxidation is affected only by `symmetry_group_mode` (not ndealk/quinone flags)
 | Debug one flag | Pass only that key in `_parameter`; unspecified keys keep production defaults |
 
 Do **not** regather golden fixtures when changing production defaults if golden
-tests still pass `symmetry_group_mode=openbabel` and legacy site/OMP modes —
-epoxidation golden rows were captured without RDKit pooling.
+tests still pass `GOLDEN_PARAMETER` (legacy site/OMP/symmetry/NRings modes).
 
 ## Implementation map
 
@@ -196,6 +220,8 @@ epoxidation golden rows were captured without RDKit pooling.
 |---|---|
 | Flag resolution | `symmetry.resolve_symmetry_group_mode`, runner `_ndealk_site_mode`, `_quinone_omp_mode` |
 | RDKit score pooling | `symmetry.apply_bond_symmetry`, `BaseRunner.symmetrize_bond_scores` |
+| Bond NRings | `features/bond.py` → `BondTD.add_nrings` |
+| Directed OB bond class | `symmetry.directed_ob_bond_symmetry_key` |
 | Ndealk site collapse | `features/bond.py` → `ndealk_site_from_row_scores` |
 | Quinone OMP paths | `features/atom.py` → `_paths_for_omp`, `_omp_paths`; `features/molgraph.py` |
 | Public API docs | `api.py` → `predict(..., _parameter=...)` docstring |
