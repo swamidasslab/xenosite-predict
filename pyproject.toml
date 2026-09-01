@@ -41,6 +41,7 @@ dev = [
     "pytest-xdist>=3.5",
     "msgpack>=1.0",
     "hypothesis>=6.100",
+    "tqdm>=4.66",
 ]
 convert = [
     "safetensors>=0.4",
