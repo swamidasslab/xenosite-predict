@@ -10,7 +10,7 @@ tensors, and must run **inside the Python 2.7 image** for unpickling.
 This host script:
 1. Writes a py2 dump helper into the extract (or invokes docker).
 2. Reads dumped JSON + tensors.
-3. Builds one ONNX file per head under ``weights/onnx/<model>/``.
+3. Builds one ONNX file per head under ``weights/onnx/v0/<model>/``.
 4. Writes committed feature-name JSON next to ``src/xenosite/predict/features/``
    when TSV headers are present.
 
@@ -315,7 +315,7 @@ def write_feature_json(model: str, head: str, names: list[str], features_dir: Pa
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--src", type=Path, default=Path("weights/legacy"))
-    p.add_argument("--out", type=Path, default=Path("weights/onnx"))
+    p.add_argument("--out", type=Path, default=Path("weights/onnx/v0"))
     p.add_argument("--model", default=None)
     p.add_argument(
         "--features-dir",

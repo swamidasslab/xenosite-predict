@@ -8,7 +8,8 @@ IMAGE ?= dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api
 LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
 LEGACY_REPLICAS ?= 24
 TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
-ONNX_TARBALL ?= weights/xenosite_onnx.tgz
+ONNX_DIR ?= weights/onnx/v0
+ONNX_TARBALL ?= weights/xenosite_onnx_v0.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx download-onnx test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
@@ -20,8 +21,8 @@ help:
 	@echo "convert-onnx        pickle → safetensors → ONNX (all models)"
 	@echo "convert-onnx MODEL=epoxidation"
 	@echo "pack-onnx           tarball of *.onnx + *.meta.json (no _dump) → $(ONNX_TARBALL)"
-	@echo "extract-onnx        unpack $(ONNX_TARBALL) into weights/onnx/"
-	@echo "download-onnx       fetch $$XENOSITE_ONNX_URL into weights/onnx/"
+	@echo "extract-onnx        unpack $(ONNX_TARBALL) into $(ONNX_DIR)/"
+	@echo "download-onnx       fetch $$XENOSITE_ONNX_URL into $(ONNX_DIR)/"
 	@echo "test                unit tests, Docker-free (-n auto via pyproject.toml)"
 	@echo "test-golden         golden_descriptor_suite ONNX parity (-n auto)"
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
@@ -40,16 +41,16 @@ extract-weights:
 	$(PYTHON) tools/extract_weights.py --image $(IMAGE) --tarball $(TARBALL) --out weights/legacy
 
 convert-onnx:
-	$(CONVERT) tools/convert_onnx.py --src weights/legacy --out weights/onnx $(if $(MODEL),--model $(MODEL),)
+	$(CONVERT) tools/convert_onnx.py --src weights/legacy --out $(ONNX_DIR) $(if $(MODEL),--model $(MODEL),)
 
 pack-onnx:
-	$(PYTHON) tools/pack_onnx.py --src weights/onnx --out $(ONNX_TARBALL)
+	$(PYTHON) tools/pack_onnx.py --src $(ONNX_DIR) --out $(ONNX_TARBALL)
 
 extract-onnx:
-	$(PYTHON) tools/pack_onnx.py --extract --src weights/onnx --out $(ONNX_TARBALL)
+	$(PYTHON) tools/pack_onnx.py --extract --src $(ONNX_DIR) --out $(ONNX_TARBALL)
 
 download-onnx:
-	$(PYTHON) -m xenosite.predict download --dest weights/onnx
+	$(PYTHON) -m xenosite.predict download --dest $(ONNX_DIR)
 
 test:
 	$(PYTEST) -m "not live"

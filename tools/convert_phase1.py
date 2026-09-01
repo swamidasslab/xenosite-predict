@@ -298,7 +298,7 @@ def _ort_run(path: Path, x: np.ndarray) -> np.ndarray:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--src", type=Path, default=Path("weights/legacy"))
-    p.add_argument("--out", type=Path, default=Path("weights/onnx"))
+    p.add_argument("--out", type=Path, default=Path("weights/onnx/v0"))
     args = p.parse_args(argv)
     return 0 if convert(args.src, args.out) else 1
 
