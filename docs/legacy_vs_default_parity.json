@@ -1,0 +1,365 @@
+{
+  "summary": {
+    "epoxidation": {
+      "n": 327,
+      "within_atol": 272,
+      "frac_within_atol": 0.8318042813455657,
+      "max_delta": 0.0388946533203125,
+      "mean_max_delta": 0.003043369597980371,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.017864781618118282,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "Nc1ccc2nc3ccccc3nc2c1",
+          "max_delta": 0.0388946533203125
+        },
+        {
+          "smiles": "c1cc2ccc3cccc4ccc(c1)c2c34",
+          "max_delta": 0.03544628620147705
+        },
+        {
+          "smiles": "c1ccc2nc3ccccc3cc2c1",
+          "max_delta": 0.03444591164588928
+        },
+        {
+          "smiles": "c1ccc2cc3ccccc3cc2c1",
+          "max_delta": 0.03422604501247406
+        },
+        {
+          "smiles": "c1ccc(Cn2c3ccccc3c3ccccc32)cc1",
+          "max_delta": 0.026218891143798828
+        }
+      ]
+    },
+    "quinone": {
+      "n": 327,
+      "within_atol": 148,
+      "frac_within_atol": 0.4525993883792049,
+      "max_delta": 0.8046353557942545,
+      "mean_max_delta": 0.0543246668826447,
+      "median_max_delta": 0.008174621332292631,
+      "p95_max_delta": 0.28067759799577613,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "O=c1c(O)c(-c2cc(O)c(O)c(O)c2)oc2cc(O)cc(O)c12",
+          "max_delta": 0.8046353557942545
+        },
+        {
+          "smiles": "O=c1c(O)c(-c2ccc(O)cc2)oc2cc(O)cc(O)c12",
+          "max_delta": 0.7161007615879319
+        },
+        {
+          "smiles": "O=C1C(O)=C2C(=O)c3cccc(O)c3C(=O)C2(O)C(O)=C1C1CCCCC1",
+          "max_delta": 0.5067103207111359
+        },
+        {
+          "smiles": "O=C(O)C=Cc1ccc(O)c(O)c1",
+          "max_delta": 0.492168270726148
+        },
+        {
+          "smiles": "Cc1nnc2n1-c1ccc(Cl)cc1C(c1ccccc1)=NC2",
+          "max_delta": 0.3948228501246652
+        }
+      ]
+    },
+    "reactivity": {
+      "n": 327,
+      "within_atol": 327,
+      "frac_within_atol": 1.0,
+      "max_delta": 0.0,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "CC(=Cc1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "COCCc1ccc(OCC(O)CNC(C)C)cc1",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "CN1C(C(=O)Nc2nccs2)=C(O)c2ccccc2S1(=O)=O",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "CC(C)C(Br)C(=O)NC(N)=O",
+          "max_delta": 0.0
+        }
+      ]
+    },
+    "ugt": {
+      "n": 327,
+      "within_atol": 327,
+      "frac_within_atol": 1.0,
+      "max_delta": 0.0,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "C=C(C=O)c1ccccc1",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "CN1C(C(=O)Nc2nccs2)=C(O)c2ccccc2S1(=O)=O",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "CC(=Cc1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "COCCc1ccc(OCC(O)CNC(C)C)cc1",
+          "max_delta": 0.0
+        }
+      ]
+    },
+    "ndealk": {
+      "n": 327,
+      "within_atol": 254,
+      "frac_within_atol": 0.7767584097859327,
+      "max_delta": 0.9591114521026611,
+      "mean_max_delta": 0.047304548892770706,
+      "median_max_delta": 0.0004857480525970459,
+      "p95_max_delta": 0.34375056326389314,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "O=C1c2ccccc2-c2c1cccc2N1CCNCC1",
+          "max_delta": 0.9591114521026611
+        },
+        {
+          "smiles": "CC(C)(C)NCC(O)COc1nsnc1N1CCOCC1",
+          "max_delta": 0.9583843350410461
+        },
+        {
+          "smiles": "CCN(CC)C(=S)SSC(=S)N(CC)CC",
+          "max_delta": 0.9363237023353577
+        },
+        {
+          "smiles": "CN1CCN(c2cc3c(cc2F)c(=O)c(C(=O)O)cn3C2CC2)CC1",
+          "max_delta": 0.9324709177017212
+        },
+        {
+          "smiles": "CN1CCN(c2ccc3nc(-c4cccc(C(F)(F)F)c4)[nH]c3c2)CC1",
+          "max_delta": 0.9107803106307983
+        }
+      ]
+    },
+    "isozyme": {
+      "n": 327,
+      "within_atol": 249,
+      "frac_within_atol": 0.7614678899082569,
+      "max_delta": 0.9591114521026611,
+      "mean_max_delta": 0.04824612319287175,
+      "median_max_delta": 0.0006605386734008789,
+      "p95_max_delta": 0.34375056326389314,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "O=C1c2ccccc2-c2c1cccc2N1CCNCC1",
+          "max_delta": 0.9591114521026611
+        },
+        {
+          "smiles": "CC(C)(C)NCC(O)COc1nsnc1N1CCOCC1",
+          "max_delta": 0.9583843350410461
+        },
+        {
+          "smiles": "CCN(CC)C(=S)SSC(=S)N(CC)CC",
+          "max_delta": 0.9363237023353577
+        },
+        {
+          "smiles": "CN1CCN(c2cc3c(cc2F)c(=O)c(C(=O)O)cn3C2CC2)CC1",
+          "max_delta": 0.9324709177017212
+        },
+        {
+          "smiles": "CN1CCN(c2ccc3nc(-c4cccc(C(F)(F)F)c4)[nH]c3c2)CC1",
+          "max_delta": 0.9107803106307983
+        }
+      ]
+    },
+    "phase1": {
+      "n": 13,
+      "within_atol": 13,
+      "frac_within_atol": 1.0,
+      "max_delta": 0.0,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "atol": 0.005,
+      "top5": [
+        {
+          "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "C=C(C=O)c1ccccc1",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "O=C(Br)C(F)(F)F",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "COCCc1ccc(OCC(O)CNC(C)C)cc1",
+          "max_delta": 0.0
+        },
+        {
+          "smiles": "CN1C(C(=O)Nc2nccs2)=C(O)c2ccccc2S1(=O)=O",
+          "max_delta": 0.0
+        }
+      ]
+    }
+  },
+  "ablation": {
+    "epoxidation:bond_nrings": {
+      "n": 327,
+      "mean_max_delta": 0.0029836557919461428,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.017599980533123016,
+      "max_delta": 0.0388946533203125
+    },
+    "epoxidation:ndealk_site": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "epoxidation:quinone_omp": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "epoxidation:symmetry": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "isozyme:bond_nrings": {
+      "n": 327,
+      "mean_max_delta": 0.0014220194532236921,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0022123664617538417,
+      "max_delta": 0.07310423254966736
+    },
+    "isozyme:ndealk_site": {
+      "n": 327,
+      "mean_max_delta": 0.046919140155891395,
+      "median_max_delta": 0.00043955445289611816,
+      "p95_max_delta": 0.34375056326389314,
+      "max_delta": 0.9591114521026611
+    },
+    "isozyme:symmetry": {
+      "n": 327,
+      "mean_max_delta": 0.13507316856209292,
+      "median_max_delta": 0.0005570352077484131,
+      "p95_max_delta": 0.9298815846443176,
+      "max_delta": 0.9916501045227051
+    },
+    "ndealk:bond_nrings": {
+      "n": 327,
+      "mean_max_delta": 0.0010165149283336207,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0022123664617538417,
+      "max_delta": 0.043052464723587036
+    },
+    "ndealk:ndealk_site": {
+      "n": 327,
+      "mean_max_delta": 0.04635813385703877,
+      "median_max_delta": 0.000329434871673584,
+      "p95_max_delta": 0.34375056326389314,
+      "max_delta": 0.9591114521026611
+    },
+    "ndealk:quinone_omp": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "ndealk:symmetry": {
+      "n": 327,
+      "mean_max_delta": 0.13457247469038774,
+      "median_max_delta": 0.0003699064254760742,
+      "p95_max_delta": 0.9298815846443176,
+      "max_delta": 0.9916501045227051
+    },
+    "phase1:bond_nrings": {
+      "n": 13,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "phase1:ndealk_site": {
+      "n": 13,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "phase1:quinone_omp": {
+      "n": 13,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "phase1:symmetry": {
+      "n": 13,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "quinone:bond_nrings": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "quinone:ndealk_site": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    },
+    "quinone:quinone_omp": {
+      "n": 327,
+      "mean_max_delta": 0.0543246668826447,
+      "median_max_delta": 0.008174621332292631,
+      "p95_max_delta": 0.28067759799577613,
+      "max_delta": 0.8046353557942545
+    },
+    "quinone:symmetry": {
+      "n": 327,
+      "mean_max_delta": 0.0,
+      "median_max_delta": 0.0,
+      "p95_max_delta": 0.0,
+      "max_delta": 0.0
+    }
+  },
+  "n_rows": 1975,
+  "jobs": 8
+}
