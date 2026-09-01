@@ -21,18 +21,22 @@ PARITY_ATOL = 3e-4  # TF1 float32 vs ORT on quinone near-zero atom scores
 GOLDEN_NDEALK_PARAMETER = {"ndealk_site_mode": "legacy"}
 GOLDEN_QUINONE_PARAMETER = {"quinone_omp_mode": "legacy"}
 GOLDEN_SYMMETRY_PARAMETER = {"symmetry_group_mode": "openbabel"}
+GOLDEN_BOND_NRINGS_PARAMETER = {"bond_nrings_mode": "legacy"}
 GOLDEN_PARAMETER = {
     **GOLDEN_NDEALK_PARAMETER,
     **GOLDEN_QUINONE_PARAMETER,
     **GOLDEN_SYMMETRY_PARAMETER,
+    **GOLDEN_BOND_NRINGS_PARAMETER,
 }
 PRINCIPLED_NDEALK_PARAMETER = {"ndealk_site_mode": "principled"}
 PRINCIPLED_QUINONE_PARAMETER = {"quinone_omp_mode": "principled"}
 PRINCIPLED_SYMMETRY_PARAMETER = {"symmetry_group_mode": "rdkit"}
+PRINCIPLED_BOND_NRINGS_PARAMETER = {"bond_nrings_mode": "principled"}
 PRINCIPLED_PARAMETER = {
     **PRINCIPLED_NDEALK_PARAMETER,
     **PRINCIPLED_QUINONE_PARAMETER,
     **PRINCIPLED_SYMMETRY_PARAMETER,
+    **PRINCIPLED_BOND_NRINGS_PARAMETER,
 }
 
 _GOLDEN_SCORE_MODELS = frozenset(
@@ -198,10 +202,26 @@ def rows_for_model(
         ugt_atom_rows,
     )
 
+    from xenosite.predict.symmetry import resolve_bond_nrings_mode
+
+    bond_nrings = "legacy"
+    if _parameter is not None:
+        bond_nrings = resolve_bond_nrings_mode(_parameter)
+    elif omp_mode is None and model in ("epoxidation", "ndealk"):
+        bond_nrings = "legacy"
+
     if model == "epoxidation":
-        return bond_rows(mol, original_atom_ordering=True)
+        return bond_rows(
+            mol,
+            original_atom_ordering=True,
+            bond_nrings_mode=bond_nrings,
+        )
     if model == "ndealk":
-        return ndealk_bond_rows(mol)
+        return ndealk_bond_rows(
+            mol,
+            symmetry_group_mode="openbabel",
+            bond_nrings_mode=bond_nrings,
+        )
     if model == "ugt":
         return ugt_atom_rows(mol)
     if model == "quinone":
