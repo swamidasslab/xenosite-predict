@@ -14,6 +14,7 @@ from typing import Literal, Mapping, Any, Sequence
 from rdkit import Chem
 
 SymmetryGroupMode = Literal["rdkit", "openbabel"]
+BondNringsMode = Literal["legacy", "principled"]
 
 _ACTIVE_ATOL = 1e-12
 
@@ -25,6 +26,33 @@ def resolve_symmetry_group_mode(parameter: Mapping[str, Any] | None) -> Symmetry
 
 def uses_rdkit_symmetry(parameter: Mapping[str, Any] | None) -> bool:
     return resolve_symmetry_group_mode(parameter) == "rdkit"
+
+
+def resolve_bond_nrings_mode(parameter: Mapping[str, Any] | None) -> BondNringsMode:
+    mode = (parameter or {}).get("bond_nrings_mode", "principled")
+    return mode if mode in ("legacy", "principled") else "principled"
+
+
+def directed_ob_bond_symmetry_key(pymol, row: Mapping[str, Any], rdmol: Chem.Mol) -> tuple[int, int, int]:
+    """Directed OpenBabel bond class: (GID(Atom1), GID(Atom2), RDKit bond order).
+
+    Atom1/Atom2 follow BondTD ``_index`` endpoint order (``mol.a.b``), not the
+    sorted undirected GID pair used for legacy site dedup.
+    """
+    from .features import _ob
+
+    ob, _ = _ob.load()
+    vec = ob.vectorUnsignedInt()
+    pymol.OBMol.GetGIDVector(vec)
+    ranks = list(vec)
+    _mol, a, b = str(row["_index"]).split(".", 2)
+    ia, ib = int(a), int(b)
+    g1 = int(ranks[ia - 1]) if ia - 1 < len(ranks) else 0
+    g2 = int(ranks[ib - 1]) if ib - 1 < len(ranks) else 0
+    i, j = int(row["_atoms"][0]), int(row["_atoms"][1])
+    bond = rdmol.GetBondBetweenAtoms(i, j)
+    bt = int(bond.GetBondType()) if bond is not None else 0
+    return (g1, g2, bt)
 
 
 def rdkit_atom_ranks(rdmol: Chem.Mol) -> list[int]:

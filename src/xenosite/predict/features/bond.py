@@ -41,6 +41,8 @@ class BondTD:
         self,
         pymol,
         *,
+        rdkit_mol=None,
+        bond_nrings_mode: Literal["legacy", "principled"] = "principled",
         original_atom_ordering: bool = True,
         overlap: bool = False,
         molnum: int = 1,
@@ -51,6 +53,10 @@ class BondTD:
         ob, _ = _ob.load()
         self.ob = ob
         self.pymol = pymol
+        self.rdkit_mol = rdkit_mol
+        self.bond_nrings_mode = (
+            bond_nrings_mode if bond_nrings_mode in ("legacy", "principled") else "principled"
+        )
         self.original_atom_ordering = original_atom_ordering
         self.overlap = overlap
         self.molnum = molnum
@@ -346,6 +352,17 @@ class BondTD:
             self._set(f"{prefix}MaxInvRingSize", inv)
 
     def add_nrings(self) -> None:
+        if self.bond_nrings_mode == "principled" and self.rdkit_mol is not None:
+            ri = self.rdkit_mol.GetRingInfo()
+            for label, indexes in self.BAI_zips:
+                self._set(
+                    f"{label}NRings",
+                    [
+                        float(ri.NumAtomRings(_ob.ob_idx_to_rdkit(idx)))
+                        for idx in indexes
+                    ],
+                )
+            return
         cycles = self.MG.dfs_cycles()
         for label, indexes in self.BAI_zips:
             self._set(
@@ -457,10 +474,20 @@ class BondTD:
         return self.rows
 
 
-def bond_rows(rdkit_mol, *, original_atom_ordering: bool = True, **kwargs) -> list[dict]:
+def bond_rows(
+    rdkit_mol,
+    *,
+    original_atom_ordering: bool = True,
+    bond_nrings_mode: Literal["legacy", "principled"] = "principled",
+    **kwargs,
+) -> list[dict]:
     pymol = _ob.from_rdkit_mol(rdkit_mol)
     return BondTD(
-        pymol, original_atom_ordering=original_atom_ordering, **kwargs
+        pymol,
+        rdkit_mol=rdkit_mol,
+        bond_nrings_mode=bond_nrings_mode,
+        original_atom_ordering=original_atom_ordering,
+        **kwargs,
     ).run()
 
 
@@ -590,6 +617,7 @@ def ndealk_bond_rows(
     rdkit_mol,
     *,
     symmetry_group_mode: Literal["rdkit", "openbabel"] = "rdkit",
+    bond_nrings_mode: Literal["legacy", "principled"] = "principled",
 ) -> list[dict]:
     """ndealk1 Heuristic + BondTD (``BondDesc__`` prefix, C–N / min-idx order).
 
@@ -601,6 +629,8 @@ def ndealk_bond_rows(
     pymol = _ob.from_rdkit_mol(rdkit_mol)
     rows = BondTD(
         pymol,
+        rdkit_mol=rdkit_mol,
+        bond_nrings_mode=bond_nrings_mode,
         original_atom_ordering=True,
         bond_prefix="BondDesc__%s",
         atom_order="ndealk",

@@ -47,7 +47,11 @@ class NdealkFamily(BaseRunner):
                 "ndealk/isozyme ONNX missing bond. Run make convert-onnx MODEL=ndealk"
             )
         mol = self.rdkit_mol(molecule)
-        rows = ndealk_bond_rows(mol, symmetry_group_mode=self.symmetry_group_mode(molecule))
+        rows = ndealk_bond_rows(
+            mol,
+            symmetry_group_mode=self.symmetry_group_mode(molecule),
+            bond_nrings_mode=self.bond_nrings_mode(molecule),
+        )
         names = load_names("ndealk", "bond")
         if not names:
             raise WeightsNotFound(

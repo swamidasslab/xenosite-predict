@@ -51,7 +51,9 @@ def predict(
         tests and ``principled`` (mean over all shortest-path indicators) for production;
         ``symmetry_group_mode`` is ``openbabel`` for golden parity and ``rdkit``
         (default) for production bond-class deduplication and score pooling
-        (mean of active scores per class).
+        (mean of active scores per class); ``bond_nrings_mode`` is ``legacy``
+        (DFS back-edge atom counts) for golden/ob dumps and ``principled``
+        (RDKit ``RingInfo.NumAtomRings`` per BondTD endpoint) for production.
 
     Notes
     -----

@@ -8,7 +8,7 @@ from ..backends.onnx import OnnxBackend
 from ..errors import ModelNotAvailable, WeightsNotFound
 from ..molecule import parse_smiles
 from ..registry import ModelRunner
-from ..symmetry import apply_atom_symmetry, apply_bond_symmetry, resolve_symmetry_group_mode
+from ..symmetry import apply_atom_symmetry, apply_bond_symmetry, resolve_bond_nrings_mode, resolve_symmetry_group_mode
 from ..types import Molecule as Mol
 
 
@@ -75,6 +75,9 @@ class BaseRunner(ModelRunner):
 
     def symmetry_group_mode(self, molecule: Mol):
         return resolve_symmetry_group_mode(molecule._parameter)
+
+    def bond_nrings_mode(self, molecule: Mol):
+        return resolve_bond_nrings_mode(molecule._parameter)
 
     def symmetrize_atom_scores(self, molecule: Mol, atom_scores: list[float]) -> list[float]:
         return apply_atom_symmetry(self.rdkit_mol(molecule), atom_scores, molecule._parameter)

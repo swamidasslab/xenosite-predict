@@ -32,7 +32,11 @@ class EpoxidationRunner(BaseRunner):
         scores_by_bond: dict[frozenset[int], list[float]] = {}
         mol_scores: list[float] = []
         for ordering in (True, False):
-            rows = bond_rows(mol, original_atom_ordering=ordering)
+            rows = bond_rows(
+                mol,
+                original_atom_ordering=ordering,
+                bond_nrings_mode=self.bond_nrings_mode(molecule),
+            )
             x, _used = matrix_from_rows(rows, bond_names)
             if x.size == 0:
                 continue
