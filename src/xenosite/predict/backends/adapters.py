@@ -152,3 +152,22 @@ def or_combine(values: Sequence[float]) -> float:
         return 0.0
     arr = np.asarray(values, dtype=float)
     return float(1.0 - np.prod(1.0 - arr))
+
+
+def safe_atom_index(v) -> int:
+    """OpenBabel 1-based atom id → 0-based RDKit index (``v0/adapters.py``)."""
+    try:
+        return int(v) - 1
+    except (TypeError, ValueError):
+        return v  # type: ignore[return-value]
+
+
+def legacy_atom_vector(site_map: dict, n_atoms: int, *, one_based: bool = True) -> list[float]:
+    """Per-atom scores from a legacy site map → 0-based RDKit vector.
+
+    Delegates to :func:`xenosite.predict.numbering.legacy_site_to_atom_vector`
+    (handles gapped legacy OB 2.4 keys on ``[nH]`` SMILES).
+    """
+    from ..numbering import legacy_site_to_atom_vector
+
+    return legacy_site_to_atom_vector(site_map, n_atoms)

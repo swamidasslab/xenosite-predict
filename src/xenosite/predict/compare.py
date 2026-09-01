@@ -59,3 +59,27 @@ def _canonicalize_pair_idx(a: dict) -> dict:
     a["pair_idx"] = [i for i, _ in ix]
     a["pair"] = [x for _, x in ix]
     return a
+
+
+def quinone_pairs_to_rdkit(
+    pair_idx: list,
+    pair: list,
+    ob_to_rd: dict[int, int],
+    *,
+    n_heavy: int | None = None,
+    legacy_ob_order: list[int] | None = None,
+) -> dict:
+    """Normalize quinone ``pair_idx``+``pair`` to sorted RDKit-indexed pairs."""
+    from .numbering import quinone_pairs_to_rdkit as _map
+
+    if legacy_ob_order is None:
+        legacy_ob_order = sorted(ob_to_rd.keys())
+    if n_heavy is None:
+        n_heavy = max(ob_to_rd.values()) + 1 if ob_to_rd else len(legacy_ob_order)
+    return _map(
+        pair_idx,
+        pair,
+        legacy_ob_order=legacy_ob_order,
+        n_heavy=n_heavy,
+        ob_to_rd=ob_to_rd,
+    )

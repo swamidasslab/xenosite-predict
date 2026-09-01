@@ -100,23 +100,29 @@ class AtomTD:
         self._init_rows()
 
     def _init_rows(self) -> None:
+        from ..numbering import numbering_mode, pattern_ob_index
+
         ob = self.ob
         vec = ob.vectorUnsignedInt()
         self.pymol.OBMol.GetGIDVector(vec)
         ranks = list(vec)
         seen: dict[int, int] = {}
         nxt = 0
+        mode = numbering_mode()
         self.rows = []
+        dense = 0
         for idx in self.HA:
+            dense += 1
             raw = int(ranks[idx - 1]) if idx - 1 < len(ranks) else 0
             if raw not in seen:
                 nxt += 1
                 seen[raw] = nxt
             group = seen[raw]
+            pat_idx = pattern_ob_index(idx, dense, mode)
             self.rows.append(
                 {
                     "_atom": _ob.ob_idx_to_rdkit(idx),
-                    "_index": f"{self.molnum}.{group}.{idx}",
+                    "_index": f"{self.molnum}.{group}.{pat_idx}",
                 }
             )
 
@@ -346,6 +352,20 @@ class AtomTD:
             add.append(int(hit))
         return add
 
+    def _paths_for_omp(self, start: int, end: int, sym: str) -> list[list[int]]:
+        """Shortest paths used for ortho/meta/para atom features.
+
+        Legacy OMP used one BFS path (CPython 2.7 ``set`` neighbor order). We use
+        ``all_shortest_paths`` for most elements so features do not depend on hash
+        order. Sulfur is an exception: taking *any* shortest path can mark
+        ``Ortho_To_S`` on fused thiadiazine/benzene sites (Sudoxicam ob=12) where
+        legacy OMP returned 0, shifting the top pair score by ~0.07 mol.
+        """
+        if sym == "S":
+            p = self.MG.shortest_path(start, end)
+            return [p] if p else []
+        return self.MG.all_shortest_paths(start, end)
+
     def ortho_meta_para_to_atoms(self, prefix: str, *, site: bool = False) -> None:
         atoms = "C N O S F Cl Br I".split()
         for label, depth in OMP.items():
@@ -361,7 +381,7 @@ class AtomTD:
                     [
                         p
                         for end in ends
-                        for p in self.MG.all_shortest_paths(start, end)
+                        for p in self._paths_for_omp(start, end, sym)
                     ]
                     for start, ends in typed
                 ]

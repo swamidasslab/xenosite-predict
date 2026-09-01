@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-from itertools import combinations
 from typing import Any
 
 import numpy as np
-from rdkit import Chem
 
 from ..backends.adapters import append_atom_pair, or_combine
 from ..backends.onnx import OnnxBackend
 from ..errors import WeightsNotFound
-from ..features import load_names, matrix_from_rows, quinone_atom_rows, topn_site_features
+from ..features import load_names, matrix_from_rows, quinone_atom_rows
+from ..features.quinone import eligible_atom_rows, quinone_mol_features, quinone_pair_rows
 from ..registry import register_model
 from ..types import Molecule
 from ._base import BaseRunner
+
+
+def _tf1_atom_scores(y: np.ndarray) -> np.ndarray:
+    """Match TF1.15 float32 outputs ORT flushes to exact zero (quinone pair logit path)."""
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    return np.where(y == 0.0, 3.022989607e-08, y)
 
 
 class QuinoneRunner(BaseRunner):
@@ -29,32 +34,36 @@ class QuinoneRunner(BaseRunner):
             )
         mol = self.rdkit_mol(molecule)
         atom_rows = quinone_atom_rows(mol)
+        eligible = eligible_atom_rows(atom_rows)
+        if not eligible:
+            append_atom_pair(
+                molecule,
+                model=self.name,
+                version=self.version,
+                mol=0.0,
+                atom=[0.0] * molecule.atoms.num,
+                pair=[],
+                pair_idx=[],
+            )
+            return
         atom_names = load_names("quinone", "atom")
-        x, _ = matrix_from_rows(atom_rows, atom_names)
-        atom_scores = backend.run_head(self.name, "atom", x).reshape(-1)
-        atom_idx = [int(r["_atom"]) for r in atom_rows]
+        x, _ = matrix_from_rows(eligible, atom_names)
+        atom_scores = _tf1_atom_scores(backend.run_head(self.name, "atom", x).reshape(-1))
 
+        ob_to_rdkit = {int(str(r["_index"]).split(".")[-1]): int(r["_atom"]) for r in atom_rows}
+        atom_scores_by_ob = {
+            int(str(r["_index"]).split(".")[-1]): float(s)
+            for r, s in zip(eligible, atom_scores)
+        }
+
+        pair_rows = quinone_pair_rows(mol, atom_rows, atom_scores_by_ob)
         pair_names = load_names("quinone", "pair")
-        pair_rows = []
-        pair_keys: list[tuple[int, int]] = []
-        dist = Chem.GetDistanceMatrix(mol)
-        for i, j in combinations(range(len(atom_idx)), 2):
-            a, b = atom_idx[i], atom_idx[j]
-            d = float(dist[a, b])
-            row = {
-                "Atom1_Pred": float(atom_scores[i]),
-                "Atom2_Pred": float(atom_scores[j]),
-                "AtomPair__Distance": d,
-                "AtomPair__Distance_Is_Odd": float(int(d) % 2),
-            }
-            pair_rows.append(row)
-            pair_keys.append(tuple(sorted((a, b))))
-
         pair_scores = np.zeros(len(pair_rows))
         if pair_rows:
             px, _ = matrix_from_rows(pair_rows, pair_names)
             pair_scores = backend.run_head(self.name, "pair", px).reshape(-1)
 
+        pair_keys = [tuple(r["_atoms"]) for r in pair_rows]
         collect = [[] for _ in range(molecule.atoms.num)]
         for (a, b), s in zip(pair_keys, pair_scores):
             collect[a].append(float(s))
@@ -64,7 +73,7 @@ class QuinoneRunner(BaseRunner):
         mol_names = load_names("quinone", "mol")
         mol_score = 0.0
         if mol_names and len(pair_scores):
-            mx = topn_site_features(pair_scores, pair_rows, mol_names)
+            mx = quinone_mol_features(atom_rows, pair_rows, pair_scores, mol_names)
             mol_score = float(backend.run_head(self.name, "mol", mx).reshape(-1)[0])
 
         append_atom_pair(
@@ -78,24 +87,51 @@ class QuinoneRunner(BaseRunner):
         )
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
-        mol_score = float(native.get("mol", 0.0))
+        from ..numbering import legacy_ob_order_from_rows, map_legacy_pair_to_rdkit
+        from ..features import quinone_atom_rows
+
+        raw_mol = native.get("mol", 0.0)
+        if isinstance(raw_mol, dict) or raw_mol == {}:
+            mol_score = 0.0
+        else:
+            mol_score = float(raw_mol or 0.0)
         site = native.get("site") or native.get("pair") or {}
-        pair_idx = []
-        pair = []
+        mol = self.rdkit_mol(molecule)
+        rows = quinone_atom_rows(mol)
+        ob_to_rd = {int(str(r["_index"]).split(".")[-1]): int(r["_atom"]) for r in rows}
+        row_ob_order = legacy_ob_order_from_rows(rows)
+        parsed: list[tuple[int, int, float]] = []
+        raw_ids: list[int] = []
         for key, val in (site.items() if isinstance(site, dict) else []):
             if isinstance(key, str) and "-" in key:
-                a, b = key.split("-", 1)
-                pair_idx.append((int(a), int(b)))
+                ia, ib = int(key.split("-", 1)[0]), int(key.split("-", 1)[1])
             elif isinstance(key, (list, tuple)):
-                pair_idx.append((int(key[0]), int(key[1])))
+                ia, ib = int(key[0]), int(key[1])
             else:
                 continue
-            pair.append(0.0 if val == {} else float(val))
-        collect = [[] for _ in range(molecule.atoms.num)]
+            raw_ids.extend([ia, ib])
+            parsed.append((ia, ib, 0.0 if val == {} else float(val)))
+        n = molecule.atoms.num
+        already_zero = bool(raw_ids) and max(raw_ids) < n
+        legacy_ob_order = sorted({i + 1 if already_zero else i for i in raw_ids}) or row_ob_order
+        pair_idx = []
+        pair = []
+        for ia, ib, score in parsed:
+            rd = map_legacy_pair_to_rdkit(
+                ia,
+                ib,
+                legacy_ob_order=legacy_ob_order,
+                n_heavy=n,
+                ob_to_rd=ob_to_rd,
+                already_zero_based=already_zero,
+            )
+            pair_idx.append(rd)
+            pair.append(score)
+        collect = [[] for _ in range(n)]
         for (a, b), s in zip(pair_idx, pair):
-            if isinstance(a, int) and 0 <= a < len(collect):
+            if 0 <= a < n:
                 collect[a].append(s)
-            if isinstance(b, int) and 0 <= b < len(collect):
+            if 0 <= b < n:
                 collect[b].append(s)
         atom_pred = [or_combine(p) for p in collect]
         append_atom_pair(

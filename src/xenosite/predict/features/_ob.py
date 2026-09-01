@@ -201,3 +201,17 @@ class _ModuleElementTable:
         if int(hyb) == 1:
             return rad * 0.90
         return rad
+
+
+def ob_numbering_mode():
+    """Configured heavy-atom numbering policy (see ``xenosite.predict.numbering``)."""
+    from ..numbering import numbering_mode
+
+    return numbering_mode()
+
+
+def ob_numbering_is_gapped(obmol: Any) -> bool:
+    """True when this molecule's heavy-atom ``GetIdx()`` values are gapped."""
+    from ..numbering import ObNumberingMode, detect_raw_numbering_mode
+
+    return detect_raw_numbering_mode(obmol) == ObNumberingMode.RAW
