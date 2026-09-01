@@ -5,6 +5,9 @@ Golden parity tests (``test_golden*.py``, ``test_onnx_legacy_parity.py``) pass
 match regathered fixtures. This module verifies the public API without
 ``_parameter``: same as explicit principled, and intentionally different from
 legacy on molecules where the modes diverge.
+
+For a human-readable walkthrough of each flag, see
+``tests/test_legacy_vs_principled_guide.py`` and ``docs/legacy-vs-principled.md``.
 """
 
 from __future__ import annotations
@@ -102,6 +105,11 @@ def test_predict_does_not_require_parameter():
     [
         pytest.param("quinone", NAPHTHALENE, id="quinone:naphthalene"),
         pytest.param("ndealk", NDEALK_PRINCIPLED_FEWER, id="ndealk:coc1"),
+        pytest.param(
+            "epoxidation",
+            "c1ccc2c(c1)oc1ccccc12",
+            id="epoxidation:dibenzofuran",
+        ),
     ],
 )
 def test_predict_default_differs_from_legacy(model, smiles):
@@ -112,13 +120,26 @@ def test_predict_default_differs_from_legacy(model, smiles):
     assert _max_score_delta(_scores(principled, model), _scores(legacy, model)) > 1e-6
 
 
-def test_ndealk_rdkit_symmetry_broadcast():
-    """Production path broadcasts one class score to all RDKit-symmetric bonds."""
+def test_ndealk_rdkit_symmetry_pooling():
+    """Production path pools one class score to all RDKit-symmetric bonds."""
     from xenosite.predict.molecule import parse_smiles
     from tests.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
 
     rdmol, _ = parse_smiles(NDEALK_PRINCIPLED_FEWER)
     mol = _onnx_predict(NDEALK_PRINCIPLED_FEWER, "ndealk")
+    groups = bond_symmetry_groups(rdmol)
+    assert groups
+    assert_bond_scores_symmetric(mol.results[0].bond, groups)
+
+
+def test_epoxidation_rdkit_symmetry_pooling():
+    """Production epoxidation pools within RDKit bond classes."""
+    from xenosite.predict.molecule import parse_smiles
+    from tests.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
+
+    smiles = "c1ccc2c(c1)oc1ccccc12"
+    rdmol, _ = parse_smiles(smiles)
+    mol = _onnx_predict(smiles, "epoxidation")
     groups = bond_symmetry_groups(rdmol)
     assert groups
     assert_bond_scores_symmetric(mol.results[0].bond, groups)
@@ -145,10 +166,10 @@ def test_principled_onnx_deterministic():
 
 @pytest.mark.parametrize(
     "model",
-    ["epoxidation", "reactivity", "ugt"],
+    ["reactivity", "ugt"],
 )
-def test_models_without_mode_flags_ignore_parameter(model):
-    """Site/OMP modes only affect ndealk/isozyme/quinone; others are unchanged."""
+def test_models_without_legacy_flags_ignore_golden_parameter(model):
+    """Reactivity/UGT scores are unchanged by golden site/OMP/symmetry flags on aspirin."""
     smiles = "CC(=O)Oc1ccccc1C(=O)O"
     if not onnx_weights_present(model):
         pytest.skip(f"no ONNX for {model}")
