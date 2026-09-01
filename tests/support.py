@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,26 +98,29 @@ def onnx_io_dims(model: str, head: str) -> tuple[int, int] | None:
     return int(n_in), int(n_out)
 
 
+@lru_cache
 def load_descriptor_smiles() -> list[str]:
     if not DESCRIPTOR_SMILES.is_file():
         return []
-    payload = json.loads(DESCRIPTOR_SMILES.read_text(encoding="utf-8"))
+    payload = _load_json(DESCRIPTOR_SMILES)
     if isinstance(payload, dict):
         payload = payload.get("smiles") or payload.get("molecules") or []
     return [str(s) for s in payload if s]
 
 
+@lru_cache
 def load_golden():
     if not GOLDEN.is_file():
         return []
-    return json.loads(GOLDEN.read_text(encoding="utf-8"))
+    return _load_json(GOLDEN)
 
 
+@lru_cache
 def load_golden_suite(*, merge_smoke: bool = True) -> list[dict]:
     """327-molecule suite golden rows; optionally include ``golden_smiles.json``."""
     rows: list[dict] = []
     if GOLDEN_SUITE.is_file():
-        rows.extend(json.loads(GOLDEN_SUITE.read_text(encoding="utf-8")))
+        rows.extend(_load_json(GOLDEN_SUITE))
     if merge_smoke and GOLDEN.is_file():
         seen = {(r.get("model"), r.get("smiles")) for r in rows}
         for r in load_golden():
@@ -144,7 +148,9 @@ def serialize_molecule_results(mol) -> list[dict]:
     return out
 
 
+@lru_cache
 def _load_json(path: Path):
+    """Parse a fixture JSON file once per process (ob_dumps is ~85 MB)."""
     probe = path.read_bytes()[:80]
     if probe.startswith(b"version https://git-lfs.github.com/spec/v1"):
         raise RuntimeError(
@@ -164,6 +170,7 @@ def _suite_path() -> Path | None:
     return None
 
 
+@lru_cache
 def _suite_molecules() -> list[dict]:
     path = _suite_path()
     if path is None:
@@ -173,11 +180,12 @@ def _suite_molecules() -> list[dict]:
     return list(mols or [])
 
 
+@lru_cache
 def load_ob_dumps() -> list[dict]:
     """All OpenBabel dumps (golden SMILES + extras). Empty if the suite is missing.
 
     Prefers uncompressed ``ob_dumps.json`` (fresh ``make dump-ob``), else the
-    committed ``ob_dumps.json.gz`` (Git LFS).
+    committed ``ob_dumps.json.gz`` (Git LFS). Parsed JSON is cached in-process.
     """
     mols = _suite_molecules()
     if mols:
@@ -250,6 +258,7 @@ def dump_compare_skip_columns(model: str) -> frozenset[str] | None:
     return None
 
 
+@lru_cache
 def load_ob_dump(path: Path | None = None) -> dict:
     p = path or OB_ASPIRIN
     if p.is_file():
@@ -424,6 +433,7 @@ def assert_predictions_parity(
         assert_equiv_results(want, have, atol=atol)
 
 
+@lru_cache
 def golden_name_by_smiles() -> dict[str, str]:
     return {
         g["smiles"]: str(g.get("name") or g["smiles"][:32])
