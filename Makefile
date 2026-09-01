@@ -60,6 +60,7 @@ CAPTURE_SMILES ?=
 CAPTURE_WORKERS ?= 8
 DRIFT_WORKERS ?= 8
 GATHER_WORKERS ?= 8
+GATHER_MODEL ?=
 
 dump-ob-features:
 	$(PYTHON) tools/dump_ob.py --smiles '$(SMILES)' --model $(MODEL)
@@ -78,7 +79,8 @@ gather-golden:
 	$(PYTHON) tools/gather_golden_suite.py \
 	  --workers $(GATHER_WORKERS) \
 	  --failing-only \
-	  --force
+	  --force \
+	  $(if $(GATHER_MODEL),--models $(GATHER_MODEL),)
 
 drift-report:
 	-$(PYTHON) tools/report_suite_drift.py \

@@ -78,13 +78,19 @@ def _gather_one(task: tuple[str, str]) -> dict:
     return rec
 
 
-def _failing_smiles() -> list[str]:
-    if FAILING_SMILES_JSON.is_file():
+def _failing_smiles(models: list[str] | None = None) -> list[str]:
+    model_set = set(models) if models else None
+    if FAILING_SMILES_JSON.is_file() and not model_set:
         return json.loads(FAILING_SMILES_JSON.read_text(encoding="utf-8"))
     golden = load_golden_suite(merge_smoke=True)
     cache = load_cache(DEFAULT_CACHE)
-    models = [m for m in SUITE_MODELS if m not in ("phase1", "bioactivation")]
-    report = analyze_suite(golden, cache, models=models, workers=default_workers())
+    suite_models = list(model_set) if model_set else [
+        m for m in SUITE_MODELS if m not in ("phase1", "bioactivation")
+    ]
+    report = analyze_suite(golden, cache, models=suite_models, workers=default_workers())
+    if model_set:
+        smiles = {ff.smiles for ff in report.field_failures if ff.model in model_set}
+        return sorted(smiles)
     return sorted(report.unique_failing_smiles)
 
 
@@ -135,16 +141,18 @@ def main(argv: list[str] | None = None) -> int:
         args.force = True
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
-    if args.failing_only:
-        models = [m for m in SUITE_MODELS if m not in ("phase1", "bioactivation")]
     if args.smiles:
         smiles_list = [args.smiles]
     elif args.failing_only:
-        smiles_list = _failing_smiles()
+        model_filter = models if set(models) != set(SUITE_MODELS) else None
+        smiles_list = _failing_smiles(model_filter)
         if not smiles_list:
             print("no failing SMILES from drift cache", file=sys.stderr)
             return 0
-        print(f"regather {len(smiles_list)} failing SMILES", flush=True)
+        label = f"regather {len(smiles_list)} failing SMILES"
+        if model_filter:
+            label += f" ({','.join(model_filter)})"
+        print(label, flush=True)
     else:
         smiles_list = load_descriptor_smiles()
     if args.limit:
