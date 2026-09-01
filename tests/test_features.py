@@ -210,7 +210,6 @@ def test_aspirin_bond_shape():
 
 
 NAPHTHALENE = "c1ccc2ccccc2c1"
-SUDOXICAM = "CN1C(C(=O)NC2=NC=CS2)=C(O)C2=CC=CC=C2S1(=O)=O"
 
 
 def _omp_column_names(rows: list[dict]) -> list[str]:
@@ -248,28 +247,40 @@ def test_quinone_omp_invariant_legacy_uses_single_path():
         assert len(paths) <= 1
 
 
-def test_quinone_omp_invariant_principled_unions_shortest_paths():
-    """Principled (non-S): all minimum-length paths feed the OMP ring test."""
+def test_quinone_omp_invariant_principled_uses_all_shortest_paths():
+    """Principled: every tied minimum-length path contributes to the mean."""
+    td = _atom_td(NAPHTHALENE, omp_mode="principled")
+    for sym in "C N O S".split():
+        paths = td._paths_for_omp(1, 4, sym)
+        assert len(paths) >= 1
+    assert len(td._paths_for_omp(1, 4, "C")) == 2
+
+
+def test_quinone_omp_invariant_principled_mean_over_path_indicators():
     td = _atom_td(NAPHTHALENE, omp_mode="principled")
     paths = td._paths_for_omp(1, 4, "C")
-    assert len(paths) == 2
-    assert all(len(p) == 4 for p in paths)
+    hits = [td._path_on_aromatic_ring(p, site=False) for p in paths]
+    expected = sum(hits) / len(hits)
+    got = td._omp_paths([paths], site=False)[0]
+    assert got == expected
 
 
-def test_quinone_omp_invariant_principled_s_uses_single_path():
-    """Principled S: still one path (fused thiadiazine/benzene edge case)."""
-    td = _atom_td(SUDOXICAM, omp_mode="principled")
-    for start, end in ((1, 4), (4, 1)):
-        assert len(td._paths_for_omp(start, end, "S")) <= 1
-
-
-def test_quinone_omp_invariant_principled_monotone_over_legacy():
-    """Principled is a union over paths, so OMP flags are never below legacy."""
-    legacy = _quinone_rows(NAPHTHALENE, omp_mode="legacy")
-    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
+def test_quinone_omp_invariant_principled_matches_legacy_when_no_ties():
+    """When every OMP path set is a singleton, principled equals legacy."""
+    benzene = "c1ccccc1"
+    legacy = _quinone_rows(benzene, omp_mode="legacy")
+    principled = _quinone_rows(benzene, omp_mode="principled")
     for col in _omp_column_names(legacy):
         for rl, rp in zip(legacy, principled):
-            assert float(rp[col]) >= float(rl[col]), col
+            assert rl[col] == rp[col]
+
+
+def test_quinone_omp_invariant_principled_values_in_unit_interval():
+    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
+    for col in _omp_column_names(principled):
+        for row in principled:
+            v = float(row[col])
+            assert 0.0 <= v <= 1.0, (col, v)
 
 
 def test_quinone_omp_invariant_only_omp_columns_differ():
@@ -300,13 +311,6 @@ def test_quinone_omp_invariant_runner_default_is_principled():
     assert QuinoneRunner()._quinone_omp_mode(mol) == "principled"
 
 
-def test_quinone_omp_invariant_principled_beats_legacy_on_naphthalene():
-    legacy = _quinone_rows(NAPHTHALENE, omp_mode="legacy")
-    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
-    assert sum(float(r["Ortho_To_C"]) for r in legacy) == 1.0
-    assert sum(float(r["Ortho_To_C"]) for r in principled) == 4.0
-
-
 def test_quinone_omp_invariant_legacy_matches_regathered_dump():
     from tests.support import (
         ASPIRIN_SMILES,
@@ -326,7 +330,7 @@ def test_quinone_omp_invariant_legacy_matches_regathered_dump():
 
 
 def test_molgraph_all_shortest_paths_can_exceed_single_path():
-    """Principled OMP union needs more than one minimum-length path on fused rings."""
+    """Principled OMP averaging needs multiple minimum-length paths on fused rings."""
     from xenosite.predict.features._ob import from_rdkit_mol
     from xenosite.predict.features.molgraph import MolGraph
 

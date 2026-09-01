@@ -324,43 +324,42 @@ class AtomTD:
                 ],
             )
 
-    def _omp_paths(self, ends_for_start, *, site: bool) -> list[int]:
-        """True if any shortest path sits on an aromatic ring (order-independent).
+    def _path_on_aromatic_ring(self, path: list[int], *, site: bool) -> bool:
+        if not path:
+            return False
+        if site:
+            return any(
+                set(path[:-1]).issubset(ring)
+                for ring in self.aromatic_rings
+                if path[-1] not in ring
+            )
+        return any(
+            set(path[1:-1]).issubset(ring)
+            for ring in self.aromatic_rings
+            if path[0] not in ring and path[-1] not in ring
+        )
 
-        The 2.4 dump used a single BFS path whose tie-break was CPython 2.7
-        ``set`` iteration order. Matching that is not worth the e2e noise.
+    def _omp_paths(self, ends_for_start, *, site: bool) -> list[float]:
+        """OMP ring feature from shortest-path tie sets.
+
+        Legacy: 1.0 if any single BFS path qualifies (one path per end).
+        Principled: mean of per-path indicators over all shortest paths
+        (same [0, 1] scale; equals legacy when only one path exists).
         """
-        add = []
+        add: list[float] = []
         for paths in ends_for_start:
-            if site:
-                hit = any(
-                    any(
-                        set(path[:-1]).issubset(ring)
-                        for ring in self.aromatic_rings
-                        if path and path[-1] not in ring
-                    )
-                    for path in paths
-                )
+            hits = [self._path_on_aromatic_ring(p, site=site) for p in paths if p]
+            if not hits:
+                add.append(0.0)
+            elif self.omp_mode == "principled":
+                add.append(sum(hits) / len(hits))
             else:
-                hit = any(
-                    any(
-                        set(path[1:-1]).issubset(ring)
-                        for ring in self.aromatic_rings
-                        if path
-                        and path[0] not in ring
-                        and path[-1] not in ring
-                    )
-                    for path in paths
-                )
-            add.append(int(hit))
+                add.append(1.0 if any(hits) else 0.0)
         return add
 
     def _paths_for_omp(self, start: int, end: int, sym: str) -> list[list[int]]:
         """Shortest paths used for ortho/meta/para atom features."""
         if self.omp_mode == "legacy":
-            p = self.MG.shortest_path(start, end)
-            return [p] if p else []
-        if sym == "S":
             p = self.MG.shortest_path(start, end)
             return [p] if p else []
         return self.MG.all_shortest_paths(start, end)

@@ -48,7 +48,7 @@ def predict(
         read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
         for golden parity tests and ``principled`` (default) for production;
         ``quinone_omp_mode`` is ``legacy`` (deterministic sorted BFS) for golden
-        tests and ``principled`` (``all_shortest_paths``) for production.
+        tests and ``principled`` (mean over all shortest-path indicators) for production.
 
     Notes
     -----
