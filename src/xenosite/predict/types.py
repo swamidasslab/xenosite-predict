@@ -37,10 +37,14 @@ class Atoms(BaseModel):
 
 
 class Metabolite(BaseModel):
-    """A bioactivation metabolite (pathway + atoms + score)."""
+    """A inferred or bioactivation metabolite (pathway + site atoms + score).
+
+    ``atom`` lists **0-based RDKit** indices for the site of metabolism, matching
+    ``Molecule.atoms`` / ``Molecule.bonds.idx``.
+    """
 
     smiles: str
-    atom: Optional[list[PositiveInt]] = None
+    atom: Optional[list[NonNegativeInt]] = None
     pathway: Optional[str] = None
     score: Number = None  # type: ignore[assignment]
 

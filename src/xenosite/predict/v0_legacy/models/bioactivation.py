@@ -45,7 +45,7 @@ class BioactivationRunner(BaseRunner):
             idx = [int(i) - 1 for i in idx_s.split(".")][1:]
             metabolites.append(
                 Metabolite(
-                    atom=[i + 1 for i in idx] if idx else None,
+                    atom=idx if idx else None,
                     pathway=pathway,
                     smiles=smi,
                     score=float(value),

@@ -8,6 +8,7 @@ from .backends import PredictBackend, resolve_backend, resolve_for_model
 from .errors import BackendNotConfigured
 from .molecule import as_molecule
 from .registry import Spec, ensure_builtins, load_runner, normalize_models, registered
+from .forest import attach_metabolites
 from .types import Molecule
 
 ModelsArg = Union[str, Spec, Iterable[str | Spec]]
@@ -23,6 +24,8 @@ def predict(
     backend: BackendArg = None,
     backends: BackendMap = None,
     env: Optional[Mapping[str, str]] = None,
+    metabolites: bool = False,
+    metabolites_min_score: Optional[float] = None,
     _parameter: Optional[Mapping[str, Any]] = None,
 ) -> Molecule:
     """Run one or more models and return a :class:`Molecule` with appended results.
@@ -43,6 +46,13 @@ def predict(
     env:
         Environment mapping for the picker. ``None`` uses ``os.environ``.
         Tests should pass ``env={}`` or rely on the autouse clearer.
+    metabolites:
+        When ``True``, attach every metabolite structure the forest ruleset
+        generates for the substrate, annotated with predictor site scores and
+        sorted by score (descending). See ``xenosite.predict.forest``.
+    metabolites_min_score:
+        When set, drop metabolites whose site score is below this threshold.
+        Default ``None`` includes all forest products.
     _parameter:
         Internal per-call options (not part of the public HTTP API). Runners
         read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
@@ -71,6 +81,8 @@ def predict(
         be = resolve_for_model(spec, backend=backend, backends=backends, env=env)
         runner = load_runner(*spec)
         runner.predict_molecule(molecule, be)
+    if metabolites:
+        attach_metabolites(molecule, min_score=metabolites_min_score)
     return molecule
 
 
