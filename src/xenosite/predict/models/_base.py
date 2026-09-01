@@ -21,7 +21,7 @@ class BaseRunner(ModelRunner):
         if self.blocked_reason:
             return False
         if getattr(backend, "name", None) == "onnx":
-            if self.name not in ("phase1", "bioactivation"):
+            if self.name not in ("bioactivation",):
                 from ..features import _ob
 
                 if not _ob.installed():

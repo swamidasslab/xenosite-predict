@@ -182,3 +182,161 @@ def ugt_atom_rows(rdkit_mol) -> list[dict]:
                 out[k] = 0.0
         rows.append(out)
     return rows
+
+
+_BOOST_SMARTS = {
+    "Aliphatic_hydroxyl": "[OX2H][A;!#1;!$([C,N,P,S]=O)]",
+    "Aromatic_hydroxyl": "[OX2H]a",
+    "Carboxylic_acid": "[OX2H1][CX3]=O",
+    "NH2": "[$([NX3H2,NX4H3+;!$(NC=O)])]",
+    "NH": "[$([NX3H1,NX4H2+;!$(NC=O)])]",
+    "N": "[$([NX3,NX4+;!$([NX3H2,NX4H3+,NX3H1,NX4H2+])])]",
+    "Sulfur": "[$([SX2H]),$([OX2H][SX4](=O)=O)]",
+}
+
+_CHANCE_SMARTS = {
+    "Aliphatic_hydroxyl1": "[$([OX2H][A;!#1;!$([C,N,P,S]=O)])]",
+    "Aromatic_hydroxyl1": "[$([OX2H]a)]",
+    "Carboxylic_acid1": "[$([OX2H1][CX3]=O)]",
+    "Nitrogen1": "[$([#7;!R0]),$([NX3,NX4]);!$([#7][C,S]=[O,S,N]);!$(N=O)]",
+}
+
+_HEURISTIC_CHANCE = {
+    "Nitrogen1": 0.0846824408468,
+    "Aliphatic_hydroxyl1": 0.496777658432,
+    "Aromatic_hydroxyl1": 0.763663220089,
+    "Carboxylic_acid1": 0.799684542587,
+    "Remaining": 0.00146456745332,
+}
+
+_QUANTUM_COLS = (
+    "charge",
+    "elec_Dens",
+    "active_Chg",
+    "elec_E",
+    "1_EE_rep",
+    "1_EN_attr",
+    "elec_res",
+    "elec_xch",
+    "2_EE_rep",
+    "2_EN_attr",
+    "NN_rep",
+    "coulomb_interx",
+    "elec_nuclear_E",
+    "fukui",
+    "nucleophil",
+    "electrophil",
+)
+
+
+def _smarts_match_count(pymol, smarts: str) -> float:
+    _, pybel = _ob.load()
+    pat = pybel.Smarts(smarts)
+    return float(len(pat.findall(pymol)))
+
+
+def _smarts_atom_sets(pymol, smarts: str) -> set[int]:
+    _, pybel = _ob.load()
+    pat = pybel.Smarts(smarts)
+    hits: set[int] = set()
+    for match in pat.findall(pymol):
+        for idx in match:
+            hits.add(int(idx))
+    return hits
+
+
+def _ugt_topology_site(pymol, verts: list[int]) -> tuple[dict[int, int], dict[int, int]]:
+    ob, pybel = _ob.load()
+    vec = ob.vectorUnsignedInt()
+    pymol.OBMol.GetGIDVector(vec)
+    ranks = list(vec)
+    topology = {a: int(ranks[a - 1]) if a - 1 < len(ranks) else 0 for a in verts}
+    site = {a: a for a in verts}
+    for smarts in ("[OX1,SX1,F,I,Cl,Br]~[*]", "[OH,SH]~[C,N]", "[H]~[*]"):
+        pat = pybel.Smarts(smarts)
+        for match in pat.findall(pymol):
+            end, base = int(match[0]), int(match[1])
+            if end in site and base in site:
+                site[end] = site[base]
+    return topology, site
+
+
+def _ugt_group_ids(topologies: list[int]) -> list[int]:
+    groups = [0] * len(topologies)
+    gid = 0
+    while 0 in groups:
+        gid += 1
+        seed = groups.index(0)
+        stack = [seed]
+        groups[seed] = gid
+        while stack:
+            cur = stack.pop()
+            for j, top in enumerate(topologies):
+                if groups[j] == 0 and top == topologies[cur]:
+                    groups[j] = gid
+                    stack.append(j)
+    return groups
+
+
+def ugt_inference_rows(rdkit_mol, *, molnum: int = 1) -> list[dict]:
+    """Topological rows + legacy boosting/chance/grouping for UGT ONNX."""
+    pymol = _ob.from_rdkit_mol(rdkit_mol)
+    base_rows = ugt_atom_rows(rdkit_mol)
+    if not base_rows:
+        return []
+
+    verts = [int(str(r["_index"]).split(".")[-1]) for r in base_rows]
+    topology, site = _ugt_topology_site(pymol, verts)
+    group_ids = _ugt_group_ids([topology[v] for v in verts])
+
+    grouped: list[dict] = []
+    for row, ob_atom, grp in zip(base_rows, verts, group_ids):
+        out = {k: v for k, v in row.items() if not k.startswith("_")}
+        out["_atom"] = row["_atom"]
+        out["_index"] = f"{molnum}.{grp}.{ob_atom}"
+        out["_ob_atom"] = ob_atom
+        out["_group"] = grp
+        grouped.append(out)
+
+    group_counts: dict[int, int] = {}
+    for grp in group_ids:
+        group_counts[grp] = group_counts.get(grp, 0) + 1
+
+    boost_counts = {
+        name: _smarts_match_count(pymol, smarts)
+        for name, smarts in _BOOST_SMARTS.items()
+    }
+
+    for out in grouped:
+        out["N_in_group"] = float(group_counts[out["_group"]])
+        out["Weight"] = 1.0
+        if out.get("NN_0") == 1.0:
+            out["Weight"] = 11.33796
+        elif out.get("NO_0") == 1.0:
+            out["Weight"] = 5.17997
+        elif out.get("NS_0") == 1.0:
+            out["Weight"] = 132.29563
+        for name, count in boost_counts.items():
+            out[name] = count
+        for col in _QUANTUM_COLS:
+            out.setdefault(col, 0.0)
+
+    chance_flags = {name: _smarts_atom_sets(pymol, smarts) for name, smarts in _CHANCE_SMARTS.items()}
+    chances = []
+    for out in grouped:
+        ob_atom = out["_ob_atom"]
+        chance = 0.0
+        matched = False
+        for name, atoms in chance_flags.items():
+            if ob_atom in atoms:
+                chance += _HEURISTIC_CHANCE[name]
+                matched = True
+        if not matched:
+            chance += _HEURISTIC_CHANCE["Remaining"]
+        chances.append(chance)
+    norm = float(sum(chances)) or 1.0
+    for out, chance in zip(grouped, chances):
+        out["normalized_chance"] = chance / norm
+
+    grouped.sort(key=lambda r: (int(str(r["_index"]).split(".")[0]), int(str(r["_index"]).split(".")[1]), int(str(r["_index"]).split(".")[2])))
+    return grouped

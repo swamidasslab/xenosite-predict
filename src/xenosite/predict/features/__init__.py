@@ -8,17 +8,27 @@ from .bond import bond_rows, ndealk_bond_rows
 from .bond_lonepair import phase1_rows
 from .names import load_names, matrix_from_rows, select_columns
 from .two_stage import topn_site_features
-from .ugt import ugt_atom_rows
+from .ugt import ugt_atom_rows, ugt_inference_rows
+from .quinone import eligible_atom_rows, quinone_mol_features, quinone_pair_rows
+from .phase1_mol import phase1_mol_features, phase1_site_column_names
+from .reactivity_mol import reactivity_mol_features, reactivity_onnx_rows
 
 __all__ = [
     "bond_rows",
     "ndealk_bond_rows",
     "ugt_atom_rows",
+    "ugt_inference_rows",
     "reactivity_atom_rows",
+    "reactivity_onnx_rows",
+    "reactivity_mol_features",
     "quinone_atom_rows",
+    "eligible_atom_rows",
+    "quinone_pair_rows",
+    "quinone_mol_features",
     "phase1_rows",
     "load_names",
     "matrix_from_rows",
     "select_columns",
-    "topn_site_features",
+    "phase1_mol_features",
+    "phase1_site_column_names",
 ]

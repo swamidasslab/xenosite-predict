@@ -95,7 +95,7 @@ def tsv_columns(path: Path) -> list[str] | None:
     with path.open(newline="") as f:
         row = next(csv.reader(f, delimiter="\t"))
     # ID + features + TARGET
-    cols = [c for c in row if c not in ("ID", "TARGET", "weight")]
+    cols = [c for c in row if c not in ("ID", "TARGET", "weight", "Weight", "EXP_SOM")]
     return cols
 
 
@@ -411,6 +411,11 @@ def main(argv: list[str] | None = None) -> int:
             meta_path = args.out / name / f"{head}.meta.json"
             if cols and meta_path.is_file():
                 n_in = int(json.loads(meta_path.read_text())["I"])
+                if name == "ugt" and head == "atom":
+                    # DESC.tsv column order != legacy ``atom_descriptors`` DataFrame order.
+                    existing = args.features_dir / f"{name}_{head}_names.json"
+                    if existing.is_file():
+                        cols = json.loads(existing.read_text()).get("names") or cols
                 cols = cols[:n_in]
             if cols:
                 write_feature_json(name, head, cols, args.features_dir)
