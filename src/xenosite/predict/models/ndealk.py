@@ -16,7 +16,6 @@ from ..backends.onnx import OnnxBackend
 from ..errors import WeightsNotFound
 from ..features import load_names, matrix_from_rows, ndealk_bond_rows, ndealk_site_from_row_scores
 from ..registry import register_model
-from ..symmetry import broadcast_bond_scores_within_rdkit_groups, resolve_symmetry_group_mode
 from ..types import Molecule
 from ._base import BaseRunner
 
@@ -48,9 +47,7 @@ class NdealkFamily(BaseRunner):
                 "ndealk/isozyme ONNX missing bond. Run make convert-onnx MODEL=ndealk"
             )
         mol = self.rdkit_mol(molecule)
-        rows = ndealk_bond_rows(
-            mol, symmetry_group_mode=resolve_symmetry_group_mode(molecule._parameter)
-        )
+        rows = ndealk_bond_rows(mol, symmetry_group_mode=self.symmetry_group_mode(molecule))
         names = load_names("ndealk", "bond")
         if not names:
             raise WeightsNotFound(
@@ -123,13 +120,8 @@ class NdealkFamily(BaseRunner):
                 continue
             pred.append(float(val or 0.0))
         bond_pred = reorder_by_bond(pred, current, molecule.bonds.idx, fill=0.0)
-        if (
-            self._ndealk_site_mode(molecule) == "principled"
-            and resolve_symmetry_group_mode(molecule._parameter) == "rdkit"
-        ):
-            bond_pred = broadcast_bond_scores_within_rdkit_groups(
-                self.rdkit_mol(molecule), bond_pred
-            )
+        if self._ndealk_site_mode(molecule) == "principled":
+            bond_pred = self.symmetrize_bond_scores(molecule, bond_pred)
         append_bond(molecule, model=model, version=self.version, bond=bond_pred)
 
 

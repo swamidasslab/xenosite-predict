@@ -50,7 +50,8 @@ def predict(
         ``quinone_omp_mode`` is ``legacy`` (deterministic sorted BFS) for golden
         tests and ``principled`` (mean over all shortest-path indicators) for production;
         ``symmetry_group_mode`` is ``openbabel`` for golden parity and ``rdkit``
-        (default) for production bond-class deduplication and broadcast.
+        (default) for production bond-class deduplication and score pooling
+        (mean of active scores per class).
 
     Notes
     -----

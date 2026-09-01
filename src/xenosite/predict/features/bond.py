@@ -550,8 +550,9 @@ def ndealk_site_from_row_scores(
 
     ``principled`` (default, production API): one site key per symmetry class
     (RDKit by default; OpenBabel GID when ``symmetry_group_mode="openbabel"``).
-    The runner broadcasts the representative score to all bonds in the class when
-    using RDKit grouping.
+    The runner pools scores within the class when using RDKit grouping: the mean
+    of active bond scores when several differ, otherwise the single active score
+    is copied to all siblings.
 
     ``legacy`` (golden tests): emit a site key per row like ``prediction_df_to_dict``,
     including orphan ``max+1`` keys for some topo duplicates so bond vectors match

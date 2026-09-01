@@ -54,7 +54,10 @@ class EpoxidationRunner(BaseRunner):
         averaged = {k: float(np.mean(v)) for k, v in scores_by_bond.items()}
         keys = list(averaged)
         pred = [averaged[k] for k in keys]
-        bond_pred = reorder_by_bond(pred, keys, molecule.bonds.idx, fill=0.0)
+        bond_pred = self.symmetrize_bond_scores(
+            molecule,
+            reorder_by_bond(pred, keys, molecule.bonds.idx, fill=0.0),
+        )
 
         mol_score = float(np.mean(mol_scores)) if mol_scores else 0.0
         if not mol_scores and averaged:
