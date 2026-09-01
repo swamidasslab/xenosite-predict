@@ -87,8 +87,11 @@ class QuinoneRunner(BaseRunner):
         )
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
-        from ..numbering import legacy_ob_order_from_rows, map_legacy_pair_to_rdkit
-        from ..features import quinone_atom_rows
+        from ..numbering import (
+            build_group_to_rdkit_from_rows,
+            legacy_site_to_atom_vector,
+            map_legacy_quinone_site_pair_to_rdkit,
+        )
 
         raw_mol = native.get("mol", 0.0)
         if isinstance(raw_mol, dict) or raw_mol == {}:
@@ -98,10 +101,10 @@ class QuinoneRunner(BaseRunner):
         site = native.get("site") or native.get("pair") or {}
         mol = self.rdkit_mol(molecule)
         rows = quinone_atom_rows(mol)
-        ob_to_rd = {int(str(r["_index"]).split(".")[-1]): int(r["_atom"]) for r in rows}
-        row_ob_order = legacy_ob_order_from_rows(rows)
-        parsed: list[tuple[int, int, float]] = []
-        raw_ids: list[int] = []
+        group_to_rd = build_group_to_rdkit_from_rows(rows)
+        n = molecule.atoms.num
+
+        legacy_pair_scores: dict[tuple[int, int], float] = {}
         for key, val in (site.items() if isinstance(site, dict) else []):
             if isinstance(key, str) and "-" in key:
                 ia, ib = int(key.split("-", 1)[0]), int(key.split("-", 1)[1])
@@ -109,32 +112,32 @@ class QuinoneRunner(BaseRunner):
                 ia, ib = int(key[0]), int(key[1])
             else:
                 continue
-            raw_ids.extend([ia, ib])
-            parsed.append((ia, ib, 0.0 if val == {} else float(val)))
-        n = molecule.atoms.num
-        # Legacy REST site keys are always 1-based OpenBabel GetIdx() atom ids.
-        already_zero = False
-        legacy_ob_order = sorted(set(raw_ids)) or row_ob_order
-        pair_idx = []
-        pair = []
-        for ia, ib, score in parsed:
-            rd = map_legacy_pair_to_rdkit(
-                ia,
-                ib,
-                legacy_ob_order=legacy_ob_order,
-                n_heavy=n,
-                ob_to_rd=ob_to_rd,
-                already_zero_based=already_zero,
+            score = 0.0 if val == {} else float(val)
+            rd = map_legacy_quinone_site_pair_to_rdkit(
+                ia, ib, group_to_rd, zero_based_keys=True
             )
-            pair_idx.append(rd)
-            pair.append(score)
-        collect = [[] for _ in range(n)]
-        for (a, b), s in zip(pair_idx, pair):
-            if 0 <= a < n:
-                collect[a].append(s)
-            if 0 <= b < n:
-                collect[b].append(s)
-        atom_pred = [or_combine(p) for p in collect]
+            legacy_pair_scores[rd] = score
+
+        atom_site = native.get("atom") or {}
+        atom_scores_by_ob = {
+            int(k): float(v if v != {} else 0.0)
+            for k, v in (atom_site.items() if isinstance(atom_site, dict) else [])
+        }
+
+        pair_rows = quinone_pair_rows(mol, rows, atom_scores_by_ob)
+        pair_idx = [list(r["_atoms"]) for r in pair_rows]
+        pair = [legacy_pair_scores.get(tuple(r["_atoms"]), 0.0) for r in pair_rows]
+
+        atom_pred = legacy_site_to_atom_vector(atom_site, n)
+        if not any(atom_pred) and pair:
+            collect = [[] for _ in range(n)]
+            for (a, b), s in zip(pair_idx, pair):
+                if 0 <= a < n:
+                    collect[a].append(s)
+                if 0 <= b < n:
+                    collect[b].append(s)
+            atom_pred = [or_combine(p) for p in collect]
+
         append_atom_pair(
             molecule,
             model=self.name,

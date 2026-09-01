@@ -165,6 +165,40 @@ def test_quinone_pair_fields_skips_already_rdkit_golden():
     assert have["pair_idx"] == [[2, 17]]
 
 
+def test_map_legacy_quinone_group_pair():
+    from xenosite.predict.molecule import parse_smiles
+    from xenosite.predict.features import quinone_atom_rows
+    from xenosite.predict.numbering import (
+        build_group_to_rdkit_from_rows,
+        map_legacy_quinone_site_pair_to_rdkit,
+    )
+
+    mol, _ = parse_smiles(GAP_SMILES)
+    rows = quinone_atom_rows(mol)
+    group_to_rd = build_group_to_rdkit_from_rows(rows)
+    # legacy-test-api emits 0-based group ids (frozenset {3,4} -> "2-3")
+    assert map_legacy_quinone_site_pair_to_rdkit(2, 3, group_to_rd) == (2, 3)
+
+
+def test_from_legacy_quinone_pair_idx_matches_onnx():
+    from pathlib import Path
+
+    from xenosite.predict import predict
+    from xenosite.predict.backends.legacy import LegacyTestBackend
+    from xenosite.predict.backends.onnx import OnnxBackend
+
+    url = "http://127.0.0.1:8099"
+    be = LegacyTestBackend(url)
+    if not be.health():
+        pytest.skip("legacy-test-api not running")
+    onx = OnnxBackend(Path(__file__).resolve().parents[1] / "weights" / "onnx")
+    leg = predict(GAP_SMILES, models=["quinone"], backend=be)
+    ort = predict(GAP_SMILES, models=["quinone"], backend=onx)
+    lg = next(r for r in leg.results if r.model == "quinone")
+    og = next(r for r in ort.results if r.model == "quinone")
+    assert {tuple(p) for p in lg.pair_idx} == {tuple(p) for p in og.pair_idx}
+
+
 def test_ok_smiles_dense():
     site = {i: 0.1 for i in range(1, 14)}
     vec = legacy_site_to_atom_vector(site, 13)

@@ -178,7 +178,11 @@ def _serialize(obj):
 
 
 def _rdkit_site_dict(site):
-    """Convert OpenBabel 1-based atom indices in site/bond maps to 0-based RDKit."""
+    """Convert 1-based topological group ids in quinone site maps to 0-based keys.
+
+    Quinone ``site`` frozensets use topologically equivalent **group** numbers
+    (middle field of ``mol.group.atom``), not raw OpenBabel ``GetIdx()``.
+    """
     if not isinstance(site, dict):
         return site
     out = {}

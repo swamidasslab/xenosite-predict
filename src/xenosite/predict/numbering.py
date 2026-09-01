@@ -102,6 +102,11 @@ def parse_pattern_ob_index(index: str | int) -> int:
     return int(str(index).split(".")[-1])
 
 
+def parse_pattern_group(index: str | int) -> int:
+    """Middle field of AtomTD ``mol.group.atom`` pattern ids."""
+    return int(str(index).split(".")[1])
+
+
 def ordered_legacy_ob_keys(site_map: Mapping[Any, Any]) -> list[int]:
     """Sorted 1-based legacy score keys (heavy atoms only)."""
     lookup = legacy_atom_lookup(dict(site_map))
@@ -171,6 +176,17 @@ def build_ob_to_rdkit_from_rows(rows: Sequence[Mapping[str, Any]]) -> dict[int, 
     return out
 
 
+def build_group_to_rdkit_from_rows(rows: Sequence[Mapping[str, Any]]) -> dict[int, int]:
+    """Map topological group id → 0-based RDKit ``_atom`` (one row per group)."""
+    out: dict[int, int] = {}
+    for row in rows:
+        if "_index" not in row or "_atom" not in row:
+            continue
+        grp = parse_pattern_group(row["_index"])
+        out.setdefault(grp, int(row["_atom"]))
+    return out
+
+
 def legacy_ob_order_from_rows(rows: Sequence[Mapping[str, Any]]) -> list[int]:
     return [parse_pattern_ob_index(r["_index"]) for r in rows if "_index" in r]
 
@@ -185,12 +201,41 @@ def map_legacy_pair_to_rdkit(
     already_zero_based: bool = False,
 ) -> tuple[int, int]:
     """Map legacy pair atom ids to sorted 0-based RDKit indices."""
-    if ob_to_rd and not legacy_keys_are_gapped(list(legacy_ob_order), n_heavy):
-        ra = ob_to_rd.get(int(a) if not already_zero_based else int(a) + 1, map_legacy_ob_to_rdkit(a, legacy_ob_order, n_heavy, already_zero_based=already_zero_based))
-        rb = ob_to_rd.get(int(b) if not already_zero_based else int(b) + 1, map_legacy_ob_to_rdkit(b, legacy_ob_order, n_heavy, already_zero_based=already_zero_based))
+    if ob_to_rd:
+        ob_a = int(a) + 1 if already_zero_based else int(a)
+        ob_b = int(b) + 1 if already_zero_based else int(b)
+        ra = ob_to_rd.get(
+            ob_a,
+            map_legacy_ob_to_rdkit(a, legacy_ob_order, n_heavy, already_zero_based=already_zero_based),
+        )
+        rb = ob_to_rd.get(
+            ob_b,
+            map_legacy_ob_to_rdkit(b, legacy_ob_order, n_heavy, already_zero_based=already_zero_based),
+        )
     else:
         ra = map_legacy_ob_to_rdkit(a, legacy_ob_order, n_heavy, already_zero_based=already_zero_based)
         rb = map_legacy_ob_to_rdkit(b, legacy_ob_order, n_heavy, already_zero_based=already_zero_based)
+    return tuple(sorted((ra, rb)))
+
+
+def map_legacy_quinone_site_pair_to_rdkit(
+    a: int,
+    b: int,
+    group_to_rd: Mapping[int, int],
+    *,
+    zero_based_keys: bool = True,
+) -> tuple[int, int]:
+    """Map legacy quinone site keys (topological group ids) to RDKit pair indices.
+
+    ``legacy-test-api`` subtracts 1 from frozenset site keys before JSON encode,
+    so keys from :class:`LegacyTestBackend` are 0-based group numbers.
+    """
+    ga = int(a) + 1 if zero_based_keys else int(a)
+    gb = int(b) + 1 if zero_based_keys else int(b)
+    ra = group_to_rd.get(ga)
+    rb = group_to_rd.get(gb)
+    if ra is None or rb is None:
+        raise KeyError(f"unknown quinone group pair ({ga}, {gb})")
     return tuple(sorted((ra, rb)))
 
 
@@ -247,6 +292,7 @@ class QuinoneNormalizeContext:
     legacy_ob_order: tuple[int, ...]
     n_heavy: int
     ob_to_rd: tuple[tuple[int, int], ...]
+    group_to_rd: tuple[tuple[int, int], ...]
 
 
 def quinone_normalize_context_from_rows(
@@ -255,10 +301,12 @@ def quinone_normalize_context_from_rows(
 ) -> QuinoneNormalizeContext:
     """Build OB→RDKit pair map from quinone feature rows (same source as predict)."""
     ob_to_rd = build_ob_to_rdkit_from_rows(rows)
+    group_to_rd = build_group_to_rdkit_from_rows(rows)
     return QuinoneNormalizeContext(
         legacy_ob_order=tuple(legacy_ob_order_from_rows(rows)),
         n_heavy=n_heavy,
         ob_to_rd=tuple(sorted(ob_to_rd.items())),
+        group_to_rd=tuple(sorted(group_to_rd.items())),
     )
 
 
@@ -317,23 +365,96 @@ def quinone_pair_idx_needs_legacy_normalize(
     pair_idx: Sequence[Sequence[int]],
     n_heavy: int,
     ob_to_rd: Mapping[int, int] | None = None,
+    group_to_rd: Mapping[int, int] | None = None,
+    *,
+    canonical_pairs: set[tuple[int, int]] | None = None,
 ) -> bool:
-    """True when stored ``pair_idx`` still uses legacy OB atom ids."""
-    if not pair_idx or ob_to_rd is None:
+    """True when stored ``pair_idx`` still uses legacy site ids (OB or group)."""
+    if not pair_idx:
         return False
     raw_ids = [int(v) for pair in pair_idx for v in pair]
-    return not _pair_ids_already_rdkit(raw_ids, n_heavy, ob_to_rd)
+    pairs = [tuple(sorted((int(a), int(b)))) for a, b in pair_idx]
+    if canonical_pairs and pairs and all(p in canonical_pairs for p in pairs):
+        return False
+    if ob_to_rd and not _pair_ids_already_rdkit(raw_ids, n_heavy, ob_to_rd):
+        return True
+    if group_to_rd:
+        remapped = []
+        for a, b in pairs:
+            try:
+                remapped.append(
+                    map_legacy_quinone_site_pair_to_rdkit(
+                        a, b, group_to_rd, zero_based_keys=True
+                    )
+                )
+            except KeyError:
+                return False
+        if remapped and remapped != pairs:
+            return True
+    return False
+
+
+def _quinone_pairs_via_groups(
+    pair_idx: Sequence[Sequence[int]],
+    pair: Sequence[float],
+    group_to_rd: Mapping[int, int],
+    *,
+    zero_based_keys: bool = True,
+) -> dict[str, list]:
+    mapped: list[tuple[tuple[int, int], float]] = []
+    for idxs, score in zip(pair_idx, pair):
+        a, b = int(idxs[0]), int(idxs[1])
+        key = map_legacy_quinone_site_pair_to_rdkit(
+            a, b, group_to_rd, zero_based_keys=zero_based_keys
+        )
+        mapped.append((key, float(score)))
+    mapped.sort()
+    return {
+        "pair_idx": [list(i) for i, _ in mapped],
+        "pair": [x for _, x in mapped],
+    }
+
+
+def _canonical_quinone_pairs(
+    rows: Sequence[Mapping[str, Any]],
+    mol: Any,
+) -> set[tuple[int, int]]:
+    from .features.quinone import quinone_pair_rows
+
+    pair_rows = quinone_pair_rows(mol, list(rows), {})
+    return {tuple(r["_atoms"]) for r in pair_rows}
 
 
 def _apply_quinone_context(fields: dict[str, Any], ctx: QuinoneNormalizeContext) -> None:
     if "pair_idx" not in fields or "pair" not in fields:
         return
-    normalize_legacy_quinone_fields(
-        fields,
-        legacy_ob_order=ctx.legacy_ob_order,
-        n_heavy=ctx.n_heavy,
-        ob_to_rd=dict(ctx.ob_to_rd),
-    )
+    group_map = dict(ctx.group_to_rd)
+    ob_map = dict(ctx.ob_to_rd)
+    raw_ids = [int(v) for pair in fields["pair_idx"] for v in pair]
+    pairs = [tuple(sorted((int(a), int(b)))) for a, b in fields["pair_idx"]]
+    if group_map and pairs:
+        try:
+            remapped = [
+                map_legacy_quinone_site_pair_to_rdkit(a, b, group_map, zero_based_keys=True)
+                for a, b in pairs
+            ]
+        except KeyError:
+            remapped = []
+        if remapped and remapped != pairs:
+            norm = _quinone_pairs_via_groups(fields["pair_idx"], fields["pair"], group_map)
+            fields["pair_idx"] = norm["pair_idx"]
+            fields["pair"] = norm["pair"]
+            return
+    if ob_map and not _pair_ids_already_rdkit(raw_ids, ctx.n_heavy, ob_map):
+        norm = quinone_pairs_to_rdkit(
+            fields["pair_idx"],
+            fields["pair"],
+            legacy_ob_order=ctx.legacy_ob_order,
+            n_heavy=ctx.n_heavy,
+            ob_to_rd=ob_map,
+        )
+        fields["pair_idx"] = norm["pair_idx"]
+        fields["pair"] = norm["pair"]
 
 
 def normalize_quinone_legacy_pair_fields(
@@ -367,10 +488,24 @@ def normalize_quinone_pair_fields(
     """Normalize golden legacy pairs; ONNX ``have`` is already RDKit by default."""
     ctx = _resolve_quinone_context(mol=mol, rows=rows, n_heavy=n_heavy, smiles=smiles)
     ob_map = dict(ctx.ob_to_rd)
-    if quinone_pair_idx_needs_legacy_normalize(want.get("pair_idx") or [], ctx.n_heavy, ob_map):
+    group_map = dict(ctx.group_to_rd)
+    canonical: set[tuple[int, int]] | None = None
+    if mol is not None and rows is not None:
+        canonical = _canonical_quinone_pairs(rows, mol)
+    elif mol is not None:
+        from .features import quinone_atom_rows
+
+        canonical = _canonical_quinone_pairs(quinone_atom_rows(mol), mol)
+    norm_kw = dict(
+        n_heavy=ctx.n_heavy,
+        ob_to_rd=ob_map,
+        group_to_rd=group_map,
+        canonical_pairs=canonical,
+    )
+    if quinone_pair_idx_needs_legacy_normalize(want.get("pair_idx") or [], **norm_kw):
         _apply_quinone_context(want, ctx)
     if normalize_have and quinone_pair_idx_needs_legacy_normalize(
-        have.get("pair_idx") or [], ctx.n_heavy, ob_map
+        have.get("pair_idx") or [], **norm_kw
     ):
         _apply_quinone_context(have, ctx)
 
