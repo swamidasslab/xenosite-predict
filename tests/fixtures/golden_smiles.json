@@ -1,12 +1,14 @@
 [
   {
+    "model": "epoxidation",
     "smiles": "CC(=Cc1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
     "name": "Metazamide",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.316959872841835,
         "bond": [
           0.0004642307758331299,
           0.2640797644853592,
@@ -36,20 +38,19 @@
           0.0011590272188186646,
           0.000646635890007019,
           0.00014448165893554688
-        ],
-        "mol": 0.316959872841835
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CC(=Cc1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
     "name": "Metazamide",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.6799003481864929,
         "atom": [
           0.07691255211830139,
@@ -83,7 +84,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.37193381786346436,
         "atom": [
           0.04921349883079529,
@@ -117,7 +117,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.3256753385066986,
         "atom": [
           0.0013200044631958008,
@@ -151,7 +150,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.4073214530944824,
         "atom": [
           0.1680956482887268,
@@ -872,14 +870,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CC(=Cc1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
     "name": "Metazamide",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.0009678304195404053,
           0.0,
@@ -1592,13 +1590,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CC(=O)Oc1ccccc1C(=O)O",
     "name": "Aspirin",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.08034025132656097,
         "bond": [
           0.006790280342102051,
           0.018031463027000427,
@@ -1613,20 +1613,19 @@
           0.005537077784538269,
           1.3947486877441406e-05,
           0.0017687976360321045
-        ],
-        "mol": 0.08034025132656097
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CC(=O)Oc1ccccc1C(=O)O",
     "name": "Aspirin",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.27600765228271484,
         "atom": [
           0.02504059672355652,
@@ -1647,7 +1646,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.18559762835502625,
         "atom": [
           0.008271545171737671,
@@ -1668,7 +1666,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.16364112496376038,
         "atom": [
           0.001801222562789917,
@@ -1689,7 +1686,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.17599302530288696,
         "atom": [
           0.002217411994934082,
@@ -1844,14 +1840,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CC(=O)Oc1ccccc1C(=O)O",
     "name": "Aspirin",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           2.5331974029541016e-05,
           2.86102294921875e-06,
@@ -2261,13 +2257,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "COCCc1ccc(OCC(O)CNC(C)C)cc1",
     "name": "Metoprolol",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.11761823296546936,
         "bond": [
           3.091990947723389e-05,
           3.3736228942871094e-05,
@@ -2288,20 +2286,19 @@
           0.013223841786384583,
           0.005451306700706482,
           0.008758604526519775
-        ],
-        "mol": 0.11761823296546936
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "COCCc1ccc(OCC(O)CNC(C)C)cc1",
     "name": "Metoprolol",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.25966089963912964,
         "atom": [
           0.09559601545333862,
@@ -2328,7 +2325,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.23101434111595154,
         "atom": [
           0.19459661841392517,
@@ -2355,7 +2351,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.2684725224971771,
         "atom": [
           0.15714901685714722,
@@ -2382,7 +2377,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.23170003294944763,
         "atom": [
           0.13662996888160706,
@@ -2555,14 +2549,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "COCCc1ccc(OCC(O)CNC(C)C)cc1",
     "name": "Metoprolol",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.0014196932315826416,
           0.005030959844589233,
@@ -3098,13 +3092,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CN1C(C(=O)Nc2nccs2)=C(O)c2ccccc2S1(=O)=O",
     "name": "Sudoxicam",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.93324413895607,
         "bond": [
           0.00032173097133636475,
           0.0006333142518997192,
@@ -3130,20 +3126,19 @@
           8.165836334228516e-06,
           0.00011032819747924805,
           0.002142980694770813
-        ],
-        "mol": 0.93324413895607
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CN1C(C(=O)Nc2nccs2)=C(O)c2ccccc2S1(=O)=O",
     "name": "Sudoxicam",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.6043281555175781,
         "atom": [
           0.01976323127746582,
@@ -3173,7 +3168,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.39016789197921753,
         "atom": [
           0.04752233624458313,
@@ -3203,7 +3197,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.1823480725288391,
         "atom": [
           0.042748451232910156,
@@ -3233,7 +3226,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.326673686504364,
         "atom": [
           0.1295698881149292,
@@ -3617,14 +3609,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CN1C(C(=O)Nc2nccs2)=C(O)c2ccccc2S1(=O)=O",
     "name": "Sudoxicam",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.0009943842887878418,
           0.0015104711055755615,
@@ -4253,13 +4245,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "C=C(C=O)c1ccccc1",
     "name": "Atropaldehyde",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.5036432147026062,
         "bond": [
           0.43620385229587555,
           0.009807884693145752,
@@ -4271,20 +4265,19 @@
           0.07572995126247406,
           0.01870693266391754,
           0.00810176134109497
-        ],
-        "mol": 0.5036432147026062
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "C=C(C=O)c1ccccc1",
     "name": "Atropaldehyde",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.9010226130485535,
         "atom": [
           0.9840699434280396,
@@ -4302,7 +4295,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.7474408745765686,
         "atom": [
           0.9069889783859253,
@@ -4320,7 +4312,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.4622188210487366,
         "atom": [
           0.018606245517730713,
@@ -4338,7 +4329,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.828438937664032,
         "atom": [
           0.7042893171310425,
@@ -4484,14 +4474,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "C=C(C=O)c1ccccc1",
     "name": "Atropaldehyde",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.0006983578205108643,
           8.940696716308594e-08,
@@ -4838,13 +4828,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CCN(CC)Cc1cc(Nc2ccnc3cc(Cl)ccc23)ccc1O",
     "name": "Amodiaquine",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.29525744915008545,
         "bond": [
           0.0003978908061981201,
           0.0001825094223022461,
@@ -4873,20 +4865,19 @@
           0.016393810510635376,
           0.0003568977117538452,
           7.878243923187256e-05
-        ],
-        "mol": 0.29525744915008545
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CCN(CC)Cc1cc(Nc2ccnc3cc(Cl)ccc23)ccc1O",
     "name": "Amodiaquine",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.3430536389350891,
         "atom": [
           0.019572466611862183,
@@ -4919,7 +4910,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.2785283327102661,
         "atom": [
           0.02927219867706299,
@@ -4952,7 +4942,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.4100082814693451,
         "atom": [
           0.0024775266647338867,
@@ -4985,7 +4974,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.3219074308872223,
         "atom": [
           0.37633171677589417,
@@ -5628,14 +5616,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CCN(CC)Cc1cc(Nc2ccnc3cc(Cl)ccc23)ccc1O",
     "name": "Amodiaquine",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           6.61015510559082e-05,
           2.60770320892334e-05,
@@ -6327,13 +6315,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CN(C)CCOC(c1ccccc1)c1ccccc1",
     "name": "Diphenhydramine",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.505842387676239,
         "bond": [
           0.0001064687967300415,
           0.0001064687967300415,
@@ -6355,20 +6345,19 @@
           0.08641916513442993,
           0.031172454357147217,
           0.031172454357147217
-        ],
-        "mol": 0.505842387676239
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CN(C)CCOC(c1ccccc1)c1ccccc1",
     "name": "Diphenhydramine",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.5666677355766296,
         "atom": [
           0.003434091806411743,
@@ -6395,7 +6384,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.3871944546699524,
         "atom": [
           0.02087727189064026,
@@ -6422,7 +6410,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.6463645100593567,
         "atom": [
           0.33435094356536865,
@@ -6449,7 +6436,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.5388967990875244,
         "atom": [
           0.026781976222991943,
@@ -6878,14 +6864,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CN(C)CCOC(c1ccccc1)c1ccccc1",
     "name": "Diphenhydramine",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.00010102987289428711,
           0.8064320683479309,
@@ -7436,13 +7422,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CS(=O)(=O)c1ccc(-c2cn3ccccc3n2)cc1",
     "name": "Zolimidine",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.9180378615856171,
         "bond": [
           4.717707633972168e-05,
           0.00017119944095611572,
@@ -7465,20 +7453,19 @@
           0.0533541738986969,
           1.1160969734191895e-05,
           8.940696716308594e-06
-        ],
-        "mol": 0.9180378615856171
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CS(=O)(=O)c1ccc(-c2cn3ccccc3n2)cc1",
     "name": "Zolimidine",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.43733179569244385,
         "atom": [
           0.06617090106010437,
@@ -7505,7 +7492,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.21766862273216248,
         "atom": [
           0.0282747745513916,
@@ -7532,7 +7518,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.23173528909683228,
         "atom": [
           0.005358785390853882,
@@ -7559,7 +7544,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.23285159468650818,
         "atom": [
           0.011487096548080444,
@@ -8049,14 +8033,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CS(=O)(=O)c1ccc(-c2cn3ccccc3n2)cc1",
     "name": "Zolimidine",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           4.914402961730957e-05,
           5.662441253662109e-07,
@@ -8622,13 +8606,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "O=C(Br)C(F)(F)F",
     "name": "Trifluoroacetyl Bromide",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.33400776982307434,
         "bond": [
           0.02676960825920105,
           0.00024840235710144043,
@@ -8636,20 +8622,19 @@
           0.0006433725357055664,
           0.0006433725357055664,
           0.0006433725357055664
-        ],
-        "mol": 0.33400776982307434
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "O=C(Br)C(F)(F)F",
     "name": "Trifluoroacetyl Bromide",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.2843989133834839,
         "atom": [
           1.2367963790893555e-05,
@@ -8664,7 +8649,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.2264622449874878,
         "atom": [
           0.00012120604515075684,
@@ -8679,7 +8663,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.18422725796699524,
         "atom": [
           0.00029021501541137695,
@@ -8694,7 +8677,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.29231083393096924,
         "atom": [
           0.007208496332168579,
@@ -8753,14 +8735,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "O=C(Br)C(F)(F)F",
     "name": "Trifluoroacetyl Bromide",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.2935258150100708,
           0.0,
@@ -9029,13 +9011,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CC(C)C(Br)C(=O)NC(N)=O",
     "name": "Bromisoval",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.06909744441509247,
         "bond": [
           0.004902273416519165,
           0.004902273416519165,
@@ -9047,20 +9031,19 @@
           5.099177360534668e-05,
           0.0003028064966201782,
           0.010045602917671204
-        ],
-        "mol": 0.06909744441509247
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CC(C)C(Br)C(=O)NC(N)=O",
     "name": "Bromisoval",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.5894700288772583,
         "atom": [
           0.08067071437835693,
@@ -9079,7 +9062,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.3906487822532654,
         "atom": [
           0.006009221076965332,
@@ -9098,7 +9080,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.32078006863594055,
         "atom": [
           0.019834786653518677,
@@ -9117,7 +9098,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.39711427688598633,
         "atom": [
           0.02384096384048462,
@@ -9188,14 +9168,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CC(C)C(Br)C(=O)NC(N)=O",
     "name": "Bromisoval",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.0007086098194122314,
           3.2782554626464844e-07,
@@ -9548,13 +9528,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CCC(=O)OC1CCC2C3CCC4=CC(=O)CCC4(C)C3CCC12C",
     "name": "Testosterone Propionate",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.2239246815443039,
         "bond": [
           0.0001169443130493164,
           0.003759130835533142,
@@ -9584,20 +9566,19 @@
           0.0016540586948394775,
           0.010637253522872925,
           0.011014699935913086
-        ],
-        "mol": 0.2239246815443039
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CCC(=O)OC1CCC2C3CCC4=CC(=O)CCC4(C)C3CCC12C",
     "name": "Testosterone Propionate",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.6184744834899902,
         "atom": [
           0.012616723775863647,
@@ -9630,7 +9611,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.12272173166275024,
         "atom": [
           0.011514157056808472,
@@ -9663,7 +9643,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.11447933316230774,
         "atom": [
           0.000883638858795166,
@@ -9696,7 +9675,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.1360602080821991,
         "atom": [
           0.15355119109153748,
@@ -10495,14 +10473,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CCC(=O)OC1CCC2C3CCC4=CC(=O)CCC4(C)C3CCC12C",
     "name": "Testosterone Propionate",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.00016418099403381348,
           4.708766937255859e-06,
@@ -11209,13 +11187,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "C(=Cc1ccccc1)CN1CCN(C(c2ccccc2)c2ccccc2)CC1",
     "name": "Cinnarizine",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.7733091711997986,
         "bond": [
           0.46678149700164795,
           3.536045551300049e-05,
@@ -11248,20 +11228,19 @@
           0.00022195279598236084,
           0.018210232257843018,
           0.018210232257843018
-        ],
-        "mol": 0.7733091711997986
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "C(=Cc1ccccc1)CN1CCN(C(c2ccccc2)c2ccccc2)CC1",
     "name": "Cinnarizine",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.7323673367500305,
         "atom": [
           0.2059554159641266,
@@ -11297,7 +11276,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.4549084007740021,
         "atom": [
           0.193803071975708,
@@ -11333,7 +11311,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.6456289887428284,
         "atom": [
           0.002501159906387329,
@@ -11369,7 +11346,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.5794098377227783,
         "atom": [
           0.6479556560516357,
@@ -12652,14 +12628,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "C(=Cc1ccccc1)CN1CCN(C(c2ccccc2)c2ccccc2)CC1",
     "name": "Cinnarizine",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           2.980232238769531e-07,
           2.682209014892578e-07,
@@ -13429,13 +13405,15 @@
     ]
   },
   {
+    "model": "epoxidation",
     "smiles": "CN(CC=CC#CC(C)(C)C)Cc1cccc2ccccc12",
     "name": "Terbinafine",
-    "model": "epoxidation",
+    "error": null,
     "results": [
       {
         "model": "epoxidation",
         "version": "0",
+        "mol": 0.6805004924535751,
         "bond": [
           7.309019565582275e-05,
           7.018446922302246e-05,
@@ -13460,20 +13438,19 @@
           0.0017364323139190674,
           0.0009984076023101807,
           5.5983662605285645e-05
-        ],
-        "mol": 0.6805004924535751
+        ]
       }
     ]
   },
   {
+    "model": "reactivity",
     "smiles": "CN(CC=CC#CC(C)(C)C)Cc1cccc2ccccc12",
     "name": "Terbinafine",
-    "model": "reactivity",
+    "error": null,
     "results": [
       {
         "model": "reactivity.gsh",
         "version": "0",
-        "bond": null,
         "mol": 0.45414233207702637,
         "atom": [
           0.0065087974071502686,
@@ -13503,7 +13480,6 @@
       {
         "model": "reactivity.protein",
         "version": "0",
-        "bond": null,
         "mol": 0.19088652729988098,
         "atom": [
           0.04632052779197693,
@@ -13533,7 +13509,6 @@
       {
         "model": "reactivity.cyanide",
         "version": "0",
-        "bond": null,
         "mol": 0.4238516688346863,
         "atom": [
           0.35578227043151855,
@@ -13563,7 +13538,6 @@
       {
         "model": "reactivity.dna",
         "version": "0",
-        "bond": null,
         "mol": 0.26821595430374146,
         "atom": [
           0.027594178915023804,
@@ -13896,14 +13870,14 @@
     ]
   },
   {
+    "model": "ugt",
     "smiles": "CN(CC=CC#CC(C)(C)C)Cc1cccc2ccccc12",
     "name": "Terbinafine",
-    "model": "ugt",
+    "error": null,
     "results": [
       {
         "model": "ugt",
         "version": "0",
-        "bond": null,
         "atom": [
           0.0002003312110900879,
           0.8160669803619385,
