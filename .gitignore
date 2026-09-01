@@ -23,6 +23,7 @@ htmlcov/
 # Local model artifacts — never commit weights or extracted legacy trees
 weights/legacy/
 weights/onnx/
+weights/*.tgz
 weights/**/*.onnx
 weights/**/*.safetensors
 weights/**/*.model

@@ -8,8 +8,9 @@ IMAGE ?= dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api
 LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
 LEGACY_REPLICAS ?= 24
 TARBALL ?= ../xenosite-legacy/data/xenosite_legacy_data_trimmed.tgz
+ONNX_TARBALL ?= weights/xenosite_onnx.tgz
 
-.PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) test test-golden test-live \
+.PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
 	capture-suite-onnx gather-golden drift-report drift-descriptors help \
 	regather-ob-dumps regather-golden-onnx
@@ -18,6 +19,8 @@ help:
 	@echo "extract-weights     copy pickles/TSV/source from $(IMAGE) into weights/legacy/"
 	@echo "convert-onnx        pickle → safetensors → ONNX (all models)"
 	@echo "convert-onnx MODEL=epoxidation"
+	@echo "pack-onnx           tarball of *.onnx + *.meta.json (no _dump) → $(ONNX_TARBALL)"
+	@echo "extract-onnx        unpack $(ONNX_TARBALL) into weights/onnx/"
 	@echo "test                unit tests, Docker-free (-n auto via pyproject.toml)"
 	@echo "test-golden         golden_descriptor_suite ONNX parity (-n auto)"
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
@@ -37,6 +40,12 @@ extract-weights:
 
 convert-onnx:
 	$(CONVERT) tools/convert_onnx.py --src weights/legacy --out weights/onnx $(if $(MODEL),--model $(MODEL),)
+
+pack-onnx:
+	$(PYTHON) tools/pack_onnx.py --src weights/onnx --out $(ONNX_TARBALL)
+
+extract-onnx:
+	$(PYTHON) tools/pack_onnx.py --extract --src weights/onnx --out $(ONNX_TARBALL)
 
 test:
 	$(PYTEST) -m "not live"
