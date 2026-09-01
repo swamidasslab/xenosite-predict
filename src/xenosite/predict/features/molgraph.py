@@ -56,10 +56,11 @@ class MolGraph:
         return dist, v2i
 
     def shortest_path(self, s: int, e: int) -> list[int]:
-        """One minimum-length path. Neighbors are visited in sorted index order.
+        """One minimum-length path; neighbors visited in sorted atom-index order.
 
-        Legacy code iterated ``set`` neighbors in CPython 2.7 hash order, so
-        tied BFS paths were machine-dependent. We do not replicate that.
+        Legacy quinone OMP used vendored ``UndirectedGraph.shortest_path`` (one
+        BFS path). CPython 2.7 iterated ``set`` neighbors in hash order; we use
+        sorted indices so the tie-break is deterministic in Python 3.
         """
         if s == e:
             return [s]

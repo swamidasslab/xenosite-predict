@@ -7,6 +7,7 @@ reactivity copy (reduced set, no EDG/EWG/OMP). OpenBabel is internal.
 from __future__ import annotations
 
 from collections import OrderedDict
+from typing import Literal
 
 from . import _ob
 from .bond import ATOM_SYMBOLS, HYB, NOUTER
@@ -53,10 +54,12 @@ class AtomTD:
         reduced_descriptor_set: bool = False,
         add_possible_site: bool = False,
         max_depth: int = 5,
+        omp_mode: Literal["principled", "legacy"] = "principled",
     ) -> None:
         self.pymol = pymol
         self.molnum = molnum
         self.reduced_descriptor_set = reduced_descriptor_set
+        self.omp_mode = omp_mode if omp_mode in ("principled", "legacy") else "principled"
         self.add_possible_site = add_possible_site
         self.max_depth = max_depth
         self.broken = False
@@ -353,15 +356,17 @@ class AtomTD:
         return add
 
     def _paths_for_omp(self, start: int, end: int, sym: str) -> list[list[int]]:
-        """Shortest paths used for ortho/meta/para atom features.
-
-        Legacy OMP used one BFS path (CPython 2.7 ``set`` neighbor order). We use
-        ``all_shortest_paths`` for most elements so features do not depend on hash
-        order. Sulfur is an exception: taking *any* shortest path can mark
-        ``Ortho_To_S`` on fused thiadiazine/benzene sites (Sudoxicam ob=12) where
-        legacy OMP returned 0, shifting the top pair score by ~0.07 mol.
-        """
+        """Shortest paths used for ortho/meta/para atom features."""
+        if self.omp_mode == "legacy":
+            p = self.MG.shortest_path(start, end)
+            return [p] if p else []
         if sym == "S":
+            p = self.MG.shortest_path(start, end)
+            return [p] if p else []
+        return self.MG.all_shortest_paths(start, end)
+
+    def _paths_for_omp_motif(self, start: int, end: int) -> list[list[int]]:
+        if self.omp_mode == "legacy":
             p = self.MG.shortest_path(start, end)
             return [p] if p else []
         return self.MG.all_shortest_paths(start, end)
@@ -404,7 +409,7 @@ class AtomTD:
                     [
                         p
                         for end in ends
-                        for p in self.MG.all_shortest_paths(start, end)
+                        for p in self._paths_for_omp_motif(start, end)
                     ]
                     for start, ends in typed
                 ]

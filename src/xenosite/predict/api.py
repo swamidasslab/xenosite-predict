@@ -46,7 +46,9 @@ def predict(
     _parameter:
         Internal per-call options (not part of the public HTTP API). Runners
         read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
-        for golden parity tests and ``principled`` (default) for production.
+        for golden parity tests and ``principled`` (default) for production;
+        ``quinone_omp_mode`` is ``legacy`` (deterministic sorted BFS) for golden
+        tests and ``principled`` (``all_shortest_paths``) for production.
 
     Notes
     -----
