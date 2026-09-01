@@ -19,6 +19,68 @@ BondNringsMode = Literal["legacy", "principled"]
 _ACTIVE_ATOL = 1e-12
 
 
+def directed_bondtd_pair(row: Mapping[str, Any]) -> tuple[int, int]:
+    """Directed BondTD / Bond_and_LonePair endpoints from ``_index`` ``…a.b`` (1-based OB)."""
+    parts = str(row["_index"]).split(".")
+    return int(parts[-2]), int(parts[-1])
+
+
+def collapse_opposite_direction_rows(
+    rows: list[dict],
+    scores: Sequence[float] | Any,
+) -> tuple[list[dict], Any]:
+    """Max-merge scores when both ``(a, b)`` and ``(b, a)`` descriptor rows exist.
+
+    Phase1 and ndealk BondTD tables can list the same heavy-atom bond in both
+    directions; only one direction may appear for a given bond. When both exist,
+    take the per-column max, then keep one representative row.
+    """
+    import numpy as np
+
+    if not rows:
+        return [], np.asarray(scores, dtype=float)
+    arr = np.asarray(scores, dtype=float)
+    if arr.ndim == 1:
+        arr = arr.reshape(-1, 1)
+    elif arr.shape[0] != len(rows) and arr.shape[1] == len(rows):
+        arr = arr.T
+    if arr.shape[0] != len(rows):
+        raise ValueError(f"scores length {arr.shape[0]} != rows {len(rows)}")
+
+    groups: list[list[int]] = []
+    seen: set[int] = set()
+    dir_to_idx = {directed_bondtd_pair(row): i for i, row in enumerate(rows)}
+    for i, row in enumerate(rows):
+        if i in seen:
+            continue
+        a, b = directed_bondtd_pair(row)
+        if a == b:
+            groups.append([i])
+            seen.add(i)
+            continue
+        rev = dir_to_idx.get((b, a))
+        if rev is not None and rev not in seen:
+            groups.append([i, rev])
+            seen.add(i)
+            seen.add(rev)
+        else:
+            groups.append([i])
+            seen.add(i)
+
+    out_rows: list[dict] = []
+    out_scores: list[np.ndarray] = []
+    for members in groups:
+        block = arr[members]
+        merged = block.max(axis=0)
+        rep = members[int(np.argmax(block[:, 0]))]
+        out_rows.append(rows[rep])
+        out_scores.append(merged)
+    out_arr = np.vstack(out_scores)
+    if out_arr.shape[1] == 1:
+        return out_rows, out_arr.reshape(-1)
+    return out_rows, out_arr
+
+
 def resolve_symmetry_group_mode(parameter: Mapping[str, Any] | None) -> SymmetryGroupMode:
     mode = (parameter or {}).get("symmetry_group_mode", "rdkit")
     return mode if mode in ("rdkit", "openbabel") else "rdkit"

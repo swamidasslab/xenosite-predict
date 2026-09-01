@@ -20,6 +20,7 @@ from ..features import load_names, matrix_from_rows, phase1_rows
 from ..features.bond_lonepair import phase1_pymol
 from ..features.phase1_mol import phase1_mol_features
 from ..registry import register_model
+from ..symmetry import collapse_opposite_direction_rows
 from ..types import Molecule
 from ._base import BaseRunner
 
@@ -134,6 +135,7 @@ class Phase1Runner(BaseRunner):
         site_scores = np.asarray(backend.run_head(self.name, "site", x), dtype=np.float64)
         if site_scores.ndim == 1:
             site_scores = site_scores.reshape(-1, len(_LEGACY_HEADS))
+        rows, site_scores = collapse_opposite_direction_rows(rows, site_scores)
         groups = [str(r["_index"]).split(".")[1] for r in rows]
         site_scores = _topology_pool(site_scores, groups)
 

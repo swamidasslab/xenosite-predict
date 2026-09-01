@@ -1,6 +1,7 @@
 """Feature unit tests. OpenBabel is a runtime dependency (PyPI wheel)."""
 
 import numpy as np
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -93,6 +94,29 @@ def test_two_orderings_swap_atom_blocks():
     b = bond_rows(mol, original_atom_ordering=False)
     assert a[0]["_atoms"] != b[0]["_atoms"] or True
     assert "BondDescriptor__Single" in a[0]
+
+
+def test_collapse_opposite_direction_rows_maxes_when_both_exist():
+    from xenosite.predict.symmetry import collapse_opposite_direction_rows
+
+    rows = [
+        {"_index": "1.1.2", "_atoms": (0, 1)},
+        {"_index": "1.2.1", "_atoms": (1, 0)},
+        {"_index": "1.3.4", "_atoms": (2, 3)},
+    ]
+    out_rows, out_scores = collapse_opposite_direction_rows(rows, [0.2, 0.9, 0.5])
+    assert len(out_rows) == 2
+    assert out_scores[0] == pytest.approx(0.9)
+    assert out_scores[1] == pytest.approx(0.5)
+
+
+def test_collapse_opposite_direction_rows_keeps_singleton_direction():
+    from xenosite.predict.symmetry import collapse_opposite_direction_rows
+
+    rows = [{"_index": "1.3.4", "_atoms": (2, 3)}]
+    out_rows, out_scores = collapse_opposite_direction_rows(rows, [0.42])
+    assert len(out_rows) == 1
+    assert out_scores[0] == pytest.approx(0.42)
 
 
 def test_ugt_atom_count():

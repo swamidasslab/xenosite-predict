@@ -585,9 +585,13 @@ def ndealk_site_from_row_scores(
     including orphan ``max+1`` keys for some topo duplicates so bond vectors match
     legacy-test-api golden captures.
     """
+    from ..symmetry import collapse_opposite_direction_rows
+
     scores = [float(v) for v in pred]
     if not rows:
         return {}
+    rows, collapsed = collapse_opposite_direction_rows(rows, scores)
+    scores = collapsed.tolist()
     if mode == "principled":
         seen: set[tuple[int, ...]] = set()
         site: dict[str, float] = {}

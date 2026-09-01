@@ -256,10 +256,10 @@ def test_chapter_3_rdkit_pooling_averages_different_scores_in_one_class():
 
 
 def test_chapter_3_epoxidation_rdkit_pooling_fixes_fused_polycyclics():
-    """Epoxidation averages orderings, then pools within RDKit classes on the vector.
+    """Epoxidation averages dual orderings, then pools within RDKit classes on the vector.
 
-    Without pooling, dual-ordering ONNX averages can leave ~0.01 score gaps
-    between bonds RDKit considers equivalent (e.g. dibenzofuran). Production
+    Without pooling, dual-ordering ONNX averages can leave ~0.01 score gaps between
+    bonds RDKit considers equivalent (e.g. dibenzofuran). Production
     ``symmetry_group_mode=rdkit`` sets each class to the mean of its active bond
     scores. Golden uses ``openbabel`` so bond vectors stay identical to fixtures.
     """
