@@ -36,12 +36,12 @@ def test_list_models_without_backend(tmp_path, monkeypatch):
 
 
 def test_list_models_local_onnx():
-    from tests.support import ROOT
+    from tests.support import onnx_root
     from xenosite.predict.features import _ob
 
-    rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(ROOT / "weights" / "onnx")})
+    rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(onnx_root())})
     by = {r["name"]: r for r in rows}
-    if (ROOT / "weights" / "onnx" / "epoxidation").exists():
+    if (onnx_root() / "epoxidation").exists():
         if _ob.installed():
             assert by["epoxidation"]["available"] is True
         else:

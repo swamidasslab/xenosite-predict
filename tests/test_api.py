@@ -8,7 +8,7 @@ from xenosite.predict import list_models, predict
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.features import _ob
 
-from tests.support import ROOT, onnx_weights_present
+from tests.support import ROOT, onnx_weights_present, onnx_root
 
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 
@@ -28,7 +28,7 @@ def test_predict_single_model(model):
         pytest.skip(f"no ONNX for {model}")
     if not _ob.installed():
         pytest.skip("OpenBabel not installed")
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(ASPIRIN, model=model, backend=be)
     assert mol.smiles
     assert mol.atoms.num >= 2
@@ -42,7 +42,7 @@ def test_predict_multi_model_appends():
         pytest.skip("missing ONNX weights")
     if not _ob.installed():
         pytest.skip("OpenBabel not installed")
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(ASPIRIN, models=["epoxidation", "quinone"], backend=be)
     heads = {r.model for r in mol.results}
     assert "epoxidation" in heads
@@ -54,7 +54,7 @@ def test_predict_reuses_molecule_object():
         pytest.skip("no epoxidation ONNX")
     if not _ob.installed():
         pytest.skip("OpenBabel not installed")
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(ASPIRIN, model="epoxidation", backend=be)
     n0 = len(mol.results)
     mol2 = predict(mol, model="quinone", backend=be)
@@ -63,7 +63,7 @@ def test_predict_reuses_molecule_object():
 
 
 def test_list_models_reports_phase1():
-    rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(ROOT / "weights" / "onnx")})
+    rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(onnx_root())})
     by = {r["name"]: r for r in rows}
     assert "phase1" in by
     assert by["phase1"]["two_stage"] is True

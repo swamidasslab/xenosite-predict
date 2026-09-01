@@ -28,11 +28,12 @@ from tests.support import (
     golden_score_fields,
     load_golden_suite,
     onnx_weights_present,
+    onnx_root,
 )
 
 from tests.v0_legacy.rdkit_equiv import assert_bond_scores_symmetric, bond_symmetry_groups
 
-BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
+BACKEND = OnnxBackend(onnx_root())
 
 NDEALK_DIVERGENT = "COc1ccc2nc(C)cc(NCCCN3CCOCC3)c2c1"
 TOP_OUTLIER = "O=C1c2ccccc2-c2c1cccc2N1CCNCC1"

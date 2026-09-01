@@ -6,7 +6,8 @@ This directory holds **local-only** artifacts. Nothing here except this README a
 
 ```
 weights/
-  onnx/<model>/<head>.onnx     # converted inference graphs
+  onnx/v0/<model>/<head>.onnx  # v0 converted inference graphs
+  onnx/v1/                     # later generation (not yet)
   legacy/                      # extracted pickles, TSV headers, vendored NN/descriptor trees
 ```
 
@@ -17,13 +18,13 @@ From the package root:
 ```
 make extract-weights    # copy from xenosite-legacy:api (or fallback tarball)
 make convert-onnx       # pickle → safetensors → ONNX (needs the extract)
-make pack-onnx          # weights/xenosite_onnx.tgz  (*.onnx + *.meta.json, no _dump)
-make extract-onnx       # unpack that tarball into weights/onnx/
-make download-onnx      # fetch $XENOSITE_ONNX_URL into weights/onnx/
+make pack-onnx          # weights/xenosite_onnx_v0.tgz  (*.onnx + *.meta.json, no _dump)
+make extract-onnx       # unpack that tarball into weights/onnx/v0/
+make download-onnx      # fetch $XENOSITE_ONNX_URL into weights/onnx/v0/
 ```
 
 Installed-package users should set `XENOSITE_ONNX_URL`. The first `predict()`
-downloads into the user cache (`$XDG_CACHE_HOME/xenosite/onnx`) and prints an
+downloads into the user cache (`$XDG_CACHE_HOME/xenosite/onnx/v0`) and prints an
 INFO line when weights are found or downloaded. No manual download call is
 required. `make download-onnx` pre-fetches into this checkout directory.
 

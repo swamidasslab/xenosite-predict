@@ -32,7 +32,7 @@ def test_ndealk_site_modes_cn1ccn_and_coc1():
     from xenosite.predict.features import load_names, matrix_from_rows, ndealk_bond_rows, ndealk_site_from_row_scores
     from tests.support import ROOT
 
-    backend = OnnxBackend(ROOT / "weights" / "onnx")
+    backend = OnnxBackend(onnx_root())
     names = load_names("ndealk", "bond")
     cases = [
         "CN1CCN(c2ccc3nc(-c4cccc(C(F)(F)F)c4)[nH]c3c2)CC1",
@@ -198,7 +198,8 @@ def test_nte_uses_sorted_symmetry_classes():
         compare_feature_dump_rows,
         load_ob_dumps,
         rows_for_model,
-    )
+    onnx_root,
+)
 
     dumps = load_ob_dumps()
     assert dumps, "missing tests/fixtures/ob_dumps.json.gz (git lfs pull, or run make dump-ob)"

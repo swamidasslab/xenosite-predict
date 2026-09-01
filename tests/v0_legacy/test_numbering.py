@@ -17,7 +17,7 @@ from xenosite.predict.numbering import (
     raw_numbering_is_gapped,
 )
 from xenosite.predict.features import _ob
-from tests.support import ROOT
+from tests.support import ROOT, onnx_root
 
 
 GAP_SMILES = "COc1cc2nc(SCc3ccccc3C)[nH]c2cc1OC"
@@ -104,7 +104,7 @@ def test_legacy_reactivity_gapped_smiles_aligns_with_onnx(legacy_api_url):
     from xenosite.predict.backends.onnx import OnnxBackend
 
     be = LegacyTestBackend(legacy_api_url)
-    onx = OnnxBackend(ROOT / "weights" / "onnx")
+    onx = OnnxBackend(onnx_root())
     leg = predict(GAP_SMILES, models=["reactivity"], backend=be)
     ort = predict(GAP_SMILES, models=["reactivity"], backend=onx)
     lg = next(r for r in leg.results if r.model == "reactivity.gsh")
@@ -226,7 +226,7 @@ def test_from_legacy_quinone_pair_idx_matches_onnx():
     be = LegacyTestBackend(url)
     if not be.health():
         pytest.skip("legacy-test-api not running")
-    onx = OnnxBackend(ROOT / "weights" / "onnx")
+    onx = OnnxBackend(onnx_root())
     leg = predict(GAP_SMILES, models=["quinone"], backend=be)
     ort = predict(GAP_SMILES, models=["quinone"], backend=onx)
     lg = next(r for r in leg.results if r.model == "quinone")
@@ -252,7 +252,7 @@ def test_from_legacy_quinone_atom_vector_matches_onnx():
     be = LegacyTestBackend(url)
     if not be.health():
         pytest.skip("legacy-test-api not running")
-    onx = OnnxBackend(ROOT / "weights" / "onnx")
+    onx = OnnxBackend(onnx_root())
     for smi in samples:
         leg = predict(smi, models=["quinone"], backend=be)
         ort = predict(smi, models=["quinone"], backend=onx)

@@ -34,7 +34,7 @@ from xenosite.predict.types import (
     Molecule,
 )
 
-from tests.support import ROOT, onnx_weights_present
+from tests.support import ROOT, onnx_weights_present, onnx_root
 
 GAP_SMILES = "COc1cc2nc(SCc3ccccc3C)[nH]c2cc1OC"
 ETHYLENE = "C=C"
@@ -353,7 +353,7 @@ def test_min_score_filters_after_enumeration():
 @pytest.mark.skipif(not _ob.installed(), reason="OpenBabel not installed")
 @pytest.mark.skipif(not onnx_weights_present("epoxidation"), reason="no epoxidation ONNX")
 def test_predict_ethylene_metabolites_end_to_end():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(ETHYLENE, model="epoxidation", backend=be, metabolites=True)
     result = next(r for r in mol.results if r.model == "epoxidation")
     assert result.metabolite
@@ -367,7 +367,7 @@ def test_predict_ethylene_metabolites_end_to_end():
 @pytest.mark.skipif(not _ob.installed(), reason="OpenBabel not installed")
 @pytest.mark.skipif(not onnx_weights_present("ndealk"), reason="no ndealk ONNX")
 def test_predict_ndealk_metabolites_end_to_end():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(NDEALK, model="ndealk", backend=be, metabolites=True)
     result = next(r for r in mol.results if r.model == "ndealk")
     assert result.metabolite
@@ -383,7 +383,7 @@ def test_predict_ndealk_metabolites_end_to_end():
 @pytest.mark.skipif(not _ob.installed(), reason="OpenBabel not installed")
 @pytest.mark.skipif(not onnx_weights_present("quinone"), reason="no quinone ONNX")
 def test_predict_quinone_metabolites_end_to_end():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(PHENOL, model="quinone", backend=be, metabolites=True)
     result = next(r for r in mol.results if r.model == "quinone")
     assert result.metabolite
@@ -400,7 +400,7 @@ def test_predict_quinone_metabolites_end_to_end():
 @pytest.mark.skipif(not onnx_weights_present("reactivity"), reason="no reactivity ONNX")
 def test_gap_smiles_nh_reactivity_indices():
     """Legacy [nH] gap molecule: metabolite atoms must stay in RDKit index range."""
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(GAP_SMILES, model="reactivity", backend=be, metabolites=True)
     _assert_rdkit_indices(mol)
     rdmol, _ = parse_smiles(mol.smiles)
@@ -410,7 +410,7 @@ def test_gap_smiles_nh_reactivity_indices():
 @pytest.mark.skipif(not _ob.installed(), reason="OpenBabel not installed")
 @pytest.mark.skipif(not onnx_weights_present("phase1"), reason="no phase1 ONNX")
 def test_phase1_metabolites_match_site_scores():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(PROPANE, models=["phase1"], backend=be, metabolites=True)
     for result in mol.results:
         if not result.model.startswith("phase1."):
@@ -559,7 +559,7 @@ def test_attach_metabolites_map_idx_always_mapped_smiles_optional():
 @pytest.mark.skipif(not _ob.installed(), reason="OpenBabel not installed")
 @pytest.mark.skipif(not onnx_weights_present("epoxidation"), reason="no epoxidation ONNX")
 def test_predict_mapped_smiles_end_to_end():
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict(
         ETHYLENE,
         model="epoxidation",

@@ -25,9 +25,10 @@ from tests.support import (
     ROOT,
     golden_score_fields,
     onnx_weights_present,
+    onnx_root,
 )
 
-BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
+BACKEND = OnnxBackend(onnx_root())
 
 NAPHTHALENE = "c1ccc2ccccc2c1"
 NDEALK_PRINCIPLED_FEWER = "COc1ccc2nc(C)cc(NCCCN3CCOCC3)c2c1"

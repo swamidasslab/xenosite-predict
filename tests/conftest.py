@@ -49,13 +49,6 @@ def docker_usable() -> bool:
         return False
 
 
-def onnx_weights_present(model: str | None = None) -> bool:
-    root = ROOT / "weights" / "onnx"
-    if model:
-        return any((root / model).glob("*.onnx"))
-    return any(root.rglob("*.onnx"))
-
-
 @pytest.fixture(scope="session")
 def legacy_api_url():
     """Session fixture: reuse XENOSITE_LEGACY_TEST_URL or start compose; skip if impossible.

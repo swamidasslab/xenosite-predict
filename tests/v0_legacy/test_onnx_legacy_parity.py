@@ -36,6 +36,7 @@ from tests.support import (
     load_ob_dumps,
     onnx_model_key,
     onnx_weights_present,
+    onnx_root,
 )
 
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
@@ -115,7 +116,7 @@ def _onnx_predict(model: str, smiles: str):
     return predict(
         smiles,
         models=[model],
-        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+        backend=OnnxBackend(onnx_root()),
         **golden_predict_kwargs(model),
     )
 
@@ -166,7 +167,7 @@ def _predict_pair_live(smiles: str, model: str, legacy_url: str):
     if not onnx_weights_present(key):
         pytest.skip(f"no ONNX for {key}")
     legacy = LegacyTestBackend(legacy_url)
-    onnx = OnnxBackend(ROOT / "weights" / "onnx")
+    onnx = OnnxBackend(onnx_root())
     kwargs = golden_predict_kwargs(model)
     try:
         leg = predict(smiles, models=[model], backend=legacy)

@@ -8,7 +8,7 @@ from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.molecule import parse_smiles
 
-from tests.support import ROOT, golden_name_by_smiles, onnx_weights_present
+from tests.support import ROOT, golden_name_by_smiles, onnx_weights_present, onnx_root
 
 EXAMPLE_SMILES = [
     r"C/C(=C\c1ccc(CO)cc1)c1ccc2c(c1)C(C)(C)C(O)CC2(C)C",
@@ -43,7 +43,7 @@ def test_epoxidation_onnx_predicts():
     mol = predict(
         EXAMPLE_SMILES[1],
         models=["epoxidation"],
-        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+        backend=OnnxBackend(onnx_root()),
     )
     assert mol.results
     assert mol.results[0].model == "epoxidation"

@@ -27,6 +27,7 @@ from tests.support import (  # noqa: E402
     load_golden,
     load_golden_suite,
     serialize_molecule_results,
+    onnx_root,
 )
 from tools.progress import iter_progress, map_progress, worker_quiet  # noqa: E402
 from tools.suite_drift_lib import default_workers  # noqa: E402
@@ -151,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     if not pending:
         print(f"nothing pending for {args.out}")
     else:
-        weights_root = str(ROOT / "weights" / "onnx")
+        weights_root = str(onnx_root())
         workers = max(1, args.workers)
         t0 = time.time()
         if workers == 1:
@@ -196,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             existing=smoke_existing,
         )
         if smoke_pending:
-            weights_root = str(ROOT / "weights" / "onnx")
+            weights_root = str(onnx_root())
             _worker_init(weights_root)
             for task in iter_progress(smoke_pending, desc="regather smoke golden", unit="pair"):
                 rec = _capture_one(task)

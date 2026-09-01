@@ -49,8 +49,8 @@ Returns dicts `{name, version, available, backend, reason, heads, two_stage, pip
 
 ONNX graphs are not in the sdist. Set `XENOSITE_ONNX_URL` to an https tarball
 or a local `.tgz` path (the URL is not stored in this repo). The first
-`predict()` (or `list_models()`) downloads into `$XDG_CACHE_HOME/xenosite/onnx`
-(or `~/.cache/xenosite/onnx`, or `XENOSITE_MODELS_WEIGHTS` if set) and prints
+`predict()` (or `list_models()`) downloads into `$XDG_CACHE_HOME/xenosite/onnx/v0`
+(or `~/.cache/xenosite/onnx/v0`, or `XENOSITE_MODELS_WEIGHTS` if set) and prints
 an INFO line when weights are found or downloaded. Tests that pass `env={}`
 never fetch. `python -m xenosite.predict download` and `make download-onnx`
 are optional pre-fetch helpers.
@@ -65,8 +65,8 @@ Picker (explicit env wins; first match):
 
 1. `XENOSITE_BACKEND` is an `http://` / `https://` URL → **HTTP** against that deployed **xenosite-api**. Optional `XENOSITE_API_KEY` as Bearer.
 2. Else `XENOSITE_MODELS_WEIGHTS` → local **ONNX** directory.
-3. Else auto-detect `./weights/onnx` if `*.onnx` exist → local ONNX.
-4. Else user cache (`$XDG_CACHE_HOME/xenosite/onnx`) if `*.onnx` exist.
+3. Else auto-detect `./weights/onnx/v0` (or a flat `./weights/onnx` tree) → local ONNX.
+4. Else user cache (`$XDG_CACHE_HOME/xenosite/onnx/v0`) if `*.onnx` exist.
 5. Else, when `XENOSITE_ONNX_URL` is set in the process env, download that archive into the cache (INFO on found/download).
 6. Else raise `BackendNotConfigured`.
 
@@ -74,7 +74,7 @@ Live parity compares **ONNX vs the legacy test-API**, not vs production HTTP. Te
 
 | Backend | Role |
 |---|---|
-| ONNX | Converted numpy-NN heads under `weights/onnx/<model>/<head>.onnx` |
+| ONNX | Converted numpy-NN heads under `weights/onnx/v0/<model>/<head>.onnx` |
 | HTTP | `GET {origin}/v0/<model>?smiles=` (xenosite-api) |
 | Legacy | Derived Docker test API (`POST /predict/<model>`, `POST /nn/<model>/<head>`) |
 
@@ -98,9 +98,9 @@ Per-model override: `predict(..., backends={("bioactivation", "0"): "http"})`.
 ```
 make extract-weights          # Docker image or fallback tarball → weights/legacy/
 make convert-onnx             # pickle → ONNX; MODEL=epoxidation for one model
-make pack-onnx                # weights/xenosite_onnx.tgz (runtime graphs, no _dump)
-make extract-onnx             # unpack that tarball into weights/onnx/
-make download-onnx            # fetch $XENOSITE_ONNX_URL into weights/onnx/
+make pack-onnx                # weights/xenosite_onnx_v0.tgz (runtime graphs, no _dump)
+make extract-onnx             # unpack that tarball into weights/onnx/v0/
+make download-onnx            # fetch $XENOSITE_ONNX_URL into weights/onnx/v0/
 make test                     # pytest -m "not live"  (no Docker)
 make test-live                # pytest -m live; fixture skips if Docker/image missing
 make py2-dump-image           # python:2.7-slim + numpy + Debian OpenBabel 2.4

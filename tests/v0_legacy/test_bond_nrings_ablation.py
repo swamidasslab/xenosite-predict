@@ -32,9 +32,10 @@ from tests.support import (
     load_golden_suite,
     onnx_weights_present,
     rows_for_model,
+    onnx_root,
 )
 
-BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
+BACKEND = OnnxBackend(onnx_root())
 
 NRINGS_COLS = frozenset({"Atom1_NRings", "Atom2_NRings"})
 

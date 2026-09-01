@@ -52,16 +52,23 @@ def golden_predict_kwargs(model: str) -> dict:
     return {}
 
 
+def onnx_root() -> Path:
+    """Checkout ONNX leaf: ``weights/onnx/v0``, or a legacy flat ``weights/onnx``."""
+    from xenosite.predict.weights import generation_root
+
+    return generation_root(ROOT / "weights" / "onnx")
+
+
 def onnx_weights_present(model: str | None = None) -> bool:
-    root = ROOT / "weights" / "onnx"
+    root = onnx_root()
     if model:
         return any((root / model).glob("*.onnx"))
     return any(p for p in root.rglob("*.onnx") if "_dump" not in p.parts)
 
 
 def list_onnx_heads() -> list[tuple[str, str]]:
-    """``(model, head)`` pairs from ``weights/onnx``, skipping convert dump dirs."""
-    root = ROOT / "weights" / "onnx"
+    """``(model, head)`` pairs from the v0 ONNX tree, skipping convert dump dirs."""
+    root = onnx_root()
     if not root.is_dir():
         return []
     found: list[tuple[str, str]] = []
@@ -73,18 +80,18 @@ def list_onnx_heads() -> list[tuple[str, str]]:
 
 def onnx_io_dims(model: str, head: str) -> tuple[int, int] | None:
     """Return ``(n_features, n_outputs)`` from convert metadata or the ONNX graph."""
-    meta = ROOT / "weights" / "onnx" / model / f"{head}.meta.json"
+    meta = onnx_root() / model / f"{head}.meta.json"
     if meta.is_file():
         data = json.loads(meta.read_text(encoding="utf-8"))
         n_in, n_out = data.get("I"), data.get("O")
         if n_in is not None and n_out is not None:
             return int(n_in), int(n_out)
-    path = ROOT / "weights" / "onnx" / model / f"{head}.onnx"
+    path = onnx_root() / model / f"{head}.onnx"
     if not path.is_file():
         return None
     from xenosite.predict.backends.onnx import OnnxBackend
 
-    sess = OnnxBackend(ROOT / "weights" / "onnx").session(model, head)
+    sess = OnnxBackend(onnx_root()).session(model, head)
     inp = sess.get_inputs()[0].shape
     out = sess.get_outputs()[0].shape
     n_in = inp[1] if len(inp) > 1 and isinstance(inp[1], int) else None

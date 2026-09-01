@@ -95,9 +95,9 @@ def _study_one(model: str, smiles: str) -> tuple[RowDelta, dict[str, float]]:
     sys.path.insert(0, str(ROOT))
 
     from xenosite.predict.backends.onnx import OnnxBackend
-    from tests.support import GOLDEN_PARAMETER, PRINCIPLED_PARAMETER
+    from tests.support import GOLDEN_PARAMETER, PRINCIPLED_PARAMETER, onnx_root
 
-    backend = OnnxBackend(ROOT / "weights" / "onnx")
+    backend = OnnxBackend(onnx_root())
 
     default = _all_heads(smiles, model, parameter=None, backend=backend)
     principled = _all_heads(smiles, model, parameter=PRINCIPLED_PARAMETER, backend=backend)

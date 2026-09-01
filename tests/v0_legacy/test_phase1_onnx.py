@@ -11,7 +11,7 @@ from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.errors import WeightsNotFound
 from xenosite.predict import predict
 
-from tests.support import ROOT, onnx_weights_present
+from tests.support import ROOT, onnx_weights_present, onnx_root
 
 sys.path.insert(0, str(ROOT / "tools"))
 from convert_phase1 import (  # noqa: E402
@@ -28,7 +28,7 @@ from convert_phase1 import (  # noqa: E402
 
 def test_phase1_onnx_heads_present():
     assert onnx_weights_present("phase1"), "no ONNX for phase1 (run make convert-onnx MODEL=phase1)"
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     assert be.has_head("phase1", "site")
     assert be.has_head("phase1", "mol")
 
@@ -46,14 +46,14 @@ def test_phase1_onnx_matches_numpy_mlp(head, pickle_name, spec_fn, fwd):
     rng = np.random.default_rng(20260830)
     x = rng.standard_normal((16, spec["I"])).astype(np.float32)
     y_ref = np.asarray(fwd(x, spec), dtype=np.float64)
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     y = np.asarray(be.run_head("phase1", head, x), dtype=np.float64)
     np.testing.assert_allclose(y, y_ref, atol=1e-5, rtol=0)
 
 
 def test_phase1_smiles_predicts():
     assert onnx_weights_present("phase1"), "no ONNX for phase1 (run make convert-onnx MODEL=phase1)"
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     mol = predict("O=C(C)Oc1ccccc1C(=O)O", models=["phase1"], backend=be)
     assert len(mol.results) == 5
     assert all(r.model.startswith("phase1.") for r in mol.results)

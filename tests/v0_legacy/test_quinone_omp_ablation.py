@@ -25,9 +25,10 @@ from tests.support import (
     load_golden_suite,
     onnx_weights_present,
     rows_for_model,
+    onnx_root,
 )
 
-BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
+BACKEND = OnnxBackend(onnx_root())
 
 NAPHTHALENE = "c1ccc2ccccc2c1"
 POLYPHENOL = "O=c1c(O)c(-c2cc(O)c(O)c(O)c2)oc2cc(O)cc(O)c12"

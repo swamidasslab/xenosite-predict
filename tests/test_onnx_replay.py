@@ -25,6 +25,7 @@ from tests.support import (
     list_onnx_heads,
     onnx_io_dims,
     onnx_weights_present,
+    onnx_root,
 )
 
 REPLAY = ROOT / "tests" / "fixtures" / "random_vectors.json"
@@ -47,7 +48,7 @@ def test_onnx_matches_dumped_py2_nn(key):
     rec = _replay()[key]
     model, head = key.split("_", 1)
     assert onnx_weights_present(model), f"no ONNX for {model} under weights/onnx"
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     x = np.asarray(rec["x"], dtype=np.float32)
     y_ref = np.asarray(rec["y"], dtype=np.float64)
     y = np.asarray(be.run_head(model, head, x), dtype=np.float64)
@@ -79,7 +80,7 @@ def test_onnx_random_matrix_finite(model, head, data):
     assert dims is not None, f"no I/O dims for {model}/{head}"
     n_in, n_out = dims
     x = data.draw(feature_matrix(n_in))
-    be = OnnxBackend(ROOT / "weights" / "onnx")
+    be = OnnxBackend(onnx_root())
     y = np.asarray(be.run_head(model, head, x), dtype=np.float64)
     assert np.all(np.isfinite(y))
     assert y.shape[0] == x.shape[0]

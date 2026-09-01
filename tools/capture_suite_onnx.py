@@ -31,6 +31,7 @@ from tests.support import (  # noqa: E402
     SUITE_MODELS,
     load_golden_suite,
     serialize_molecule_results,
+    onnx_root,
 )
 from tools.progress import iter_progress, map_progress, worker_quiet  # noqa: E402
 from tools.suite_drift_lib import DEFAULT_CACHE, cache_index, default_workers, load_cache, save_cache  # noqa: E402
@@ -127,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"cache {args.cache} total={len(rows)} new=0 (nothing pending)")
         return 0
 
-    weights_root = str(ROOT / "weights" / "onnx")
+    weights_root = str(onnx_root())
     workers = max(1, args.workers)
     added = 0
     t0 = time.time()

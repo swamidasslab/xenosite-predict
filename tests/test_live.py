@@ -20,6 +20,7 @@ from tests.support import (
     onnx_io_dims,
     onnx_weights_present,
     rows_for_model,
+    onnx_root,
 )
 
 ASPIRIN = "O=C(C)Oc1ccccc1C(=O)O"
@@ -64,7 +65,7 @@ def test_random_vector_nn(legacy_api_url, model, head, data):
         y_legacy = be.nn(model, head, x.tolist())
     except Exception as exc:
         pytest.skip(f"legacy /nn/{model}/{head} failed: {exc}")
-    onnx = OnnxBackend(ROOT / "weights" / "onnx")
+    onnx = OnnxBackend(onnx_root())
     try:
         y_onnx = onnx.run_head(model, head, x)
     except Exception as exc:
@@ -81,7 +82,7 @@ def test_smiles_parity(legacy_api_url, model):
     if not onnx_weights_present("ndealk" if model == "isozyme" else model):
         pytest.skip(f"no ONNX for {model}")
     legacy = LegacyTestBackend(legacy_api_url)
-    onnx = OnnxBackend(ROOT / "weights" / "onnx")
+    onnx = OnnxBackend(onnx_root())
     try:
         a = predict(ASPIRIN, models=[model], backend=legacy)
     except Exception as exc:

@@ -18,6 +18,7 @@ from tests.support import (
     golden_predict_kwargs,
     load_golden,
     onnx_weights_present,
+    onnx_root,
 )
 
 
@@ -57,7 +58,7 @@ def test_golden_scores_onnx(model, smiles):
     mol = predict(
         smiles,
         models=[model],
-        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+        backend=OnnxBackend(onnx_root()),
         **golden_predict_kwargs(model),
     )
     assert mol.results
@@ -69,7 +70,7 @@ def test_quinone_null_pair_predicts():
     mol = predict(
         "O=C(Br)C(F)(F)F",
         models=["quinone"],
-        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+        backend=OnnxBackend(onnx_root()),
     )
     assert mol.results
     r = mol.results[0]

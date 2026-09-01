@@ -140,9 +140,9 @@ def _score_delta(default_fields: dict, other_fields: dict) -> float:
 def _quinone_scores(smiles: str, *, mode_key: str) -> dict:
     from xenosite.predict import predict
     from xenosite.predict.backends.onnx import OnnxBackend
-    from tests.support import GOLDEN_PARAMETER, ROOT, golden_score_fields
+    from tests.support import GOLDEN_PARAMETER, ROOT, golden_score_fields, onnx_root
 
-    backend = OnnxBackend(ROOT / "weights" / "onnx")
+    backend = OnnxBackend(onnx_root())
 
     if mode_key == "legacy_bfs":
         with _patched_omp(path_mode="legacy_bfs"):

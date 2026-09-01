@@ -51,9 +51,10 @@ from tests.support import (
     golden_score_fields,
     onnx_weights_present,
     rows_for_model,
+    onnx_root,
 )
 
-BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
+BACKEND = OnnxBackend(onnx_root())
 
 # Molecules chosen because the committed regression suite already shows legacy ≠
 # principled on them — they are small enough to reason about in comments.

@@ -24,6 +24,7 @@ from tests.support import (
     load_golden_suite,
     onnx_weights_present,
     parity_atol,
+    onnx_root,
 )
 
 
@@ -74,7 +75,7 @@ def _assert_golden_suite_scores_onnx(model: str, smiles: str) -> None:
     mol = predict(
         smiles,
         models=[model],
-        backend=OnnxBackend(ROOT / "weights" / "onnx"),
+        backend=OnnxBackend(onnx_root()),
         **golden_predict_kwargs(model),
     )
     assert mol.results

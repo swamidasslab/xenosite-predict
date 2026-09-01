@@ -34,9 +34,10 @@ from tests.support import (
     golden_name_by_smiles,
     load_ob_dumps,
     onnx_weights_present,
+    onnx_root,
 )
 
-BACKEND = OnnxBackend(ROOT / "weights" / "onnx")
+BACKEND = OnnxBackend(onnx_root())
 
 _SCORE_MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme")
 _PARAMS_CACHE: list | None = None

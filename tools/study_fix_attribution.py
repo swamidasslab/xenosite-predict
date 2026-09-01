@@ -65,10 +65,10 @@ def _worker(model: str, smiles: str, fix_key: str | None) -> tuple[str, str, str
 
     from xenosite.predict import predict
     from xenosite.predict.backends.onnx import OnnxBackend
-    from tests.support import GOLDEN_PARAMETER, golden_score_fields
+    from tests.support import GOLDEN_PARAMETER, golden_score_fields, onnx_root
     from tools.study_legacy_vs_default import _heads_delta, _all_heads
 
-    backend = OnnxBackend(ROOT / "weights" / "onnx")
+    backend = OnnxBackend(onnx_root())
     default = _all_heads(smiles, model, parameter=None, backend=backend)
     legacy = _all_heads(smiles, model, parameter=GOLDEN_PARAMETER, backend=backend)
 
