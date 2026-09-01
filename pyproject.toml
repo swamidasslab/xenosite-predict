@@ -50,11 +50,13 @@ convert = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-m \"not live\" -n auto"
+addopts = "-m \"not live and not full\" -n auto"
 testpaths = ["tests"]
+python_files = ["test_*.py"]
 pythonpath = ["src", "."]
 markers = [
     "live: requires Docker legacy test API and/or ONNX weights",
+    "full: exhaustive corpus parametrization (CI/nightly; use pytest -m full)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
