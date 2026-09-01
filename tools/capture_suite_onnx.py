@@ -8,6 +8,7 @@ use ``--force`` to refresh one model or SMILES. Run once, then use
 Example::
 
   uv run python tools/capture_suite_onnx.py              # fill missing only
+  uv run python tools/capture_suite_onnx.py --workers 8
   uv run python tools/capture_suite_onnx.py --model reactivity --force
   uv run python tools/report_suite_drift.py              # analyze from cache
 """
@@ -15,8 +16,10 @@ Example::
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +32,40 @@ from tests.support import (  # noqa: E402
     serialize_molecule_results,
 )
 from tools.suite_drift_lib import DEFAULT_CACHE, cache_index, load_cache, save_cache  # noqa: E402
+
+_WEIGHTS_ROOT: str = ""
+
+
+def _default_workers() -> int:
+    n = os.cpu_count() or 4
+    return max(1, min(n, 8))
+
+
+def _worker_init(weights_root: str) -> None:
+    global _WEIGHTS_ROOT
+    _WEIGHTS_ROOT = weights_root
+
+
+def _capture_one(task: tuple[str, str, str]) -> dict:
+    """Run one (model, smiles, name) in a worker process."""
+    model, smiles, name = task
+    from xenosite.predict import predict
+    from xenosite.predict.backends.onnx import OnnxBackend
+
+    rec: dict = {
+        "model": model,
+        "smiles": smiles,
+        "name": name or smiles[:40],
+    }
+    try:
+        backend = OnnxBackend(_WEIGHTS_ROOT)
+        mol = predict(smiles, models=[model], backend=backend)
+        rec["results"] = serialize_molecule_results(mol)
+        rec["error"] = None
+    except Exception as exc:
+        rec["results"] = []
+        rec["error"] = str(exc)
+    return rec
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,10 +80,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--model", default="", help="single model only")
     p.add_argument("--force", action="store_true", help="redo cached pairs")
     p.add_argument("--limit", type=int, default=0)
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=_default_workers(),
+        help="parallel worker processes (default: min(cpu_count, 8))",
+    )
     args = p.parse_args(argv)
-
-    from xenosite.predict import predict
-    from xenosite.predict.backends.onnx import OnnxBackend
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     if args.model:
@@ -71,36 +111,59 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = load_cache(args.cache)
     done = cache_index(rows)
-    added = 0
-    backend = OnnxBackend(ROOT / "weights" / "onnx")
-
+    pending: list[tuple[str, str, str]] = []
     for model, smiles, g in pairs:
         key = (model, smiles)
         if key in done and not args.force:
             continue
         if args.force:
             rows = [r for r in rows if (r.get("model"), r.get("smiles")) != key]
-        t0 = time.time()
-        rec: dict = {
-            "model": model,
-            "smiles": smiles,
-            "name": g.get("name") or smiles[:40],
-        }
-        try:
-            mol = predict(smiles, models=[model], backend=backend)
-            rec["results"] = serialize_molecule_results(mol)
-            rec["error"] = None
-        except Exception as exc:
-            rec["results"] = []
-            rec["error"] = str(exc)
-        rows.append(rec)
-        added += 1
-        save_cache(args.cache, rows)
-        dt = time.time() - t0
-        status = "ok" if not rec["error"] else f"ERR {rec['error'][:40]}"
-        print(f"[{added}] {model} {rec['name'][:32]} ({dt:.1f}s) {status}", flush=True)
+            done.pop(key, None)
+        name = g.get("name") or smiles[:40]
+        pending.append((model, smiles, name))
 
-    print(f"cache {args.cache} total={len(rows)} new={added}")
+    if not pending:
+        print(f"cache {args.cache} total={len(rows)} new=0 (nothing pending)")
+        return 0
+
+    weights_root = str(ROOT / "weights" / "onnx")
+    workers = max(1, args.workers)
+    added = 0
+    t0 = time.time()
+
+    if workers == 1:
+        _worker_init(weights_root)
+        for task in pending:
+            rec = _capture_one(task)
+            rows.append(rec)
+            added += 1
+            save_cache(args.cache, rows)
+            status = "ok" if not rec["error"] else f"ERR {rec['error'][:40]}"
+            print(
+                f"[{added}/{len(pending)}] {rec['model']} {rec['name'][:32]} {status}",
+                flush=True,
+            )
+    else:
+        print(f"capture {len(pending)} pairs with {workers} workers", flush=True)
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_worker_init,
+            initargs=(weights_root,),
+        ) as pool:
+            futures = {pool.submit(_capture_one, task): task for task in pending}
+            for fut in as_completed(futures):
+                rec = fut.result()
+                rows.append(rec)
+                added += 1
+                save_cache(args.cache, rows)
+                status = "ok" if not rec["error"] else f"ERR {rec['error'][:40]}"
+                print(
+                    f"[{added}/{len(pending)}] {rec['model']} {rec['name'][:32]} {status}",
+                    flush=True,
+                )
+
+    dt = time.time() - t0
+    print(f"cache {args.cache} total={len(rows)} new={added} ({dt:.1f}s)")
     return 0
 
 

@@ -20,7 +20,7 @@ help:
 	@echo "test-live           pytest -m live (skips if Docker/image/weights missing)"
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4 + RDKit)"
 	@echo "dump-ob             fill descriptor suite incrementally (skip dumps already present)"
-	@echo "capture-suite-onnx  cache ONNX scores (full suite; CAPTURE_MODEL/CAPTURE_SMILES to filter)"
+	@echo "capture-suite-onnx  cache ONNX scores (CAPTURE_WORKERS=8 default; CAPTURE_MODEL/SMILES to filter)"
 	@echo "drift-report        classify ONNX vs golden from cache (instant)"
 	@echo "legacy-test-api     build/run derived test image"
 	@echo "legacy-test-api-down"
@@ -52,6 +52,7 @@ MODEL ?= epoxidation
 # Optional filters for capture-suite-onnx (empty = full golden suite)
 CAPTURE_MODEL ?=
 CAPTURE_SMILES ?=
+CAPTURE_WORKERS ?= 8
 
 dump-ob-features:
 	$(PYTHON) tools/dump_ob.py --smiles '$(SMILES)' --model $(MODEL)
@@ -61,6 +62,7 @@ dump-ob:
 
 capture-suite-onnx:
 	$(PYTHON) tools/capture_suite_onnx.py \
+	  --workers $(CAPTURE_WORKERS) \
 	  $(if $(CAPTURE_MODEL),--model $(CAPTURE_MODEL),) \
 	  $(if $(CAPTURE_SMILES),--smiles '$(CAPTURE_SMILES)',) \
 	  $(if $(FORCE),--force,)
