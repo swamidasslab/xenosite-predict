@@ -39,12 +39,20 @@ class Atoms(BaseModel):
 class Metabolite(BaseModel):
     """A inferred or bioactivation metabolite (pathway + site atoms + score).
 
-    ``atom`` lists **0-based RDKit** indices for the site of metabolism, matching
-    ``Molecule.atoms`` / ``Molecule.bonds.idx``.
+    ``atom`` lists **0-based RDKit** indices for the site of metabolism on the
+    parent, matching ``Molecule.atoms`` / ``Molecule.bonds.idx``.
+
+    ``map_idx`` lists **1-based** parent atom numbers for each heavy atom in
+    ``smiles`` (canonical order). ``0`` marks newly introduced atoms.
+
+    When requested, ``mapped_smiles`` is the same structure with atom-map
+    numbers embedded (e.g. ``[CH2:1]``) tracing atoms back to the parent.
     """
 
     smiles: str
     atom: Optional[list[NonNegativeInt]] = None
+    map_idx: Optional[list[NonNegativeInt]] = None
+    mapped_smiles: Optional[str] = None
     pathway: Optional[str] = None
     score: Number = None  # type: ignore[assignment]
 

@@ -26,6 +26,7 @@ def predict(
     env: Optional[Mapping[str, str]] = None,
     metabolites: bool = False,
     metabolites_min_score: Optional[float] = None,
+    mapped_smiles: bool = False,
     _parameter: Optional[Mapping[str, Any]] = None,
 ) -> Molecule:
     """Run one or more models and return a :class:`Molecule` with appended results.
@@ -53,6 +54,11 @@ def predict(
     metabolites_min_score:
         When set, drop metabolites whose site score is below this threshold.
         Default ``None`` includes all forest products.
+    mapped_smiles:
+        When ``True`` (with ``metabolites=True``), add ``mapped_smiles`` to each
+        forest metabolite — canonical SMILES with ``:N`` atom-map numbers tracing
+        heavy atoms back to the parent (1-based; new atoms unmapped). ``map_idx``
+        is always populated when forest metabolites are attached.
     _parameter:
         Internal per-call options (not part of the public HTTP API). Runners
         read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
@@ -82,7 +88,11 @@ def predict(
         runner = load_runner(*spec)
         runner.predict_molecule(molecule, be)
     if metabolites:
-        attach_metabolites(molecule, min_score=metabolites_min_score)
+        attach_metabolites(
+            molecule,
+            min_score=metabolites_min_score,
+            mapped_smiles=mapped_smiles,
+        )
     return molecule
 
 
