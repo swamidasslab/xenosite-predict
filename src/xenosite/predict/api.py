@@ -8,7 +8,7 @@ from .backends import PredictBackend, resolve_backend, resolve_for_model
 from .errors import BackendNotConfigured
 from .molecule import as_molecule
 from .registry import Spec, ensure_builtins, load_runner, normalize_models, registered
-from .forest import attach_metabolites
+from ._private import add_metabolites
 from .types import Molecule
 
 ModelsArg = Union[str, Spec, Iterable[str | Spec]]
@@ -88,7 +88,7 @@ def predict(
         runner = load_runner(*spec)
         runner.predict_molecule(molecule, be)
     if metabolites:
-        attach_metabolites(
+        add_metabolites(
             molecule,
             min_score=metabolites_min_score,
             mapped_smiles=mapped_smiles,
