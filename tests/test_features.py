@@ -209,6 +209,146 @@ def test_aspirin_bond_shape():
     assert rows[0]["Atom1_PT__Mass"] > 0
 
 
+NAPHTHALENE = "c1ccc2ccccc2c1"
+SUDOXICAM = "CN1C(C(=O)NC2=NC=CS2)=C(O)C2=CC=CC=C2S1(=O)=O"
+
+
+def _omp_column_names(rows: list[dict]) -> list[str]:
+    prefixes = ("Ortho_", "Meta_", "Para_", "Site_Ortho_", "Site_Meta_", "Site_Para_")
+    return sorted(
+        k
+        for r in rows
+        for k in r
+        if not k.startswith("_") and k.startswith(prefixes)
+    )
+
+
+def _atom_td(smiles: str, *, omp_mode: str):
+    from xenosite.predict.features._ob import from_rdkit_mol
+    from xenosite.predict.features.atom import AtomTD
+
+    mol, _ = parse_smiles(smiles)
+    return AtomTD(from_rdkit_mol(mol), omp_mode=omp_mode)
+
+
+def _quinone_rows(smiles: str, *, omp_mode: str | None = None):
+    from xenosite.predict.features import quinone_atom_rows
+
+    mol, _ = parse_smiles(smiles)
+    if omp_mode is None:
+        return quinone_atom_rows(mol)
+    return quinone_atom_rows(mol, omp_mode=omp_mode)
+
+
+def test_quinone_omp_invariant_legacy_uses_single_path():
+    """Legacy: one BFS shortest path per (start, end, element)."""
+    td = _atom_td(NAPHTHALENE, omp_mode="legacy")
+    for sym in "C N O S".split():
+        paths = td._paths_for_omp(1, 4, sym)
+        assert len(paths) <= 1
+
+
+def test_quinone_omp_invariant_principled_unions_shortest_paths():
+    """Principled (non-S): all minimum-length paths feed the OMP ring test."""
+    td = _atom_td(NAPHTHALENE, omp_mode="principled")
+    paths = td._paths_for_omp(1, 4, "C")
+    assert len(paths) == 2
+    assert all(len(p) == 4 for p in paths)
+
+
+def test_quinone_omp_invariant_principled_s_uses_single_path():
+    """Principled S: still one path (fused thiadiazine/benzene edge case)."""
+    td = _atom_td(SUDOXICAM, omp_mode="principled")
+    for start, end in ((1, 4), (4, 1)):
+        assert len(td._paths_for_omp(start, end, "S")) <= 1
+
+
+def test_quinone_omp_invariant_principled_monotone_over_legacy():
+    """Principled is a union over paths, so OMP flags are never below legacy."""
+    legacy = _quinone_rows(NAPHTHALENE, omp_mode="legacy")
+    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
+    for col in _omp_column_names(legacy):
+        for rl, rp in zip(legacy, principled):
+            assert float(rp[col]) >= float(rl[col]), col
+
+
+def test_quinone_omp_invariant_only_omp_columns_differ():
+    legacy = _quinone_rows(NAPHTHALENE, omp_mode="legacy")
+    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
+    omp_cols = set(_omp_column_names(legacy))
+    assert omp_cols
+    for rl, rp in zip(legacy, principled):
+        for key, val in rl.items():
+            if key.startswith("_") or key in omp_cols:
+                continue
+            assert val == rp[key], key
+
+
+def test_quinone_omp_invariant_default_is_principled():
+    default = _quinone_rows(NAPHTHALENE)
+    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
+    for col in _omp_column_names(default):
+        for rd, rp in zip(default, principled):
+            assert rd[col] == rp[col]
+
+
+def test_quinone_omp_invariant_runner_default_is_principled():
+    from xenosite.predict.models.quinone import QuinoneRunner
+    from xenosite.predict.types import Atoms, Bonds, Molecule
+
+    mol = Molecule(smiles=NAPHTHALENE, atoms=Atoms(num=1, idx=[]), bonds=Bonds(idx=[]))
+    assert QuinoneRunner()._quinone_omp_mode(mol) == "principled"
+
+
+def test_quinone_omp_invariant_principled_beats_legacy_on_naphthalene():
+    legacy = _quinone_rows(NAPHTHALENE, omp_mode="legacy")
+    principled = _quinone_rows(NAPHTHALENE, omp_mode="principled")
+    assert sum(float(r["Ortho_To_C"]) for r in legacy) == 1.0
+    assert sum(float(r["Ortho_To_C"]) for r in principled) == 4.0
+
+
+def test_quinone_omp_invariant_legacy_matches_regathered_dump():
+    from tests.support import (
+        ASPIRIN_SMILES,
+        GOLDEN_QUINONE_PARAMETER,
+        compare_feature_dump_rows,
+        load_ob_dumps,
+        rows_for_model,
+    )
+
+    dump = next(d for d in load_ob_dumps() if d.get("smiles") == ASPIRIN_SMILES)
+    mol, _ = parse_smiles(ASPIRIN_SMILES)
+    mm = compare_feature_dump_rows(
+        rows_for_model("quinone", mol, _parameter=GOLDEN_QUINONE_PARAMETER),
+        dump["models"]["quinone"],
+    )
+    assert not [c for c in mm if not c.startswith("_")]
+
+
+def test_molgraph_all_shortest_paths_can_exceed_single_path():
+    """Principled OMP union needs more than one minimum-length path on fused rings."""
+    from xenosite.predict.features._ob import from_rdkit_mol
+    from xenosite.predict.features.molgraph import MolGraph
+
+    mol, _ = parse_smiles("c1ccc2ccccc2c1")
+    mg = MolGraph(from_rdkit_mol(mol))
+    multi = False
+    for s in sorted(mg.vertex):
+        for e in sorted(mg.vertex):
+            if s >= e:
+                continue
+            paths = mg.all_shortest_paths(s, e)
+            if len(paths) > 1:
+                single = mg.shortest_path(s, e)
+                assert single
+                assert len(single) == len(paths[0])
+                multi = True
+                break
+        if multi:
+            break
+    assert multi
+
+
 def test_import_does_not_require_openbabel():
     """Package import must succeed on hosts without OpenBabel and must not bind it."""
     import os
