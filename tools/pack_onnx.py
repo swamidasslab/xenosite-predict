@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Pack or unpack the ONNX files needed to run predictors.
 
-Runtime uses ``weights/onnx/<model>/<head>.onnx``. Convert also writes
+Runtime uses ``weights/onnx/v0/<model>/<head>.onnx``. Convert also writes
 ``*.meta.json`` next to each graph (I/O dims for tests); those are packed too.
 ``_dump/`` (pickle dump intermediates) is excluded.
 
-Unpack into ``weights/onnx`` (or point ``XENOSITE_MODELS_WEIGHTS`` at the
-extracted tree). Feature-name JSON lives in the Python package, not here.
+Unpack into ``weights/onnx/v0`` (or point ``XENOSITE_MODELS_WEIGHTS`` at the
+extracted v0 tree). Feature-name JSON lives in the Python package, not here.
+This tarball is the v0 generation; v1 will be a separate archive.
 """
 
 from __future__ import annotations
@@ -16,14 +17,14 @@ import io
 import tarfile
 from pathlib import Path
 
-DEFAULT_SRC = Path("weights/onnx")
-DEFAULT_OUT = Path("weights/xenosite_onnx.tgz")
-README = """XenoSite ONNX weights (inference graphs).
+DEFAULT_SRC = Path("weights/onnx/v0")
+DEFAULT_OUT = Path("weights/xenosite_onnx_v0.tgz")
+README = """XenoSite ONNX weights (v0 inference graphs).
 
 Layout: <model>/<head>.onnx  (+ optional <head>.meta.json)
 
-Unpack into weights/onnx, or set XENOSITE_MODELS_WEIGHTS to this directory.
-Feature names ship in the xenosite-predict package, not this tarball.
+Unpack into weights/onnx/v0, or set XENOSITE_MODELS_WEIGHTS to that directory.
+This archive is generation v0 only. Feature names ship in the Python package.
 """
 
 

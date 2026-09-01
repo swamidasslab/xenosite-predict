@@ -2,8 +2,12 @@
 
 The published archive URL is **not** compiled into this package. Set
 ``XENOSITE_ONNX_URL`` (https(s) or a local ``.tgz`` path). First ``predict()``
-fetches into the user cache when the URL is set and no local ``*.onnx`` files
-are found. Import does not download or open ONNX.
+fetches v0 graphs into the user cache when the URL is set and no local
+``*.onnx`` files are found. Import does not download or open ONNX.
+
+v0 lives under ``weights/onnx/v0`` (checkout) and
+``$XDG_CACHE_HOME/xenosite/onnx/v0`` (cache). A later v1 generation uses a
+sibling directory and its own tarball.
 """
 
 from __future__ import annotations
@@ -24,8 +28,10 @@ ENV_WEIGHTS = "XENOSITE_MODELS_WEIGHTS"
 ENV_ONNX_URL = "XENOSITE_ONNX_URL"
 ENV_AUTO_DOWNLOAD = "XENOSITE_AUTO_DOWNLOAD"
 
-DEFAULT_ONNX_DIR = Path("weights/onnx")
-_ARCHIVE_NAME = "xenosite_onnx.tgz"
+GENERATION = "v0"
+WEIGHTS_ONNX_PARENT = Path("weights/onnx")
+DEFAULT_ONNX_DIR = WEIGHTS_ONNX_PARENT / GENERATION
+ARCHIVE_NAME = f"xenosite_onnx_{GENERATION}.tgz"
 _USER_AGENT = "xenosite-predict"
 
 logger = logging.getLogger("xenosite.predict")
@@ -42,17 +48,41 @@ def onnx_dir_has_files(path: Path) -> bool:
     return any(path.rglob("*.onnx"))
 
 
+def _model_onnx_dirs(path: Path) -> bool:
+    """True if ``path/<model>/*.onnx`` exists (generation leaf or flat tree)."""
+    if not path.is_dir():
+        return False
+    for child in path.iterdir():
+        if not child.is_dir() or child.name.startswith(".") or child.name == "_dump":
+            continue
+        if any(child.glob("*.onnx")):
+            return True
+    return False
+
+
+def generation_root(path: Path, generation: str = GENERATION) -> Path:
+    """Resolve a generation leaf: ``…/v0``, a parent containing ``v0/``, or a flat tree."""
+    if path.name == generation:
+        return path
+    nested = path / generation
+    if _model_onnx_dirs(nested):
+        return nested
+    if _model_onnx_dirs(path):
+        return path
+    return nested
+
+
 def default_cache_dir(env: Optional[Mapping[str, str]] = None) -> Optional[Path]:
     """User-level ONNX cache. Isolated ``env`` dicts do not consult ``$HOME``."""
     e = os.environ if env is None else env
     xdg = (e.get("XDG_CACHE_HOME") or "").strip()
     if xdg:
-        return Path(xdg) / "xenosite" / "onnx"
+        return Path(xdg) / "xenosite" / "onnx" / GENERATION
     if env is None:
-        return Path.home() / ".cache" / "xenosite" / "onnx"
+        return Path.home() / ".cache" / "xenosite" / "onnx" / GENERATION
     home = (e.get("HOME") or "").strip()
     if home:
-        return Path(home) / ".cache" / "xenosite" / "onnx"
+        return Path(home) / ".cache" / "xenosite" / "onnx" / GENERATION
     return None
 
 
@@ -195,7 +225,9 @@ def download_weights(
         dest_path = Path(dest)
     else:
         configured = (e.get(ENV_WEIGHTS) or "").strip()
-        dest_path = Path(configured) if configured else default_cache_dir(env)
+        dest_path = (
+            generation_root(Path(configured)) if configured else default_cache_dir(env)
+        )
         if dest_path is None:
             raise WeightsDownloadError(
                 f"No destination: set {ENV_WEIGHTS} or XDG_CACHE_HOME / HOME."
@@ -206,7 +238,7 @@ def download_weights(
         return dest_path
 
     local = _local_source(source)
-    archive = dest_path.parent / _ARCHIVE_NAME
+    archive = dest_path.parent / ARCHIVE_NAME
     if local is not None:
         archive = local
     elif force or not archive.is_file():
@@ -239,7 +271,9 @@ def ensure_weights(
         dest_path = Path(dest)
     else:
         configured = (e.get(ENV_WEIGHTS) or "").strip()
-        dest_path = Path(configured) if configured else default_cache_dir(env)
+        dest_path = (
+            generation_root(Path(configured)) if configured else default_cache_dir(env)
+        )
         if dest_path is None:
             raise WeightsDownloadError(
                 f"No destination: set {ENV_WEIGHTS} or XDG_CACHE_HOME / HOME."
@@ -257,13 +291,13 @@ def resolve_onnx_dir(
     auto_download: Optional[bool] = None,
     fallback: bool = False,
 ) -> Optional[Path]:
-    """Pick an ONNX directory: env, ``./weights/onnx``, user cache, then download."""
+    """Pick an ONNX directory: env, ``./weights/onnx/v0``, user cache, then download."""
     e = os.environ if env is None else env
     want = auto_download_enabled(env, auto_download=auto_download)
 
     configured = (e.get(ENV_WEIGHTS) or "").strip()
     if configured:
-        path = Path(configured)
+        path = generation_root(Path(configured))
         if onnx_dir_has_files(path):
             _announce(path, downloaded=False)
             return path
@@ -272,7 +306,7 @@ def resolve_onnx_dir(
         return path
 
     cwd = cwd or Path.cwd()
-    local = cwd / DEFAULT_ONNX_DIR
+    local = generation_root(cwd / WEIGHTS_ONNX_PARENT)
     if onnx_dir_has_files(local):
         _announce(local, downloaded=False)
         return local

@@ -13,9 +13,12 @@ from xenosite.predict import WeightsDownloadError, download_weights, ensure_weig
 from xenosite.predict.backends import BackendNotConfigured, resolve_backend
 from xenosite.predict import weights as weights_mod
 from xenosite.predict.weights import (
+    ARCHIVE_NAME,
     ENV_ONNX_URL,
+    GENERATION,
     default_cache_dir,
     extract_onnx_archive,
+    generation_root,
     onnx_url,
     resolve_onnx_dir,
 )
@@ -33,6 +36,30 @@ def _tiny_tarball(path: Path) -> Path:
         onnx.size = len(blob)
         tf.addfile(onnx, io.BytesIO(blob))
     return path
+
+
+def test_generation_root_prefers_v0(tmp_path):
+    parent = tmp_path / "onnx"
+    v0 = parent / GENERATION
+    (v0 / "epoxidation").mkdir(parents=True)
+    (v0 / "epoxidation" / "bond.onnx").write_bytes(b"x")
+    (parent / "quinone").mkdir()
+    (parent / "quinone" / "atom.onnx").write_bytes(b"old")
+    assert generation_root(parent) == v0
+    assert generation_root(v0) == v0
+
+
+def test_generation_root_flat_legacy(tmp_path):
+    parent = tmp_path / "onnx"
+    (parent / "epoxidation").mkdir(parents=True)
+    (parent / "epoxidation" / "bond.onnx").write_bytes(b"x")
+    assert generation_root(parent) == parent
+
+
+def test_generation_root_empty_parent_is_v0(tmp_path):
+    parent = tmp_path / "onnx"
+    parent.mkdir()
+    assert generation_root(parent) == parent / GENERATION
 
 
 def test_onnx_url_requires_env():
@@ -115,7 +142,7 @@ def test_download_from_http_uses_env_url(tmp_path, monkeypatch, capsys):
     env = {ENV_ONNX_URL: "https://example.invalid/weights.tgz"}
     out = download_weights(dest=dest, env=env)
     assert (out / "demo" / "head.onnx").is_file()
-    assert (dest.parent / "xenosite_onnx.tgz").is_file()
+    assert (dest.parent / ARCHIVE_NAME).is_file()
     err = capsys.readouterr().err
     assert "INFO: downloading ONNX weights" in err
     assert "INFO: downloaded ONNX weights to" in err
@@ -125,11 +152,11 @@ def test_download_from_http_uses_env_url(tmp_path, monkeypatch, capsys):
 def test_default_cache_dir_isolated_env(tmp_path):
     assert default_cache_dir(env={}) is None
     d = default_cache_dir(env={"XDG_CACHE_HOME": str(tmp_path / "xdg")})
-    assert d == tmp_path / "xdg" / "xenosite" / "onnx"
+    assert d == tmp_path / "xdg" / "xenosite" / "onnx" / GENERATION
 
 
 def test_picker_uses_cache_dir(tmp_path):
-    cache = tmp_path / "xdg" / "xenosite" / "onnx"
+    cache = tmp_path / "xdg" / "xenosite" / "onnx" / GENERATION
     cache.mkdir(parents=True)
     (cache / "epoxidation").mkdir()
     (cache / "epoxidation" / "bond.onnx").write_bytes(b"x")

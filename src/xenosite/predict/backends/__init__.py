@@ -5,8 +5,8 @@ Picker (explicit env wins; first match):
 1. ``XENOSITE_BACKEND`` is an ``http://`` / ``https://`` URL → HTTP backend
    (deployed xenosite-api). Optional ``XENOSITE_API_KEY`` as Bearer.
 2. Else ``XENOSITE_MODELS_WEIGHTS`` → local ONNX directory.
-3. Else auto-detect ``./weights/onnx`` if model files exist → local ONNX.
-4. Else user cache (``$XDG_CACHE_HOME/xenosite/onnx``) if ``*.onnx`` exist.
+3. Else auto-detect ``./weights/onnx/v0`` (or a flat ``./weights/onnx`` tree) → local ONNX.
+4. Else user cache (``$XDG_CACHE_HOME/xenosite/onnx/v0``) if ``*.onnx`` exist.
 5. Else, when ``XENOSITE_ONNX_URL`` is set, fetch that archive into the cache
    (an INFO line reports when weights are found or downloaded).
 6. Else raise :class:`BackendNotConfigured`.
@@ -114,7 +114,7 @@ def resolve_backend(
     raise BackendNotConfigured(
         "No predictor backend configured. Set XENOSITE_BACKEND to an http(s) "
         "xenosite-api URL, XENOSITE_MODELS_WEIGHTS to an ONNX directory, put "
-        "*.onnx files under ./weights/onnx, or set XENOSITE_ONNX_URL "
+        "*.onnx files under ./weights/onnx/v0, or set XENOSITE_ONNX_URL "
         "(weights download on first predict())."
     )
 

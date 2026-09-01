@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
 
 
 class OnnxBackend:
-    """Run converted numpy-NN heads from ``weights/onnx/<model>/<head>.onnx``."""
+    """Run converted numpy-NN heads from ``weights/onnx/v0/<model>/<head>.onnx``."""
 
     name = "onnx"
 
