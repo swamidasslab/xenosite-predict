@@ -6,10 +6,10 @@ This package does not perform name lookup; ``name`` is optional metadata.
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel as _BaseModel
-from pydantic import ConfigDict, Field, NonNegativeInt, PositiveInt
+from pydantic import ConfigDict, Field, NonNegativeInt, PositiveInt, PrivateAttr
 
 Number = float
 
@@ -103,4 +103,5 @@ class Molecule(BaseModel):
     atoms: Atoms
     bonds: Bonds
     name: Optional[dict[str, Union[int, str]]] = Field(default_factory=dict)
+    _parameter: dict[str, Any] = PrivateAttr(default_factory=dict)
     model_config = ConfigDict(json_schema_extra={})

@@ -11,6 +11,67 @@ from xenosite.predict.molecule import parse_smiles
 ASPIRIN = "O=C(C)Oc1ccccc1C(=O)O"
 
 
+def test_ndealk_row_site_pair_from_index():
+    from xenosite.predict.features import ndealk_bond_rows, ndealk_row_site_key, ndealk_row_site_pair
+
+    mol, _ = parse_smiles("CN1CCNCC1")
+    rows = ndealk_bond_rows(mol)
+    assert rows
+    for row in rows:
+        a, b = ndealk_row_site_pair(row)
+        _mol, oa, ob = str(row["_index"]).split(".", 2)
+        ia, ib = int(oa) - 1, int(ob) - 1
+        assert (a, b) == (min(ia, ib), max(ia, ib))
+        assert ndealk_row_site_key(row) == f"{a}-{b}"
+
+
+def test_ndealk_site_modes_cn1ccn_and_coc1():
+    from pathlib import Path
+
+    from xenosite.predict.backends.adapters import canonical_bond_site_pair, reorder_by_bond
+    from xenosite.predict.backends.onnx import OnnxBackend
+    from xenosite.predict.features import load_names, matrix_from_rows, ndealk_bond_rows, ndealk_site_from_row_scores
+
+    backend = OnnxBackend(Path(__file__).resolve().parents[1] / "weights" / "onnx")
+    names = load_names("ndealk", "bond")
+    cases = [
+        "CN1CCN(c2ccc3nc(-c4cccc(C(F)(F)F)c4)[nH]c3c2)CC1",
+        "COc1ccc2nc(C)cc(NCCCN3CCOCC3)c2c1",
+    ]
+    for smi in cases:
+        mol, molecule = parse_smiles(smi)
+        rows = ndealk_bond_rows(mol)
+        x, _ = matrix_from_rows(rows, names)
+        pred = [float(v) for v in backend.run_head("ndealk", "bond", x)[:, 6]]
+
+        def mapped(mode):
+            site = ndealk_site_from_row_scores(
+                rows, pred, names, mode=mode, n_atoms=molecule.atoms.num
+            )
+            current, scores = [], []
+            for k, v in site.items():
+                a, b = map(int, k.split("-"))
+                current.append(canonical_bond_site_pair(a, b))
+                scores.append(v)
+            return reorder_by_bond(scores, current, molecule.bonds.idx, fill=0.0)
+
+        leg = mapped("legacy")
+        pri = mapped("principled")
+        if "CN1CCN" in smi:
+            assert sum(1 for v in leg if v > 0.01) == 3
+            for mode_vec in (leg, pri):
+                assert not any(
+                    molecule.bonds.idx[i] in ((25, 1), (4, 24)) and mode_vec[i] > 0.01
+                    for i in range(len(mode_vec))
+                )
+        else:
+            leg_set = {molecule.bonds.idx[i] for i, v in enumerate(leg) if v > 0.001}
+            pri_set = {molecule.bonds.idx[i] for i, v in enumerate(pri) if v > 0.001}
+            assert (20, 15) in leg_set
+            assert (20, 15) not in pri_set
+            assert len(pri_set) < len(leg_set)
+
+
 def test_bond_rows_deterministic():
     from xenosite.predict.features import bond_rows
 

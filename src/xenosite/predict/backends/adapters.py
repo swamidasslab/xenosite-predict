@@ -130,6 +130,13 @@ def canonicalize_pair_idx(
     return {"pair_idx": [i for i, _ in ix], "pair": [x for _, x in ix]}
 
 
+def canonical_bond_site_pair(a: int, b: int) -> tuple[int, int]:
+    """Legacy ndealk/isozyme site keys use ascending atom ids (``2-1`` → ``1-2``)."""
+    if a <= b:
+        return a, b
+    return b, a
+
+
 def reorder_by_bond(
     scores: Sequence[float],
     current: Sequence[Iterable[int]],

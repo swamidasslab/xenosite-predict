@@ -11,10 +11,10 @@ from typing import Any
 
 import numpy as np
 
-from ..backends.adapters import append_bond, reorder_by_bond
+from ..backends.adapters import append_bond, canonical_bond_site_pair, reorder_by_bond
 from ..backends.onnx import OnnxBackend
 from ..errors import WeightsNotFound
-from ..features import load_names, matrix_from_rows, ndealk_bond_rows
+from ..features import load_names, matrix_from_rows, ndealk_bond_rows, ndealk_site_from_row_scores
 from ..registry import register_model
 from ..types import Molecule
 from ._base import BaseRunner
@@ -58,8 +58,7 @@ class NdealkFamily(BaseRunner):
         y = backend.run_head("ndealk", "bond", x)
         if y.ndim == 1:
             y = y.reshape(-1, 1)
-        keys = [frozenset(r["_atoms"]) for r in rows]  # type: ignore[arg-type]
-        self._append_from_matrix(molecule, y, keys)
+        self._append_from_matrix(molecule, y, rows)
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
         # native: {isozyme: {frozenset or "i-j": score}}
@@ -71,22 +70,42 @@ class NdealkFamily(BaseRunner):
             site = native.get("hlm") or native.get("HLM") or native.get("site") or {}
             self._append_bond_map(molecule, "ndealk", site)
 
-    def _append_from_matrix(self, molecule: Molecule, y: np.ndarray, keys) -> None:
+    def _ndealk_site_mode(self, molecule: Molecule) -> str:
+        mode = molecule._parameter.get("ndealk_site_mode", "principled")
+        return mode if mode in ("legacy", "principled") else "principled"
+
+    def _site_from_row_scores(
+        self,
+        molecule: Molecule,
+        rows: list[dict],
+        pred: list[float],
+        names: list[str],
+    ) -> dict[str, float]:
+        return ndealk_site_from_row_scores(
+            rows,
+            pred,
+            names,
+            mode=self._ndealk_site_mode(molecule),
+            n_atoms=molecule.atoms.num,
+        )
+
+    def _append_from_matrix(self, molecule: Molecule, y: np.ndarray, rows: list[dict]) -> None:
         col_index = {name: i for i, name in enumerate(_OUT_ORDER)}
+        names = load_names("ndealk", "bond")
         if self.isozyme_mode:
             for api_name in ISOZYMES:
                 src = {v: k for k, v in _OUT_TO_API.items()}[api_name]
                 ci = col_index.get(src, 0)
                 ci = min(ci, y.shape[1] - 1)
                 pred = [float(v) for v in y[:, ci]]
-                bond_pred = reorder_by_bond(pred, keys, molecule.bonds.idx, fill=0.0)
-                append_bond(molecule, model=f"isozyme.{api_name}", version=self.version, bond=bond_pred)
+                site = self._site_from_row_scores(molecule, rows, pred, names)
+                self._append_bond_map(molecule, f"isozyme.{api_name}", site)
         else:
             ci = col_index.get("HLM", y.shape[1] - 1)
             ci = min(ci, y.shape[1] - 1)
             pred = [float(v) for v in y[:, ci]]
-            bond_pred = reorder_by_bond(pred, keys, molecule.bonds.idx, fill=0.0)
-            append_bond(molecule, model="ndealk", version=self.version, bond=bond_pred)
+            site = self._site_from_row_scores(molecule, rows, pred, names)
+            self._append_bond_map(molecule, "ndealk", site)
 
     def _append_bond_map(self, molecule: Molecule, model: str, site: dict) -> None:
         current = []
@@ -94,9 +113,9 @@ class NdealkFamily(BaseRunner):
         for key, val in (site.items() if isinstance(site, dict) else []):
             if isinstance(key, str) and "-" in key:
                 a, b = key.split("-", 1)
-                current.append((int(a), int(b)))
+                current.append(canonical_bond_site_pair(int(a), int(b)))
             elif isinstance(key, (list, tuple)):
-                current.append((int(key[0]), int(key[1])))
+                current.append(canonical_bond_site_pair(int(key[0]), int(key[1])))
             else:
                 continue
             pred.append(float(val or 0.0))

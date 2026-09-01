@@ -7,6 +7,9 @@ ndealk ``bond_desc.BondTD`` ordering/prefix variant. OpenBabel is internal.
 from __future__ import annotations
 
 from collections import Counter, OrderedDict
+from typing import Literal
+
+import numpy as np
 
 from . import _ob
 from .molgraph import MolGraph
@@ -461,6 +464,106 @@ def bond_rows(rdkit_mol, *, original_atom_ordering: bool = True, **kwargs) -> li
     ).run()
 
 
+def ndealk_row_site_pair(row: dict) -> tuple[int, int]:
+    """0-based legacy site pair from BondTD ``_index`` ``mol.a.b`` (1-based OB ids).
+
+    ``1.3.2`` is molecule 1, bond from OB atom 3 to OB atom 2. Legacy
+    ``predict(..., indexed_zero=True)`` subtracts one from each id, then
+    standardizes site keys to ascending order (``2-1`` → ``1-2``).
+    """
+    _mol, a, b = str(row["_index"]).split(".", 2)
+    ia, ib = int(a) - 1, int(b) - 1
+    if ia <= ib:
+        return ia, ib
+    return ib, ia
+
+
+def ndealk_row_site_key(row: dict) -> str:
+    """Legacy ``site`` dict key for a BondTD row."""
+    a, b = ndealk_row_site_pair(row)
+    return f"{a}-{b}"
+
+
+def ndealk_row_topo_gid_pair(pymol, row: dict) -> tuple[int, ...]:
+    """Sorted OpenBabel GID ranks for the bond endpoints (legacy ``BondTD.BT`` key)."""
+    ob, _ = _ob.load()
+    vec = ob.vectorUnsignedInt()
+    pymol.OBMol.GetGIDVector(vec)
+    ranks = list(vec)
+    _mol, a, b = str(row["_index"]).split(".", 2)
+    ia, ib = int(a), int(b)
+    g1 = int(ranks[ia - 1]) if ia - 1 < len(ranks) else 0
+    g2 = int(ranks[ib - 1]) if ib - 1 < len(ranks) else 0
+    return tuple(sorted((g1, g2)))
+
+
+def _attach_ndealk_topo_gid_pairs(pymol, rows: list[dict]) -> None:
+    for row in rows:
+        row["_topo_gid_pair"] = ndealk_row_topo_gid_pair(pymol, row)
+
+
+def ndealk_row_site_key_legacy(row: dict, *, n_atoms: int, seen_topo: set[tuple[int, ...]]) -> str:
+    """Legacy-test parity site key (``prediction_df_to_dict`` + orphan keys).
+
+    Later rows in a topo-GID duplicate class use ``max+1`` on the site key when
+    ``max(site) >= n_atoms - 2``, matching accidental suppression in legacy when
+    the indexed frozenset does not map to an RDKit bond.
+    """
+    a, b = ndealk_row_site_pair(row)
+    gid = row.get("_topo_gid_pair")
+    if gid is not None:
+        if gid in seen_topo:
+            hi = max(a, b)
+            if hi >= n_atoms - 2:
+                return f"{min(a, b)}-{hi + 1}"
+        else:
+            seen_topo.add(gid)
+    return f"{a}-{b}"
+
+
+def ndealk_site_from_row_scores(
+    rows: list[dict],
+    pred: list[float] | np.ndarray,
+    names: list[str],
+    *,
+    mode: Literal["principled", "legacy"] = "principled",
+    n_atoms: int | None = None,
+) -> dict[str, float]:
+    """Bond site map from BondTD rows and per-row ONNX scores.
+
+    ``principled`` (default, production API): one site key per unordered topo-GID
+    bond class — first BondTD row in each class only.
+
+    ``legacy`` (golden tests): emit a site key per row like ``prediction_df_to_dict``,
+    including orphan ``max+1`` keys for some topo duplicates so bond vectors match
+    legacy-test-api golden captures.
+    """
+    scores = [float(v) for v in pred]
+    if not rows:
+        return {}
+    if mode == "principled":
+        seen: set[tuple[int, ...]] = set()
+        site: dict[str, float] = {}
+        for i, row in enumerate(rows):
+            gid = row.get("_topo_gid_pair")
+            if gid is None:
+                site[ndealk_row_site_key(row)] = scores[i]
+                continue
+            if gid in seen:
+                continue
+            seen.add(gid)
+            site[ndealk_row_site_key(row)] = scores[i]
+        return site
+
+    n = n_atoms if n_atoms is not None else max(max(ndealk_row_site_pair(r)) for r in rows) + 1
+    seen_topo: set[tuple[int, ...]] = set()
+    site: dict[str, float] = {}
+    for i, row in enumerate(rows):
+        key = ndealk_row_site_key_legacy(row, n_atoms=n, seen_topo=seen_topo)
+        site[key] = scores[i]
+    return site
+
+
 def ndealk_bond_rows(rdkit_mol) -> list[dict]:
     """ndealk1 Heuristic + BondTD (``BondDesc__`` prefix, C–N / min-idx order).
 
@@ -489,4 +592,5 @@ def ndealk_bond_rows(rdkit_mol) -> list[dict]:
         h = h_by.get(frozenset(r["_atoms"]), {})
         for k in keys:
             r[k] = float(h.get(k, 0.0))
+    _attach_ndealk_topo_gid_pairs(pymol, rows)
     return rows

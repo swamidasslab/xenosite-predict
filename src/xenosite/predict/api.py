@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping, Optional, Union
+from typing import Any, Iterable, Mapping, Optional, Union
 
 from .backends import PredictBackend, resolve_backend, resolve_for_model
 from .errors import BackendNotConfigured
@@ -23,6 +23,7 @@ def predict(
     backend: BackendArg = None,
     backends: BackendMap = None,
     env: Optional[Mapping[str, str]] = None,
+    _parameter: Optional[Mapping[str, Any]] = None,
 ) -> Molecule:
     """Run one or more models and return a :class:`Molecule` with appended results.
 
@@ -42,6 +43,10 @@ def predict(
     env:
         Environment mapping for the picker. ``None`` uses ``os.environ``.
         Tests should pass ``env={}`` or rely on the autouse clearer.
+    _parameter:
+        Internal per-call options (not part of the public HTTP API). Runners
+        read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
+        for golden parity tests and ``principled`` (default) for production.
 
     Notes
     -----
@@ -52,6 +57,8 @@ def predict(
         models = model
     specs = normalize_models(models)
     _, molecule = as_molecule(inp)
+    if _parameter:
+        molecule._parameter = dict(_parameter)
 
     for spec in specs:
         be = resolve_for_model(spec, backend=backend, backends=backends, env=env)

@@ -18,6 +18,8 @@ MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "phase1")
 SUITE_MODELS = ("epoxidation", "quinone", "reactivity", "ugt", "ndealk", "isozyme", "phase1")
 PARITY_ATOL = 3e-4  # TF1 float32 vs ORT on quinone near-zero atom scores
 PARITY_ATOL_OMP = 0.02  # quinone OMP descriptor drift (mol head can lag ~0.02)
+# Golden rows were captured from legacy-test-api; ONNX bond vectors need legacy site keys.
+GOLDEN_NDEALK_PARAMETER = {"ndealk_site_mode": "legacy"}
 
 
 def onnx_weights_present(model: str | None = None) -> bool:

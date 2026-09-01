@@ -4,7 +4,7 @@ Importing this package does not load OpenBabel; bindings load on first feature c
 """
 
 from .atom import quinone_atom_rows, reactivity_atom_rows
-from .bond import bond_rows, ndealk_bond_rows
+from .bond import bond_rows, ndealk_bond_rows, ndealk_row_site_key, ndealk_row_site_pair, ndealk_row_topo_gid_pair, ndealk_site_from_row_scores
 from .bond_lonepair import phase1_rows
 from .names import load_names, matrix_from_rows, select_columns
 from .two_stage import topn_site_features
@@ -16,6 +16,10 @@ from .reactivity_mol import reactivity_mol_features, reactivity_onnx_rows
 __all__ = [
     "bond_rows",
     "ndealk_bond_rows",
+    "ndealk_row_site_pair",
+    "ndealk_row_site_key",
+    "ndealk_row_topo_gid_pair",
+    "ndealk_site_from_row_scores",
     "ugt_atom_rows",
     "ugt_inference_rows",
     "reactivity_atom_rows",
