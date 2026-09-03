@@ -149,6 +149,43 @@ def test_download_from_http_uses_env_url(tmp_path, monkeypatch, capsys):
     assert "example.invalid" not in err
 
 
+def test_download_http_error_does_not_leak_url(tmp_path, monkeypatch):
+    """httpx embeds the request URL in errors; we must not surface it."""
+    secret = "https://secret.example/private/xenosite_onnx_v0.tgz"
+
+    class _Stream:
+        status_code = 403
+
+        def raise_for_status(self):
+            req = httpx.Request("GET", secret)
+            resp = httpx.Response(403, request=req)
+            raise httpx.HTTPStatusError(
+                f"Client error '403 Forbidden' for url '{secret}'",
+                request=req,
+                response=resp,
+            )
+
+        def iter_bytes(self):
+            yield b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(httpx.Client, "stream", lambda self, *a, **k: _Stream())
+    dest = tmp_path / "onnx"
+    with pytest.raises(WeightsDownloadError) as ei:
+        download_weights(url=secret, dest=dest, env={}, force=True)
+    msg = str(ei.value)
+    assert "failed to download ONNX weights" in msg
+    assert "403" in msg
+    assert "secret.example" not in msg
+    assert secret not in msg
+    assert ei.value.__cause__ is None
+
+
 def test_default_cache_dir_isolated_env(tmp_path):
     assert default_cache_dir(env={}) is None
     d = default_cache_dir(env={"XDG_CACHE_HOME": str(tmp_path / "xdg")})

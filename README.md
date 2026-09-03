@@ -71,8 +71,9 @@ ONNX graphs are not in the sdist. Set `XENOSITE_ONNX_URL` to an https tarball
 or a local `.tgz` path (the URL is not stored in this repo). The first
 `predict()` (or `list_models()`) downloads into `$XDG_CACHE_HOME/xenosite/onnx/v0`
 (or `~/.cache/xenosite/onnx/v0`, or `XENOSITE_MODELS_WEIGHTS` if set) and prints
-an INFO line when weights are found or downloaded. Tests that pass `env={}`
-never fetch. `python -m xenosite.predict download` and `make download-onnx`
+an INFO line when weights are found or downloaded. Download logs and errors
+never echo the URL (so a private weight location does not leak via stderr or
+tracebacks). Tests that pass `env={}` never fetch. `python -m xenosite.predict download` and `make download-onnx`
 are optional pre-fetch helpers.
 
 ### Errors
@@ -156,6 +157,23 @@ docs/legacy-vs-principled.md  # production defaults vs golden legacy modes
 uv sync --group dev
 make test
 ```
+
+### Publishing to PyPI (trusted publishing)
+
+No long-lived PyPI tokens. Releases use GitHub OIDC via `.github/workflows/publish.yml`.
+
+1. On PyPI, add a **pending** trusted publisher (project not published yet) at
+   [pypi.org/manage/account/publishing](https://pypi.org/manage/account/publishing/):
+   - Project: `xenosite-predict`
+   - Owner: `swamidasslab`
+   - Repo: `xenosite-predict`
+   - Workflow: `publish.yml`
+   - Environment: `pypi`
+2. In GitHub → Settings → Environments, create `pypi` (add required reviewers if you want a human gate).
+3. Merge the workflow, then either push a tag `v0.2.0` or run **Publish** manually.
+4. The first successful publish creates the PyPI project; later releases reuse the same publisher.
+
+Do **not** commit `XENOSITE_ONNX_URL`, API keys, or weight hostnames. Keep those in local env / deployment secrets only.
 
 Vendored-tree comparison (sibling checkout, not committed):
 
