@@ -1,29 +1,19 @@
-"""Load committed feature-name JSON (column order). Inference never opens TSV."""
+"""Load committed feature-column order. Inference never opens TSV or JSON."""
 
 from __future__ import annotations
 
-import json
-from importlib import resources
-from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
+from .name_tables import TABLES
+
 
 def load_names(model: str, head: str) -> Optional[list[str]]:
-    """Return ordered feature names for ``model/head``, or None if not committed yet."""
-    pkg = "xenosite.predict.features"
-    filename = f"{model}_{head}_names.json"
-    try:
-        data = resources.files(pkg).joinpath(filename).read_text(encoding="utf-8")
-    except (FileNotFoundError, ModuleNotFoundError, AttributeError):
-        path = Path(__file__).with_name(filename)
-        if not path.is_file():
-            return None
-        data = path.read_text(encoding="utf-8")
-    names = json.loads(data)
-    if isinstance(names, dict):
-        names = names.get("names") or names.get("columns")
+    """Return ordered feature names for ``model/head``, or None if unknown."""
+    names = TABLES.get((model, head))
+    if names is None:
+        return None
     return list(names)
 
 

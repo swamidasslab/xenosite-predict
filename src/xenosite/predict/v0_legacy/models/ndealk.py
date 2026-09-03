@@ -55,7 +55,7 @@ class NdealkFamily(BaseRunner):
         names = load_names("ndealk", "bond")
         if not names:
             raise WeightsNotFound(
-                "ndealk feature-name JSON is missing (no training TSV in the tarball). "
+                "ndealk feature-name table is missing (no training TSV in the tarball). "
                 "Cannot align RDKit columns to the 386-D ONNX input."
             )
         x, _ = matrix_from_rows(rows, names)

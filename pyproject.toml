@@ -25,21 +25,6 @@ build-backend = "hatchling.build"
 # Local/editable installs still build a wheel. Published artifacts are sdist-only.
 packages = ["src/xenosite"]
 
-# Hatch packs only .py from packages=; JSON name tables must be listed here.
-# Do not force-include the features/ directory (duplicates __init__.py in the wheel).
-[tool.hatch.build.targets.wheel.force-include]
-"src/xenosite/predict/v0_legacy/features/epoxidation_bond_names.json" = "xenosite/predict/v0_legacy/features/epoxidation_bond_names.json"
-"src/xenosite/predict/v0_legacy/features/epoxidation_mol_names.json" = "xenosite/predict/v0_legacy/features/epoxidation_mol_names.json"
-"src/xenosite/predict/v0_legacy/features/ndealk_bond_names.json" = "xenosite/predict/v0_legacy/features/ndealk_bond_names.json"
-"src/xenosite/predict/v0_legacy/features/phase1_mol_names.json" = "xenosite/predict/v0_legacy/features/phase1_mol_names.json"
-"src/xenosite/predict/v0_legacy/features/phase1_site_names.json" = "xenosite/predict/v0_legacy/features/phase1_site_names.json"
-"src/xenosite/predict/v0_legacy/features/quinone_atom_names.json" = "xenosite/predict/v0_legacy/features/quinone_atom_names.json"
-"src/xenosite/predict/v0_legacy/features/quinone_mol_names.json" = "xenosite/predict/v0_legacy/features/quinone_mol_names.json"
-"src/xenosite/predict/v0_legacy/features/quinone_pair_names.json" = "xenosite/predict/v0_legacy/features/quinone_pair_names.json"
-"src/xenosite/predict/v0_legacy/features/reactivity_atom_names.json" = "xenosite/predict/v0_legacy/features/reactivity_atom_names.json"
-"src/xenosite/predict/v0_legacy/features/reactivity_mol_names.json" = "xenosite/predict/v0_legacy/features/reactivity_mol_names.json"
-"src/xenosite/predict/v0_legacy/features/ugt_atom_names.json" = "xenosite/predict/v0_legacy/features/ugt_atom_names.json"
-
 [tool.hatch.build.targets.sdist]
 exclude = [
     "/tools",
