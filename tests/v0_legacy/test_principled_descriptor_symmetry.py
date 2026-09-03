@@ -81,7 +81,7 @@ def _assert_principled_atom_descriptors(smiles: str, model: str) -> None:
         _parameter=PRINCIPLED_PARAMETER,
     )
     names = load_names(model, "atom")
-    assert names, f"missing {model}_atom_names.json"
+    assert names, f"missing {model}/atom names in name_tables"
     assert_atom_descriptor_rows_symmetric(rows, rdmol, names)
 
 
@@ -89,7 +89,7 @@ def _assert_principled_bond_descriptors(smiles: str, model: str) -> None:
     rdmol, _ = parse_smiles(smiles)
     rows = rows_for_model(model, rdmol, _parameter=PRINCIPLED_PARAMETER)
     names = load_names(model, "bond")
-    assert names, f"missing {model}_bond_names.json"
+    assert names, f"missing {model}/bond names in name_tables"
     assert_bond_descriptor_rows_symmetric(rows, rdmol, names)
 
 

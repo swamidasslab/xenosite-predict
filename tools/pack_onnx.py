@@ -6,7 +6,7 @@ Runtime uses ``weights/onnx/v0/<model>/<head>.onnx``. Convert also writes
 ``_dump/`` (pickle dump intermediates) is excluded.
 
 Unpack into ``weights/onnx/v0`` (or point ``XENOSITE_MODELS_WEIGHTS`` at the
-extracted v0 tree). Feature-name JSON lives in the Python package, not here.
+extracted v0 tree). Feature-name tables live in the Python package (`name_tables.py`), not here.
 This tarball is the v0 generation; v1 will be a separate archive.
 """
 

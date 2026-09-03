@@ -29,8 +29,8 @@ INFO line when weights are found or downloaded. No manual download call is
 required. `make download-onnx` pre-fetches into this checkout directory.
 
 `make pack-onnx` is the runtime-weight tarball: `epoxidation/bond.onnx` and friends.
-It omits `_dump/` (Python-2 pickle dump intermediates). Feature-name JSON stays in
-the Python package. Inference only needs the `.onnx` files; `.meta.json` is packed
+It omits `_dump/` (Python-2 pickle dump intermediates). Feature-name tables live in
+the Python package (`name_tables.py`). Inference only needs the `.onnx` files; `.meta.json` is packed
 for tests/debugging.
 
 The Docker image is `dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api`.

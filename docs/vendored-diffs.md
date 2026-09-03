@@ -89,7 +89,7 @@ Phase1 is TensorFlow `molecularNN`. Bioactivation enumerates metabolites then sc
 
 ## Weights
 
-Feature **names/order** JSON may be committed next to Python modules after `make convert-onnx` reads TSV headers. Weight tensors stay in gitignored `weights/`.
+Feature **names/order** live in ``name_tables.py`` after `make convert-onnx` reads TSV headers. Weight tensors stay in gitignored `weights/`.
 
 ### Extract and ONNX convert (2026-08-29)
 
@@ -97,7 +97,7 @@ Feature **names/order** JSON may be committed next to Python modules after `make
 - Fallback tarball contains pickles. Conversion uses a public `python:2.7-slim` (linux/amd64) dump image plus sibling `NN/` sources (OpenOpt stubbed). **Not** the WashU image.
 - Numpy-NN heads converted and random-vector parity vs dumped py2 `model.output` holds at atol `1e-4` (typically `~1e-7` float32): epoxidation bond/mol, quinone atom/pair/mol, reactivity atom (AbutLayer) / mol, ugt atom, ndealk bond (10 isozyme heads).
 - **Phase1 / bioactivation:** Phase1 TF1 pickles convert on the host to `weights/onnx/v0/phase1/{site,mol}.onnx` (windowed MLP; no TensorFlow at runtime). Bioactivation is still a metabolite pipeline, not one graph. HTTP/legacy backends still apply.
-- Feature-name JSON committed from TSV headers. N-dealk has no training TSV in the tarball; the aspirin OpenBabel dump supplied 386 `ndealk_bond_names.json` columns (`Heuristic` + `BondDesc`).
+- Feature-name tables are inlined in `name_tables.py` (from TSV headers). N-dealk has no training TSV in the tarball; the aspirin OpenBabel dump supplied 386 ndealk bond columns (`Heuristic` + `BondDesc`).
 - Host OpenBabel vs dump tests use `xenosite-predict-py2:dump` (Debian `python-openbabel` 2.4.1 and `python-rdkit` from archive.debian.org + sibling `xenosite-legacy/src`). Not the WashU API image and not the micromamba test-API. `make dump-ob` writes `tests/fixtures/ob_dumps.json` (gitignored) and `ob_dumps.json.gz` (committed via Git LFS). Compare rows by **atom identity** in the dump index (`1.5.10` = mol.atom1.atom2, 1-based), not OpenBabel bond-iterator order. Use **rtol=0**. Default atol is `1e-4`. Keep pybel's read-time Gasteiger charges; calling `OBChargeModel` `gasteiger` on 3.2 equalizes nitro oxygens and misses the dump by ~0.45.
 - BondTD `NRings` counts **DFS back-edge cycles** (legacy `UndirectedGraph.cycles`), not OpenBabel SSSR. SSSR is still used for `MolGraph.cycles()`, AtomTD/UGT ring sizes, and quinone aromatic rings. Fusion atoms sit in extra perimeter cycles the dump counted; SSSR dropped them.
 - Quinone ortho/meta/para has two modes via ``quinone_omp_mode`` on ``predict(..., _parameter=)``:
