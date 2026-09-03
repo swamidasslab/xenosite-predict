@@ -180,6 +180,11 @@ def _local_source(source: Source) -> Optional[Path]:
 
 
 def _http_get(url: str, dest: Path, *, timeout: float) -> None:
+    """Fetch ``url`` to ``dest`` without logging or re-raising the URL.
+
+    ``httpx`` error strings include the request URL; we deliberately drop the
+    cause chain so ``XENOSITE_ONNX_URL`` cannot leak via tracebacks or logs.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     partial = dest.with_name(dest.name + ".partial")
     try:
@@ -189,15 +194,25 @@ def _http_get(url: str, dest: Path, *, timeout: float) -> None:
             headers={"user-agent": _USER_AGENT},
         ) as client:
             with client.stream("GET", url) as response:
-                response.raise_for_status()
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    code = exc.response.status_code
+                    raise WeightsDownloadError(
+                        f"failed to download ONNX weights (HTTP {code})"
+                    ) from None
                 with partial.open("wb") as fh:
                     for chunk in response.iter_bytes():
                         fh.write(chunk)
         partial.replace(dest)
-    except httpx.HTTPError as exc:
+    except WeightsDownloadError:
         if partial.exists():
             partial.unlink()
-        raise WeightsDownloadError("failed to download ONNX weights") from exc
+        raise
+    except httpx.HTTPError:
+        if partial.exists():
+            partial.unlink()
+        raise WeightsDownloadError("failed to download ONNX weights") from None
     except Exception:
         if partial.exists():
             partial.unlink()

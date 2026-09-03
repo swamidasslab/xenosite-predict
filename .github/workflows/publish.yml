@@ -1,0 +1,57 @@
+# Publish to PyPI via Trusted Publishing (OIDC). No API tokens in GitHub secrets.
+#
+# One-time setup (package not on PyPI yet → pending publisher):
+#   1. https://pypi.org/manage/account/publishing/
+#   2. Add pending publisher:
+#        PyPI project name: xenosite-predict
+#        Owner:             swamidasslab
+#        Repository:        xenosite-predict
+#        Workflow name:     publish.yml
+#        Environment:       pypi
+#   3. GitHub → Settings → Environments → create `pypi`
+#      (optional but recommended: required reviewers)
+#   4. Merge this workflow, then push a tag vX.Y.Z (or Run workflow → publish)
+#
+# Docs: https://docs.pypi.org/trusted-publishers/
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build sdist
+        run: uv build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/xenosite-predict
+    permissions:
+      id-token: write  # required for trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
