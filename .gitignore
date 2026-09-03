@@ -34,6 +34,8 @@ weights/**/*.pickle
 *.safetensors
 *.model
 *.pyp
+# Tiny stub graphs for parallel/async unit tests (not real weights).
+!tests/fixtures/stub_onnx/**/*.onnx
 
 # uv
 uv.lock
