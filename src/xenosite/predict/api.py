@@ -74,7 +74,9 @@ def predict(
 
     Notes
     -----
-    One molecule at a time (no batch API). Import does not open ONNX, HTTP, or OpenBabel.
+    One molecule at a time (no batch API). For many molecules use
+    :func:`xenosite.predict.predict_many` or :func:`xenosite.predict.apredict_many`.
+    Import does not open ONNX, HTTP, or OpenBabel.
     First use downloads ONNX weights when XENOSITE_ONNX_URL is set.
     """
     ensure_builtins()

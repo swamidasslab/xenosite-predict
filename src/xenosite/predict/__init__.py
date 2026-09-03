@@ -7,6 +7,7 @@ See the package README for backends, environment variables, and versions.
 """
 
 from .api import list_models, predict
+from .parallel import apredict, apredict_many, predict_many
 from .registry import register_model
 from .errors import (
     BackendNotConfigured,
@@ -35,6 +36,9 @@ from .types import (
 
 __all__ = [
     "predict",
+    "predict_many",
+    "apredict",
+    "apredict_many",
     "list_models",
     "register_model",
     "Molecule",

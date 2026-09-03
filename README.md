@@ -9,22 +9,42 @@ This package is **not** wired into `xenosite-api` yet.
 ## User API
 
 ```python
-from xenosite.predict import predict, list_models
+from xenosite.predict import predict, predict_many, apredict, apredict_many, list_models
 
 mol = predict("O=C(C)Oc1ccccc1C(=O)O", model="epoxidation")
 mol = predict("O=C(C)Oc1ccccc1C(=O)O", models=["epoxidation", ("ugt", "0")])
 mol = predict(mol, models=["quinone"])  # append
 list_models()  # what this process can actually run (backend-aware)
+
+# Many molecules (process pool for ONNX; sync API)
+mols = predict_many(smiles_list, model="ugt", workers=4)
+
+# Async (event-loop friendly; same workers under the hood)
+mol = await apredict(smi, model="ugt")
+mols = await apredict_many(smiles_list, model="ugt", workers=4)
+mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 ```
 
-- **One molecule at a time** (no batch API).
-- **Parse once** when several models run. Canonical SMILES is **non-isomeric** (`isomericSmiles=False`).
+- **One molecule at a time** for ``predict`` / ``apredict`` (no multi-mol batch inside a single call).
+- **Many molecules:** ``predict_many`` / ``apredict_many`` run each input independently in parallel.
+- **Parse once** when several models run on one molecule. Canonical SMILES is **non-isomeric** (`isomericSmiles=False`).
 - **`models=`** is a name (default version `"0"`) or `(name, version)` pairs. Do not pass one version string for a whole list.
 - **Indices** are 0-based RDKit atom/bond indices. Scores are floats (`atol=1e-4` in tests).
 - **Name lookup is omitted.** Pass SMILES, not drug names.
 - Import does **not** open ONNX, HTTP, or OpenBabel. Load on first use of that `(model, version)`. Callers never import `openbabel` / `pybel`.
 - First `predict()` downloads ONNX weights when `XENOSITE_ONNX_URL` is set and none are cached (an **INFO** line reports when they are found or downloaded). No separate `download_weights()` call is required.
+- **Workers:** ONNX batch/async paths use a process pool (descriptor generation is CPU-bound; threads do not help). Set ``workers=`` or ``XENOSITE_WORKERS``. ``XENOSITE_ORT_INTRA_OP`` caps ORT threads per process under concurrency.
 - **Legacy vs principled:** production defaults differ from golden-test-api parity in four internal `_parameter` flags (ndealk site keys, quinone OMP paths, bond symmetry, bond NRings). **Score impact summary:** [`docs/legacy-vs-principled.md`](docs/legacy-vs-principled.md#expected-score-impact-production-vs-legacy). Walkthrough: `tests/v0_legacy/test_legacy_vs_principled_guide.py`.
+
+### `predict_many` / `apredict` / `apredict_many`
+
+| Helper | Meaning |
+|---|---|
+| `predict_many(inputs, …, workers=…)` | Sync batch: one molecule per input, process pool for ONNX |
+| `apredict(inp, …)` | Async single molecule (offloads to the shared pool) |
+| `apredict_many(inputs, …)` | Async batch (same workers as `predict_many`) |
+
+`workers` defaults to CPU count (`XENOSITE_WORKERS` overrides). New models reuse the existing `predict` / runner path — no per-model async code.
 
 ### `predict(inp, model=..., models=..., backend=..., backends=..., env=...)`
 
