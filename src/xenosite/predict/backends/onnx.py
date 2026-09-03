@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -13,6 +14,20 @@ try:
     import onnxruntime as ort
 except ImportError:  # pragma: no cover
     ort = None  # type: ignore[assignment]
+
+# Cap ORT intra-op threads when many process workers share a host.
+ENV_ORT_INTRA = "XENOSITE_ORT_INTRA_OP"
+
+
+def _session_options() -> Any:
+    if ort is None:
+        return None
+    opts = ort.SessionOptions()
+    raw = (os.environ.get(ENV_ORT_INTRA) or "").strip()
+    if raw:
+        opts.intra_op_num_threads = max(1, int(raw))
+        opts.inter_op_num_threads = 1
+    return opts
 
 
 class OnnxBackend:
@@ -54,9 +69,11 @@ class OnnxBackend:
                     "(auto-downloaded on first predict()) or "
                     "XENOSITE_MODELS_WEIGHTS to a directory of *.onnx files."
                 )
-            self._sessions[key] = ort.InferenceSession(
-                str(path), providers=["CPUExecutionProvider"]
-            )
+            kwargs: dict[str, Any] = {"providers": ["CPUExecutionProvider"]}
+            opts = _session_options()
+            if opts is not None:
+                kwargs["sess_options"] = opts
+            self._sessions[key] = ort.InferenceSession(str(path), **kwargs)
         return self._sessions[key]
 
     def run_head(self, model: str, head: str, x: np.ndarray) -> np.ndarray:
