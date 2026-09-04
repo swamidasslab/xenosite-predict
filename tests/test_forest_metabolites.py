@@ -42,6 +42,7 @@ PROPANE = "CCC"
 NDEALK = "CN(C)Cc1ccccc1"
 PHENOL = "Oc1ccccc1"
 BENZENE = "c1ccccc1"
+ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 
 
 def _forest_metabolite_keys(rdmol, ruleset: str) -> set[tuple[str, str, tuple[int, ...]]]:
@@ -299,7 +300,37 @@ def test_exact_duplicate_forest_hits_deduped():
     cc = [m for m in mol.results[0].metabolite or [] if m.smiles == "CC"]
     assert len(cc) == 1
     assert cc[0].atom == [0, 1]
+    # Cleavage co-products (e.g. CO / C=O) are separate rows sharing the site.
+    assert {m.smiles for m in mol.results[0].metabolite or [] if m.atom == [0, 1]} >= {
+        "CC",
+        "CO",
+    }
     assert len(mol.results[0].metabolite) == _unique_forest_count(rdmol, "UO")
+
+
+def test_hydrolysis_emits_both_cleavage_fragments():
+    """Ester hydrolysis yields each fragment as its own metabolite row."""
+    rdmol, mol = parse_smiles(ASPIRIN)
+    mol.results = [
+        AtomBondResult(
+            model="phase1.hydrolysis",
+            version="0",
+            atom=[0.0] * mol.atoms.num,
+            bond=_bond_scores(mol, (1, 3), 0.91),
+        )
+    ]
+    attach_metabolites(mol, rdmol=rdmol)
+    mets = mol.results[0].metabolite
+    assert mets
+    ester = [m for m in mets if m.atom == [1, 3]]
+    smiles = {m.smiles for m in ester}
+    assert "CC(=O)O" in smiles  # acetic acid
+    assert "O=C(O)c1ccccc1O" in smiles  # salicylic acid
+    assert all(m.pathway == "Hydrolysis" for m in ester)
+    assert all(float(m.score or 0.0) == pytest.approx(0.91) for m in ester)
+    assert len(mets) == _unique_forest_count(rdmol, "HD")
+    forest_keys = _forest_metabolite_keys(rdmol, "HD")
+    assert _attached_metabolite_keys(mets) == forest_keys
 
 
 def test_attach_metabolites_multiple_model_results():
