@@ -1,16 +1,18 @@
 """Built-in ``(name, version)`` registry with lazy factories.
 
-``models=`` accepts a string (default version ``"0"``) or ``(name, version)``
-pairs. Do not apply one version string across a list. Entry-point plugins are
-deferred until a built-in ONNX model actually runs.
+``models=`` accepts a string (default scoring version ``"1"``) or
+``(name, version)`` pairs. Version ``"0"`` uses legacy scoring parameters;
+``"1"`` uses the updated defaults. Do not apply one version string across a
+list. Entry-point plugins are deferred until a built-in ONNX model actually runs.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Iterable, Optional
 
 from .errors import UnknownModel
+from .scoring import DEFAULT_SCORING_VERSION
 
 Spec = tuple[str, str]
 Factory = Callable[[], "ModelRunner"]
@@ -56,16 +58,32 @@ def register_model(
     two_stage: bool = False,
     pipeline: bool = False,
 ) -> None:
-    """Internal registration. Not a public plugin API yet."""
-    _REGISTRY[(name, version)] = ModelInfo(
-        name=name,
-        version=version,
+    """Internal registration. Not a public plugin API yet.
+
+    Built-ins pass ``version="0"`` (weight generation). Scoring versions
+    ``"0"`` (legacy params) and ``"1"`` (updated params) share the factory;
+    ``default=True`` marks ``"1"`` as the ``models=["name"]`` default.
+    """
+    info_kw = dict(
         factory=factory,
-        default=default,
         blocked_reason=blocked_reason,
         heads=heads,
         two_stage=two_stage,
         pipeline=pipeline,
+    )
+    if version == "0":
+        _REGISTRY[(name, "0")] = ModelInfo(
+            name=name, version="0", default=False, **info_kw
+        )
+        _REGISTRY[(name, "1")] = ModelInfo(
+            name=name, version="1", default=default, **info_kw
+        )
+        return
+    _REGISTRY[(name, version)] = ModelInfo(
+        name=name,
+        version=version,
+        default=default,
+        **info_kw,
     )
 
 
@@ -96,8 +114,9 @@ def default_version(name: str) -> str:
     for (n, v), info in _REGISTRY.items():
         if n == name and info.default:
             return v
-    # Unknown names still get "0" so the error is UnknownModel at lookup
-    return "0"
+    # Unknown names still get the production scoring version so the error is
+    # UnknownModel at lookup (not a missing-version miss).
+    return DEFAULT_SCORING_VERSION
 
 
 def get_info(name: str, version: str) -> ModelInfo:
@@ -112,7 +131,9 @@ def get_info(name: str, version: str) -> ModelInfo:
 
 def load_runner(name: str, version: str) -> ModelRunner:
     info = get_info(name, version)
-    return info.factory()
+    runner = info.factory()
+    runner.version = version
+    return runner
 
 
 def registered() -> list[ModelInfo]:

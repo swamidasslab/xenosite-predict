@@ -1,50 +1,51 @@
 # Legacy vs principled prediction modes
 
 XenoSite ONNX predictors reproduce scores from the original TensorFlow 1 /
-legacy-test-api stack closely enough for regression testing, but **production
-`predict()` defaults deliberately differ** in a few places where the legacy
-behavior was accidental, tie-breaking, or tied to OpenBabel internals rather than
-chemical symmetry.
+legacy-test-api stack closely enough for regression testing, but **scoring
+version `"1"` (the `predict()` default, HTTP `/v1`) differs** from version
+`"0"` in a few places where the legacy behavior was accidental, tie-breaking,
+or tied to OpenBabel internals rather than chemical symmetry.
 
-This document explains those differences, how to opt into legacy behavior, and
+This document explains those differences, how to request each version, and
 which models are affected.
+
+## Scoring versions
+
+| Version | How to call | Parameter defaults | Matches |
+|---|---|---|---|
+| `"1"` (default) | `predict(smi, model="epoxidation")` or `models=[("epoxidation", "1")]` | updated / principled / RDKit | HTTP `/v1` |
+| `"0"` | `predict(smi, models=[("epoxidation", "0")])` | legacy site/OMP/symmetry/NRings | HTTP `/v0`, golden fixtures, legacy-test-api |
+
+Same ONNX weights in both cases. `Result.version` is `"0"` or `"1"` to match.
+`_parameter` overlays individual flags (tests and ablations only).
+
+```python
+from xenosite.predict import predict
+
+# v1 — updated mapping (default)
+mol = predict("c1ccc2ccccc2c1", models=["quinone"])
+
+# v0 — legacy mapping
+mol = predict("c1ccc2ccccc2c1", models=[("quinone", "0")])
+```
 
 ## Quick reference
 
-| `_parameter` key | Production default | Golden / parity value | Affects |
+| `_parameter` key | Version `"1"` (default) | Version `"0"` / golden | Affects |
 |---|---|---|---|
 | `ndealk_site_mode` | `"principled"` | `"legacy"` | `ndealk`, `isozyme` |
 | `quinone_omp_mode` | `"principled"` (max/any over tied shortest paths) | `"legacy"` (single sorted-BFS path) | `quinone` |
 | `symmetry_group_mode` | `"rdkit"` | `"openbabel"` | `ndealk`, `isozyme`, `epoxidation` |
 | `bond_nrings_mode` | `"principled"` | `"legacy"` | `epoxidation`, `ndealk`, `isozyme` |
 
-Pass options on the internal `_parameter` mapping (not exposed on the public HTTP
-API today):
+Bundles live in `xenosite.predict.scoring` (`V0_PARAMETER`, `V1_PARAMETER`).
+Test helpers in `tests/support.py`:
 
-```python
-from xenosite.predict import predict
-
-# Production (defaults — no _parameter needed)
-mol = predict("c1ccc2ccccc2c1", models=["quinone"])
-
-# Legacy parity (golden tests, diffing against legacy-test-api captures)
-mol = predict(
-    "c1ccc2ccccc2c1",
-    models=["quinone"],
-    _parameter={
-        "ndealk_site_mode": "legacy",
-        "quinone_omp_mode": "legacy",
-        "symmetry_group_mode": "openbabel",
-        "bond_nrings_mode": "legacy",
-    },
-)
-```
-
-Test helpers in `tests/support.py` define the merged bundles:
-
-- `PRINCIPLED_PARAMETER` — explicit production defaults (same as omitting `_parameter`).
-- `GOLDEN_PARAMETER` — legacy site/OMP/symmetry modes used by `test_golden*.py`.
+- `PRINCIPLED_PARAMETER` — explicit v1 flags (same scores as omitting `_parameter`).
+- `GOLDEN_PARAMETER` — v0 flags; `test_golden*.py` still pass this on version `"1"` as an overlay.
 - `golden_predict_kwargs(model)` — returns `{"_parameter": GOLDEN_PARAMETER}` for score models.
+
+The public equivalent of `GOLDEN_PARAMETER` is `models=[(name, "0")]`.
 
 ## Why two modes exist
 
@@ -53,19 +54,22 @@ Test helpers in `tests/support.py` define the merged bundles:
 (Docker image running pickled TF1 graphs + OpenBabel 2.4 features). Those captures
 encode historical quirks: one BFS shortest path for quinone OMP descriptors,
 per-row ndealk site keys with orphan indices, and OpenBabel GID bond classes.
+Request scoring version `"0"` (or overlay `GOLDEN_PARAMETER`) to match them.
 
-**Production ONNX** keeps the same neural-network weights and feature columns but
-fixes grouping and descriptor tie-breaking so scores respect RDKit topological
-symmetry and stable graph-theoretic definitions. ONNX outputs are unchanged; only
-**how row scores map onto atom/bond vectors** differs in the flagged code paths.
+**Version `"1"` / production ONNX** keeps the same neural-network weights and
+feature columns but fixes grouping and descriptor tie-breaking so scores respect
+RDKit topological symmetry and stable graph-theoretic definitions. ONNX outputs
+are unchanged; only **how row scores map onto atom/bond vectors** differs in the
+flagged code paths.
 
-Golden tests therefore pass `GOLDEN_PARAMETER` so bitwise parity with fixtures
-holds. Application code should call `predict()` without `_parameter` unless
-reproducing legacy numbers intentionally.
+Golden tests therefore pass `GOLDEN_PARAMETER` (or `models=[(name, "0")]`) so
+bitwise parity with fixtures holds. Application code should call `predict()` at
+version `"1"` (the default) unless reproducing legacy numbers intentionally.
 
 ## Expected score impact (production vs legacy)
 
-These numbers compare **`predict()` defaults** vs **`GOLDEN_PARAMETER`** on the
+These numbers compare **version `"1"` (`predict()` default)** vs **version `"0"`
+/ `GOLDEN_PARAMETER`** on the
 327-molecule golden suite (`PARITY_ATOL = 0.005`, max absolute delta across
 mol/atom/bond/pair heads). Same ONNX weights in both cases — differences are
 descriptor tie-breaking and **how row scores map onto bond vectors**, not model
@@ -111,23 +115,26 @@ approximate legacy site collapse without sibling broadcast, use
 **Unaffected models** — `reactivity`, `ugt`, and `phase1` scores are identical
 with or without `GOLDEN_PARAMETER`.
 
-### When to pass legacy flags
+### When to use version `"0"`
 
 | Situation | Recommendation |
 |---|---|
-| New rankings, UI, or chemistry-facing APIs | Omit `_parameter` (production defaults) |
-| Diffing against committed golden JSON | `golden_predict_kwargs(model)` from `tests/support.py` |
-| Matching legacy-test-api Docker output | Full `GOLDEN_PARAMETER` |
-| Quinone only: closer to golden without full bundle | `quinone_omp_mode="legacy"` |
+| New rankings, UI, or chemistry-facing APIs | Default version `"1"` (omit the version) |
+| HTTP `/v1` | `models=[(name, "1")]` or omit version |
+| HTTP `/v0` / historical clients | `models=[(name, "0")]` |
+| Diffing against committed golden JSON | `models=[(name, "0")]` or `golden_predict_kwargs(model)` |
+| Matching legacy-test-api Docker output | Version `"0"` or full `GOLDEN_PARAMETER` |
+| Quinone only: closer to golden without full bundle | `quinone_omp_mode="legacy"` overlay |
 | Ndealk: principled dedup but no sibling broadcast | `ndealk_site_mode="principled"`, `symmetry_group_mode="openbabel"` |
 
 ```python
 from tests.support import GOLDEN_PARAMETER, golden_predict_kwargs
 
-# Full legacy parity (golden tests)
-predict(smiles, models=["ndealk"], _parameter=GOLDEN_PARAMETER)
+# Public v0 (legacy params, Result.version == "0")
+predict(smiles, models=[("ndealk", "0")])
 
-# Shorthand for golden score models
+# Overlay on v1 (golden tests that still pass _parameter)
+predict(smiles, models=["ndealk"], _parameter=GOLDEN_PARAMETER)
 predict(smiles, **golden_predict_kwargs("quinone"))
 ```
 
@@ -287,10 +294,10 @@ Ndealk/isozyme also use `ndealk_site_mode`.
 
 | Goal | Call |
 |---|---|
-| New application / principled chemistry | `predict(smiles, models=[...])` |
-| Match committed golden JSON | `predict(..., **golden_predict_kwargs(model))` |
-| Match legacy-test-api Docker output | Full `GOLDEN_PARAMETER` on score models |
-| Debug one flag | Pass only that key in `_parameter`; unspecified keys keep production defaults |
+| New application / updated chemistry | `predict(smiles, models=[...])` (version `"1"`) |
+| HTTP `/v1` | version `"1"` (default) |
+| HTTP `/v0` / golden JSON / legacy-test-api | `predict(..., models=[(name, "0")])` |
+| Debug one flag | Pass only that key in `_parameter`; unspecified keys keep that version's defaults |
 
 Do **not** regather golden fixtures when changing production defaults if golden
 tests still pass `GOLDEN_PARAMETER` (legacy site/OMP/symmetry/NRings modes).
@@ -305,4 +312,4 @@ tests still pass `GOLDEN_PARAMETER` (legacy site/OMP/symmetry/NRings modes).
 | Directed OB bond class | `symmetry.directed_ob_bond_symmetry_key` |
 | Ndealk site collapse | `features/bond.py` → `ndealk_site_from_row_scores` |
 | Quinone OMP paths | `features/atom.py` → `_paths_for_omp`, `_omp_paths`; `features/molgraph.py` |
-| Public API docs | `api.py` → `predict(..., _parameter=...)` docstring |
+| Public API docs | `api.py` → `predict(..., models=[(name, version)])`; `scoring.py` |

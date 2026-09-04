@@ -34,7 +34,7 @@ def test_predict_single_model(model):
     assert mol.atoms.num >= 2
     assert len(mol.bonds.idx) >= 1
     assert mol.results
-    assert all(r.version == "0" for r in mol.results)
+    assert all(r.version == "1" for r in mol.results)
 
 
 def test_predict_multi_model_appends():
@@ -47,6 +47,20 @@ def test_predict_multi_model_appends():
     heads = {r.model for r in mol.results}
     assert "epoxidation" in heads
     assert "quinone" in heads
+    assert all(r.version == "1" for r in mol.results)
+
+
+def test_predict_v0_stamps_legacy_version():
+    if not onnx_weights_present("epoxidation"):
+        pytest.skip("no epoxidation ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    mol = predict(ASPIRIN, models=[("epoxidation", "0")], backend=be)
+    assert mol.results
+    assert all(r.version == "0" for r in mol.results)
+    assert mol._parameter["ndealk_site_mode"] == "legacy"
+    assert mol._parameter["symmetry_group_mode"] == "openbabel"
 
 
 def test_predict_reuses_molecule_object():
@@ -64,9 +78,13 @@ def test_predict_reuses_molecule_object():
 
 def test_list_models_reports_phase1():
     rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(onnx_root())})
-    by = {r["name"]: r for r in rows}
-    assert "phase1" in by
-    assert by["phase1"]["two_stage"] is True
-    assert "stable_oxygenation" in by["phase1"]["heads"]
+    versions = {(r["name"], r["version"]) for r in rows}
+    assert ("phase1", "0") in versions
+    assert ("phase1", "1") in versions
+    by = {(r["name"], r["version"]): r for r in rows}
+    v1 = by[("phase1", "1")]
+    assert v1["two_stage"] is True
+    assert "stable_oxygenation" in v1["heads"]
     if onnx_weights_present("phase1") and _ob.installed():
-        assert by["phase1"]["available"] is True
+        assert v1["available"] is True
+        assert by[("phase1", "0")]["available"] is True

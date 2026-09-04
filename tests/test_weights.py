@@ -203,6 +203,7 @@ def test_picker_uses_cache_dir(tmp_path):
     )
     assert be.name == "onnx"
     assert ("epoxidation", "0") in be.available_models()
+    assert ("epoxidation", "1") in be.available_models()
 
 
 def test_picker_does_not_download_with_empty_env(tmp_path):

@@ -104,31 +104,42 @@ def _max_delta(a: dict, b: dict) -> float:
 
 
 def test_chapter_0_public_predict_uses_principled_defaults():
-    """Production ``predict()`` needs no ``_parameter``; golden tests opt into legacy.
+    """Default ``predict()`` is scoring version ``"1"`` (updated params).
 
-    Golden JSON was captured from legacy-test-api with historical site keys and
-    OpenBabel symmetry. Application code should omit ``_parameter`` unless it
-    intentionally reproduces those numbers.
+    Version ``"0"`` is the legacy / golden / HTTP ``/v0`` mapping. Application
+    code should omit the version (or pass ``"1"``) unless it intentionally
+    reproduces historical numbers.
     """
     mol = _predict(NAPHTHALENE, "quinone")
-    # Runners leave _parameter empty unless the caller set it.
+    # v1 leaves _parameter empty; runners already default to updated flags.
     assert mol._parameter == {}
+    assert all(r.version == "1" for r in mol.results)
 
     explicit = _predict(NAPHTHALENE, "quinone", parameter=PRINCIPLED_PARAMETER)
     assert_equiv_results(_fields(mol, "quinone"), _fields(explicit, "quinone"), atol=0.0)
 
 
-def test_chapter_0_golden_tests_use_legacy_bundle():
-    """``golden_predict_kwargs`` merges legacy site/OMP/symmetry for fixture parity.
+def test_chapter_0_version_0_uses_legacy_bundle():
+    """``models=[(name, "0")]`` injects the same flags as ``GOLDEN_PARAMETER``.
 
-    This is why ``test_golden_suite.py`` can assert near-equality with rows that
-    were regathered from legacy modes while ``predict()`` defaults stay principled.
+    Tests that still pass ``_parameter=GOLDEN_PARAMETER`` on version ``"1"``
+    overlay the same bundle; the public call is the version pair.
     """
     kwargs = golden_predict_kwargs("ndealk")
     assert kwargs["_parameter"]["ndealk_site_mode"] == "legacy"
     assert kwargs["_parameter"]["quinone_omp_mode"] == "legacy"
     assert kwargs["_parameter"]["symmetry_group_mode"] == "openbabel"
     assert kwargs["_parameter"]["bond_nrings_mode"] == "legacy"
+
+    if not onnx_weights_present("quinone"):
+        pytest.skip("no ONNX weights for quinone")
+    v0 = predict(
+        NAPHTHALENE,
+        models=[("quinone", "0")],
+        backend=OnnxBackend(onnx_root()),
+    )
+    assert v0._parameter["quinone_omp_mode"] == "legacy"
+    assert all(r.version == "0" for r in v0.results)
 
 
 # ---------------------------------------------------------------------------

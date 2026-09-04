@@ -9,6 +9,7 @@ from .errors import BackendNotConfigured
 from .molecule import as_molecule
 from .registry import Spec, ensure_builtins, load_runner, normalize_models, registered
 from ._private import add_metabolites
+from .scoring import apply_scoring_parameters
 from .types import Molecule
 
 ModelsArg = Union[str, Spec, Iterable[str | Spec]]
@@ -39,6 +40,9 @@ def predict(
         Single model name (default version). Ignored if ``models`` is set.
     models:
         Names and/or ``(name, version)`` pairs. Parse/canonicalize once.
+        Version ``"1"`` (default) uses updated scoring parameters; ``"0"``
+        uses legacy parameters that match golden / ``/v0`` HTTP. See
+        ``xenosite.predict.scoring`` and ``docs/legacy-vs-principled.md``.
     backend:
         Pin every model in this call: ``"onnx"``, ``"http"``, ``"legacy"``,
         a URL, or a :class:`PredictBackend`. ``None`` uses the env picker.
@@ -60,17 +64,12 @@ def predict(
         heavy atoms back to the parent (1-based; new atoms unmapped). ``map_idx``
         is always populated when forest metabolites are attached.
     _parameter:
-        Internal per-call options (not part of the public HTTP API). Runners
-        read ``molecule._parameter``; e.g. ``ndealk_site_mode`` is ``legacy``
-        for golden parity tests and ``principled`` (default) for production;
-        ``quinone_omp_mode`` is ``legacy`` (deterministic sorted BFS) for golden
-        tests and ``principled`` (any qualifying tied shortest path; binary) for
-        production; ``mean`` averages all shortest-path indicators (fractional);
-        ``symmetry_group_mode`` is ``openbabel`` for golden parity and ``rdkit``
-        (default) for production bond-class deduplication and score pooling
-        (mean of active scores per class); ``bond_nrings_mode`` is ``legacy``
-        (DFS back-edge atom counts) for golden/ob dumps and ``principled``
-        (RDKit ``RingInfo.NumAtomRings`` per BondTD endpoint) for production.
+        Overlay on the scoring-version defaults (not part of the public HTTP
+        API). Runners read ``molecule._parameter``. Version ``"0"`` defaults
+        to legacy ``ndealk_site_mode`` / ``quinone_omp_mode`` /
+        ``symmetry_group_mode="openbabel"`` / ``bond_nrings_mode``; version
+        ``"1"`` defaults to the updated principled/RDKit mapping. Pass a
+        mapping here only to override individual flags (tests, ablations).
 
     Notes
     -----
@@ -84,12 +83,12 @@ def predict(
         models = model
     specs = normalize_models(models)
     _, molecule = as_molecule(inp)
-    if _parameter:
-        molecule._parameter = dict(_parameter)
+    user_parameter = dict(_parameter) if _parameter is not None else None
 
     for spec in specs:
         be = resolve_for_model(spec, backend=backend, backends=backends, env=env)
         runner = load_runner(*spec)
+        molecule._parameter = apply_scoring_parameters(spec[1], user_parameter)
         runner.predict_molecule(molecule, be)
     if metabolites:
         add_metabolites(
@@ -108,6 +107,7 @@ def list_models(
     """What this process can actually run (backend-aware), not a fictional union.
 
     Each item is ``{"name", "version", "available", "backend", "reason"}``.
+    Versions ``"0"`` and ``"1"`` are listed separately (legacy vs updated scoring).
     """
     ensure_builtins()
     try:

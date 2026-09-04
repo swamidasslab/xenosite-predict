@@ -17,17 +17,25 @@ import httpx
 from ..errors import UnknownModel
 from ..types import Molecule
 
-# xenosite-api v0 routes (query: ?smiles=)
+# xenosite-api routes (query: ?smiles=). Version is the scoring generation:
+# ``"0"`` → ``/v0`` (legacy params), ``"1"`` → ``/v1`` (updated params).
+_HTTP_MODELS = (
+    "epoxidation",
+    "quinone",
+    "ugt",
+    "ndealk",
+    "isozyme",
+    "phase1",
+    "reactivity",
+)
 _V0_ROUTES: dict[tuple[str, str], str] = {
-    ("epoxidation", "0"): "/v0/epoxidation",
-    ("quinone", "0"): "/v0/quinone",
-    ("ugt", "0"): "/v0/ugt",
-    ("ndealk", "0"): "/v0/ndealk",
-    ("isozyme", "0"): "/v0/isozyme",
-    ("phase1", "0"): "/v0/phase1",
-    ("bioactivation", "0"): "/v0/bioactivation",
-    ("reactivity", "0"): "/v0/reactivity",
+    (name, "0"): f"/v0/{name}" for name in _HTTP_MODELS
 }
+_V0_ROUTES[("bioactivation", "0")] = "/v0/bioactivation"
+_V1_ROUTES: dict[tuple[str, str], str] = {
+    (name, "1"): f"/v1/{name}" for name in _HTTP_MODELS
+}
+_ROUTES: dict[tuple[str, str], str] = {**_V0_ROUTES, **_V1_ROUTES}
 
 
 class HttpBackend:
@@ -47,10 +55,10 @@ class HttpBackend:
         return h
 
     def available_models(self) -> list[tuple[str, str]]:
-        return list(_V0_ROUTES)
+        return list(_ROUTES)
 
     def predict_native(self, smiles: str, model: str, version: str) -> Any:
-        route = _V0_ROUTES.get((model, version))
+        route = _ROUTES.get((model, version))
         if route is None:
             raise UnknownModel(f"HTTP backend has no route for {model!r} {version!r}")
         url = f"{self.origin}{route}"

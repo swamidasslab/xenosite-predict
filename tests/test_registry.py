@@ -4,17 +4,26 @@ import pytest
 
 from xenosite.predict import UnknownModel, list_models
 from xenosite.predict.backends import BackendNotConfigured, resolve_backend
-from xenosite.predict.registry import normalize_models
+from xenosite.predict.registry import get_info, normalize_models, ensure_builtins
+
+
+def test_registry_registers_scoring_versions():
+    ensure_builtins()
+    v0 = get_info("epoxidation", "0")
+    v1 = get_info("epoxidation", "1")
+    assert v0.default is False
+    assert v1.default is True
+    assert v0.factory is v1.factory
 
 
 def test_normalize_models_default_version():
     specs = normalize_models(["epoxidation", ("ugt", "0")])
-    assert specs == [("epoxidation", "0"), ("ugt", "0")]
+    assert specs == [("epoxidation", "1"), ("ugt", "0")]
 
 
 def test_normalize_rejects_global_version_pattern():
     # A lone string is one model, not a version applied to a list
-    assert normalize_models("quinone") == [("quinone", "0")]
+    assert normalize_models("quinone") == [("quinone", "1")]
 
 
 def test_unknown_model_predict(monkeypatch):
@@ -63,6 +72,7 @@ def test_picker_weights_dir(tmp_path):
     be = resolve_backend(env={"XENOSITE_MODELS_WEIGHTS": str(d)})
     assert be.name == "onnx"
     assert ("epoxidation", "0") in be.available_models()
+    assert ("epoxidation", "1") in be.available_models()
 
 
 def test_picker_error_when_empty():

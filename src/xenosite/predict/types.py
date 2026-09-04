@@ -58,7 +58,11 @@ class Metabolite(BaseModel):
 
 
 class Result(BaseModel):
-    """One model (or model head) attached to a :class:`Molecule`."""
+    """One model (or model head) attached to a :class:`Molecule`.
+
+    ``version`` is the scoring generation: ``"0"`` (legacy parameters) or
+    ``"1"`` (updated parameters, the ``predict()`` default).
+    """
 
     model: str
     version: str

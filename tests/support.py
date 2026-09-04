@@ -46,7 +46,11 @@ _GOLDEN_SCORE_MODELS = frozenset(
 
 
 def golden_predict_kwargs(model: str) -> dict:
-    """``predict`` kwargs for ONNX golden parity (legacy site/OMP/symmetry modes)."""
+    """``predict`` kwargs that overlay v0/legacy flags on scoring version ``"1"``.
+
+    Prefer ``models=[(model, "0")]`` in new code; this helper keeps golden tests
+    that still pass ``_parameter`` working.
+    """
     if model in _GOLDEN_SCORE_MODELS:
         return {"_parameter": dict(GOLDEN_PARAMETER)}
     return {}

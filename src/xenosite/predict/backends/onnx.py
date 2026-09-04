@@ -8,7 +8,8 @@ from typing import Any, Optional
 
 import numpy as np
 
-from ..errors import BackendNotConfigured, WeightsNotFound
+from ..errors import WeightsNotFound
+from ..scoring import SCORING_VERSIONS
 
 try:
     import onnxruntime as ort
@@ -51,10 +52,12 @@ class OnnxBackend:
             return found
         for model_dir in sorted(p for p in self.root.iterdir() if p.is_dir()):
             if any(model_dir.glob("*.onnx")):
-                found.append((model_dir.name, "0"))
+                for version in SCORING_VERSIONS:
+                    found.append((model_dir.name, version))
         names = {n for n, _ in found}
         if "ndealk" in names and "isozyme" not in names:
-            found.append(("isozyme", "0"))
+            for version in SCORING_VERSIONS:
+                found.append(("isozyme", version))
         return found
 
     def session(self, model: str, head: str):

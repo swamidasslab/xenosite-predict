@@ -1,13 +1,13 @@
-"""Production ONNX path: ``predict()`` defaults to principled site/OMP modes.
+"""Production ONNX path: ``predict()`` defaults to scoring version ``"1"``.
 
 Golden parity tests (``test_golden*.py``, ``test_onnx_legacy_parity.py``) pass
-``GOLDEN_PARAMETER`` (legacy ``ndealk_site_mode`` / ``quinone_omp_mode``) so scores
-match regathered fixtures. This module verifies the public API without
-``_parameter``: same as explicit principled, and intentionally different from
-legacy on molecules where the modes diverge.
+``GOLDEN_PARAMETER`` or ``models=[(name, "0")]`` so scores match regathered
+fixtures. This module verifies the public API at version ``"1"``: same as
+explicit principled, and intentionally different from version ``"0"`` on
+molecules where the modes diverge.
 
 For a human-readable walkthrough of each flag, see
-``tests/test_legacy_vs_principled_guide.py`` and ``docs/legacy-vs-principled.md``.
+``tests/v0_legacy/test_legacy_vs_principled_guide.py`` and ``docs/legacy-vs-principled.md``.
 """
 
 from __future__ import annotations
@@ -95,10 +95,31 @@ def test_predict_default_matches_explicit_principled(model, smiles):
 
 
 def test_predict_does_not_require_parameter():
-    """Public calls leave ``molecule._parameter`` empty unless set."""
+    """Public v1 calls leave ``molecule._parameter`` empty unless set."""
     mol = _onnx_predict(NAPHTHALENE, "quinone")
     assert mol.results
     assert mol._parameter == {}
+    assert all(r.version == "1" for r in mol.results)
+
+
+def test_scoring_version_0_matches_golden_parameter():
+    """``models=[(name, "0")]`` applies legacy params (HTTP ``/v0``)."""
+    if not onnx_weights_present("quinone"):
+        pytest.skip("no ONNX weights for quinone")
+    v0 = predict(NAPHTHALENE, models=[("quinone", "0")], backend=BACKEND)
+    via_param = _onnx_predict(NAPHTHALENE, "quinone", _parameter=GOLDEN_PARAMETER)
+    assert all(r.version == "0" for r in v0.results)
+    assert v0._parameter["quinone_omp_mode"] == "legacy"
+    assert_equiv_results(_scores(v0, "quinone"), _scores(via_param, "quinone"), atol=0.0)
+
+
+def test_scoring_version_1_matches_default():
+    """``models=[(name, "1")]`` is the same as omitting the version."""
+    default = _onnx_predict(NAPHTHALENE, "quinone")
+    v1 = predict(NAPHTHALENE, models=[("quinone", "1")], backend=BACKEND)
+    assert all(r.version == "1" for r in default.results)
+    assert all(r.version == "1" for r in v1.results)
+    assert_equiv_results(_scores(default, "quinone"), _scores(v1, "quinone"), atol=0.0)
 
 
 @pytest.mark.parametrize(

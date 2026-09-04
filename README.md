@@ -11,8 +11,9 @@ This package is **not** wired into `xenosite-api` yet.
 ```python
 from xenosite.predict import predict, predict_many, apredict, apredict_many, list_models
 
-mol = predict("O=C(C)Oc1ccccc1C(=O)O", model="epoxidation")
-mol = predict("O=C(C)Oc1ccccc1C(=O)O", models=["epoxidation", ("ugt", "0")])
+mol = predict("O=C(C)Oc1ccccc1C(=O)O", model="epoxidation")  # version "1"
+mol = predict("O=C(C)Oc1ccccc1C(=O)O", models=["epoxidation", ("ugt", "1")])
+mol = predict("O=C(C)Oc1ccccc1C(=O)O", models=[("epoxidation", "0")])  # v0 / legacy params
 mol = predict(mol, models=["quinone"])  # append
 list_models()  # what this process can actually run (backend-aware)
 
@@ -28,13 +29,13 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 - **One molecule at a time** for ``predict`` / ``apredict`` (no multi-mol batch inside a single call).
 - **Many molecules:** ``predict_many`` / ``apredict_many`` run each input independently in parallel.
 - **Parse once** when several models run on one molecule. Canonical SMILES is **non-isomeric** (`isomericSmiles=False`).
-- **`models=`** is a name (default version `"0"`) or `(name, version)` pairs. Do not pass one version string for a whole list.
+- **`models=`** is a name (default scoring version `"1"`) or `(name, version)` pairs. **`"1"`** uses updated scoring parameters (HTTP `/v1`). **`"0"`** uses legacy parameters that match golden fixtures and HTTP `/v0`. Do not pass one version string for a whole list.
 - **Indices** are 0-based RDKit atom/bond indices. Scores are floats (`atol=1e-4` in tests).
 - **Name lookup is omitted.** Pass SMILES, not drug names.
 - Import does **not** open ONNX, HTTP, or OpenBabel. Load on first use of that `(model, version)`. Callers never import `openbabel` / `pybel`.
 - First `predict()` downloads ONNX weights when `XENOSITE_ONNX_URL` is set and none are cached (an **INFO** line reports when they are found or downloaded). No separate `download_weights()` call is required.
 - **Workers:** ONNX batch/async paths use a process pool (descriptor generation is CPU-bound; threads do not help). Set ``workers=`` or ``XENOSITE_WORKERS``. ``XENOSITE_ORT_INTRA_OP`` caps ORT threads per process under concurrency.
-- **Legacy vs principled:** production defaults differ from golden-test-api parity in four internal `_parameter` flags (ndealk site keys, quinone OMP paths, bond symmetry, bond NRings). **Score impact summary:** [`docs/legacy-vs-principled.md`](docs/legacy-vs-principled.md#expected-score-impact-production-vs-legacy). Walkthrough: `tests/v0_legacy/test_legacy_vs_principled_guide.py`.
+- **Scoring versions:** `predict(..., models=[("epoxidation", "0")])` is v0/legacy parameters; omit the version or pass `"1"` for the updated mapping. Same ONNX weights. **Score impact summary:** [`docs/legacy-vs-principled.md`](docs/legacy-vs-principled.md#expected-score-impact-production-vs-legacy). Walkthrough: `tests/v0_legacy/test_legacy_vs_principled_guide.py`. `_parameter` overlays individual flags for tests.
 
 ### `predict_many` / `apredict` / `apredict_many`
 
@@ -52,14 +53,14 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 |---|---|
 | `inp` | SMILES or an existing `Molecule` (results append) |
 | `model` | Single name; ignored if `models` is set |
-| `models` | `str` or `(name, version)` iterable |
+| `models` | `str` or `(name, version)` iterable. `"1"` (default) = updated params; `"0"` = legacy / `/v0` |
 | `backend` | Pin the whole call: `"onnx"`, `"http"`, `"legacy"`, a URL, or a backend object |
 | `backends` | Per-`(name, version)` override (ONNX epoxidation + HTTP bioactivation) |
 | `env` | Picker mapping; `None` uses `os.environ`. Tests clear `XENOSITE_*` |
 
 ### Return type (`Molecule`)
 
-Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Result variants: `MolBondResult`, `MolAtomResult`, `MolAtomPairResult`, `AtomResult`, `BondResult`, `AtomBondResult`. Each result has `model` and `version`.
+Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Result variants: `MolBondResult`, `MolAtomResult`, `MolAtomPairResult`, `AtomResult`, `BondResult`, `AtomBondResult`. Each result has `model` and `version` (`"0"` or `"1"`, the scoring generation).
 
 ### `list_models()`
 

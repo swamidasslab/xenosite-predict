@@ -2,6 +2,8 @@
 
 Call :func:`predict` with a SMILES string or an existing :class:`Molecule`.
 Results append; parse/canonicalize happens once when several models run.
+Scoring version ``"1"`` (default) uses updated parameters; ``"0"`` uses legacy
+parameters (HTTP ``/v0`` / golden fixtures).
 
 See the package README for backends, environment variables, and versions.
 """

@@ -15,16 +15,17 @@ import httpx
 
 from ..errors import UnknownModel
 
-_MODELS = [
-    ("epoxidation", "0"),
-    ("quinone", "0"),
-    ("reactivity", "0"),
-    ("ugt", "0"),
-    ("ndealk", "0"),
-    ("isozyme", "0"),
-    ("phase1", "0"),
-    ("bioactivation", "0"),
-]
+_MODEL_NAMES = (
+    "epoxidation",
+    "quinone",
+    "reactivity",
+    "ugt",
+    "ndealk",
+    "isozyme",
+    "phase1",
+    "bioactivation",
+)
+_MODELS = [(name, version) for name in _MODEL_NAMES for version in ("0", "1")]
 
 
 class LegacyTestBackend:
