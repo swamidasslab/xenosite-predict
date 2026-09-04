@@ -330,6 +330,8 @@ def enumerate_metabolites(
     """Yield ``(pathway, rdkit_site, canonical_smiles, product_mol)`` for each metabolite.
 
     One call to ``RuleSet.metabolites`` enumerates all products for the substrate.
+    Cleavage rules (hydrolysis, dealkylation, …) return one mol per fragment; each
+    fragment is yielded as its own metabolite (same pathway and site).
     """
     mode = forest_site_indexing()
     n_atoms = rdmol.GetNumAtoms()
@@ -337,9 +339,12 @@ def enumerate_metabolites(
     for (rule, site), mols in rs.metabolites(rdmol, unique=True):
         if not mols:
             continue
-        product = mols[-1]
         rdkit_site = forest_site_to_rdkit(site, n_atoms, mode)
-        yield pathway_name(rule), rdkit_site, can_smi(rdmol=product)[0], product
+        pathway = pathway_name(rule)
+        for product in mols:
+            if product is None or product.GetNumAtoms() == 0:
+                continue
+            yield pathway, rdkit_site, can_smi(rdmol=product)[0], product
 
 
 def attach_metabolites(
