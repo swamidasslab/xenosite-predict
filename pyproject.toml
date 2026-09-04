@@ -1,6 +1,6 @@
 [project]
 name = "xenosite-predict"
-version = "0.2.2"
+version = "0.3.0"
 description = "RDKit public API + internal OpenBabel 2.4 + ONNX predictors for XenoSite (xenosite.predict)"
 readme = "README.md"
 authors = [
