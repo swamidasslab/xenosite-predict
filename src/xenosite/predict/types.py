@@ -6,16 +6,17 @@ This package does not perform name lookup; ``name`` is optional metadata.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel as _BaseModel
 from pydantic import ConfigDict, Field, NonNegativeInt, PositiveInt, PrivateAttr
 
 Number = float
+ModelVersion = Literal["0", "1"]
 
 
 class BaseModel(_BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, protected_namespaces=())
 
 
 class Bonds(BaseModel):
@@ -60,12 +61,13 @@ class Metabolite(BaseModel):
 class Result(BaseModel):
     """One model (or model head) attached to a :class:`Molecule`.
 
-    ``version`` is the scoring generation: ``"0"`` (legacy parameters) or
-    ``"1"`` (updated parameters, the ``predict()`` default).
+    ``model_version`` is the scoring generation: ``"0"`` (legacy parameters) or
+    ``"1"`` (updated parameters, the ``predict()`` default). The registry still
+    keys runners by ``(name, version)``; that value is copied here.
     """
 
     model: str
-    version: str
+    model_version: ModelVersion
     depiction: Optional[str] = None
     metabolite: Optional[list[Metabolite]] = None
 
@@ -120,4 +122,4 @@ class Molecule(BaseModel):
     bonds: Bonds
     name: Optional[dict[str, Union[int, str]]] = Field(default_factory=dict)
     _parameter: dict[str, Any] = PrivateAttr(default_factory=dict)
-    model_config = ConfigDict(json_schema_extra={})
+    model_config = ConfigDict(json_schema_extra={}, protected_namespaces=())

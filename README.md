@@ -60,7 +60,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 
 ### Return type (`Molecule`)
 
-Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Result variants: `MolBondResult`, `MolAtomResult`, `MolAtomPairResult`, `AtomResult`, `BondResult`, `AtomBondResult`. Each result has `model` and `version` (`"0"` or `"1"`, the scoring generation).
+Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Result variants: `MolBondResult`, `MolAtomResult`, `MolAtomPairResult`, `AtomResult`, `BondResult`, `AtomBondResult`. Each result has `model` and `model_version` (`"0"` or `"1"`, the scoring generation).
 
 ### `list_models()`
 

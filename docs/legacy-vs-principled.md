@@ -16,7 +16,7 @@ which models are affected.
 | `"1"` (default) | `predict(smi, model="epoxidation")` or `models=[("epoxidation", "1")]` | updated / principled / RDKit | HTTP `/v1` |
 | `"0"` | `predict(smi, models=[("epoxidation", "0")])` | legacy site/OMP/symmetry/NRings | HTTP `/v0`, golden fixtures, legacy-test-api |
 
-Same ONNX weights in both cases. `Result.version` is `"0"` or `"1"` to match.
+Same ONNX weights in both cases. `Result.model_version` is `"0"` or `"1"` to match.
 `_parameter` overlays individual flags (tests and ablations only).
 
 ```python
@@ -130,7 +130,7 @@ with or without `GOLDEN_PARAMETER`.
 ```python
 from tests.support import GOLDEN_PARAMETER, golden_predict_kwargs
 
-# Public v0 (legacy params, Result.version == "0")
+# Public v0 (legacy params, Result.model_version == "0")
 predict(smiles, models=[("ndealk", "0")])
 
 # Overlay on v1 (golden tests that still pass _parameter)

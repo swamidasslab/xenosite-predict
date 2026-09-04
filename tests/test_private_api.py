@@ -40,7 +40,7 @@ def test_add_metabolites_skips_unsupported_models():
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
         results=[
-            MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85]),
+            MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85]),
         ],
     )
     add_metabolites(mol, models={"ndealk"})
@@ -53,7 +53,7 @@ def test_add_metabolites_attaches_when_model_filtered():
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
         results=[
-            MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85]),
+            MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85]),
         ],
     )
     add_metabolites(mol, models={"epoxidation"})

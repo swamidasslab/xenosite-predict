@@ -99,7 +99,7 @@ def test_predict_does_not_require_parameter():
     mol = _onnx_predict(NAPHTHALENE, "quinone")
     assert mol.results
     assert mol._parameter == {}
-    assert all(r.version == "1" for r in mol.results)
+    assert all(r.model_version == "1" for r in mol.results)
 
 
 def test_scoring_version_0_matches_golden_parameter():
@@ -108,7 +108,7 @@ def test_scoring_version_0_matches_golden_parameter():
         pytest.skip("no ONNX weights for quinone")
     v0 = predict(NAPHTHALENE, models=[("quinone", "0")], backend=BACKEND)
     via_param = _onnx_predict(NAPHTHALENE, "quinone", _parameter=GOLDEN_PARAMETER)
-    assert all(r.version == "0" for r in v0.results)
+    assert all(r.model_version == "0" for r in v0.results)
     assert v0._parameter["quinone_omp_mode"] == "legacy"
     assert_equiv_results(_scores(v0, "quinone"), _scores(via_param, "quinone"), atol=0.0)
 
@@ -117,8 +117,8 @@ def test_scoring_version_1_matches_default():
     """``models=[(name, "1")]`` is the same as omitting the version."""
     default = _onnx_predict(NAPHTHALENE, "quinone")
     v1 = predict(NAPHTHALENE, models=[("quinone", "1")], backend=BACKEND)
-    assert all(r.version == "1" for r in default.results)
-    assert all(r.version == "1" for r in v1.results)
+    assert all(r.model_version == "1" for r in default.results)
+    assert all(r.model_version == "1" for r in v1.results)
     assert_equiv_results(_scores(default, "quinone"), _scores(v1, "quinone"), atol=0.0)
 
 

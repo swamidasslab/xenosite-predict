@@ -126,7 +126,7 @@ def test_ethylene_epoxidation_rdkit_indices():
         smiles=ETHYLENE,
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85])],
+        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])],
     )
     attach_metabolites(mol)
     assert len(mol.results[0].metabolite) == 1
@@ -144,7 +144,7 @@ def test_propane_includes_all_forest_metabolites_sorted():
     mol.results = [
         AtomBondResult(
             model="phase1.stable_oxygenation",
-            version="0",
+            model_version="0",
             atom=[0.0, 0.72, 0.0],
             bond=[0.0, 0.0],
         )
@@ -164,14 +164,14 @@ def test_propane_includes_all_forest_metabolites_sorted():
 def test_site_score_atom_result():
     """``AtomResult`` (ugt) / ``MolAtomResult`` (reactivity): max over site atoms."""
     _, mol = parse_smiles(PHENOL)
-    ugt = AtomResult(model="ugt", version="0", atom=[0.81, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
+    ugt = AtomResult(model="ugt", model_version="0", atom=[0.81, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
     assert site_score(mol, ugt, frozenset({0})) == pytest.approx(0.81)
     assert site_score(mol, ugt, frozenset({0, 1})) == pytest.approx(0.81)
     assert site_score(mol, ugt, frozenset({2})) == pytest.approx(0.0)
 
     gsh = MolAtomResult(
         model="reactivity.gsh",
-        version="0",
+        model_version="0",
         mol=0.4,
         atom=[0.0, 0.66, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     )
@@ -184,7 +184,7 @@ def test_site_score_bond_and_atom():
     _, mol = parse_smiles(PROPANE)
     result = AtomBondResult(
         model="phase1.stable_oxygenation",
-        version="0",
+        model_version="0",
         atom=[0.0, 0.1, 0.72],
         bond=[0.55, 0.0],
     )
@@ -198,7 +198,7 @@ def test_site_score_bond_result():
     _, mol = parse_smiles(NDEALK)
     result = BondResult(
         model="ndealk",
-        version="0",
+        model_version="0",
         bond=_bond_scores(mol, (0, 1), 0.88),
     )
     assert site_score(mol, result, frozenset({0, 1})) == pytest.approx(0.88)
@@ -211,7 +211,7 @@ def test_site_score_mol_atom_pair_result():
     _, mol = parse_smiles(PHENOL)
     result = MolAtomPairResult(
         model="quinone",
-        version="0",
+        model_version="0",
         mol=0.5,
         atom=[0.0] * mol.atoms.num,
         pair=[0.77, 0.33],
@@ -228,7 +228,7 @@ def test_attach_metabolites_bond_result():
     mol.results = [
         BondResult(
             model="ndealk",
-            version="0",
+            model_version="0",
             bond=_bond_scores(mol, (0, 1), 0.88),
         )
     ]
@@ -247,7 +247,7 @@ def test_attach_metabolites_mol_atom_pair_result():
     rdmol, mol = parse_smiles(PHENOL)
     result = MolAtomPairResult(
         model="quinone",
-        version="0",
+        model_version="0",
         mol=0.5,
         atom=[0.0] * mol.atoms.num,
         pair=[0.77, 0.33],
@@ -276,7 +276,7 @@ def test_topologically_equivalent_soms_both_emitted():
     mol.results = [
         MolBondResult(
             model="epoxidation",
-            version="0",
+            model_version="0",
             mol=0.5,
             bond=[0.0] * len(mol.bonds.idx),
         )
@@ -313,7 +313,7 @@ def test_exact_duplicate_forest_hits_deduped():
     mol.results = [
         AtomBondResult(
             model="phase1.unstable_oxygenation",
-            version="0",
+            model_version="0",
             atom=[0.0, 0.0, 0.0],
             bond=[0.0, 0.0],
         )
@@ -336,7 +336,7 @@ def test_hydrolysis_emits_both_cleavage_fragments():
     mol.results = [
         AtomBondResult(
             model="phase1.hydrolysis",
-            version="0",
+            model_version="0",
             atom=[0.0] * mol.atoms.num,
             bond=_bond_scores(mol, (1, 3), 0.91),
         )
@@ -361,7 +361,7 @@ def test_ugt_metabolites_are_star_adducts():
     mol.results = [
         AtomResult(
             model="ugt",
-            version="0",
+            model_version="0",
             atom=[0.81] + [0.0] * (mol.atoms.num - 1),
         )
     ]
@@ -389,13 +389,13 @@ def test_reactivity_gsh_and_protein_use_star_not_glutathione():
     mol.results = [
         MolAtomResult(
             model="reactivity.gsh",
-            version="0",
+            model_version="0",
             mol=0.5,
             atom=[0.0] * n,
         ),
         MolAtomResult(
             model="reactivity.protein",
-            version="0",
+            model_version="0",
             mol=0.4,
             atom=[0.0] * n,
         ),
@@ -428,13 +428,13 @@ def test_attach_metabolites_multiple_model_results():
     mol.results = [
         AtomBondResult(
             model="phase1.stable_oxygenation",
-            version="0",
+            model_version="0",
             atom=[0.0, 0.72, 0.0],
             bond=[0.0, 0.0],
         ),
         AtomBondResult(
             model="phase1.unstable_oxygenation",
-            version="0",
+            model_version="0",
             atom=[0.0, 0.0, 0.61],
             bond=[0.0, 0.0],
         ),
@@ -452,7 +452,7 @@ def test_zero_score_sites_still_included():
         smiles=ETHYLENE,
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.0])],
+        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.0])],
     )
     attach_metabolites(mol)
     assert mol.results[0].metabolite
@@ -464,7 +464,7 @@ def test_min_score_filters_after_enumeration():
         smiles=ETHYLENE,
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85])],
+        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])],
     )
     attach_metabolites(mol, min_score=0.9)
     assert mol.results[0].metabolite is None
@@ -606,7 +606,7 @@ def test_wrong_site_indexing_detection_fails(monkeypatch):
         smiles=ETHYLENE,
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85])],
+        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])],
     )
     with pytest.raises(ValueError, match="invalid RDKit index"):
         attach_metabolites(mol)
@@ -653,7 +653,7 @@ def test_attach_metabolites_map_idx_always_mapped_smiles_optional():
         smiles=ETHYLENE,
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85])],
+        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])],
     )
     attach_metabolites(mol)
     met = mol.results[0].metabolite[0]
@@ -666,7 +666,7 @@ def test_attach_metabolites_map_idx_always_mapped_smiles_optional():
         smiles=ETHYLENE,
         atoms=Atoms(num=2),
         bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", version="0", mol=0.9, bond=[0.85])],
+        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])],
     )
     attach_metabolites(mol2, mapped_smiles=True)
     met2 = mol2.results[0].metabolite[0]

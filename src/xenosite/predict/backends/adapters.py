@@ -33,7 +33,9 @@ def append_mol_bond(
     bond: Sequence[float],
 ) -> None:
     molecule.results.append(
-        MolBondResult(model=model, version=version, mol=float(mol), bond=[float(x) for x in bond])
+        MolBondResult(
+            model=model, model_version=version, mol=float(mol), bond=[float(x) for x in bond]
+        )
     )
 
 
@@ -49,7 +51,7 @@ def append_mol_atom(
     molecule.results.append(
         MolAtomResult(
             model=model,
-            version=version,
+            model_version=version,
             mol=float(mol),
             atom=[float(x) for x in atom],
             metabolite=metabolite,
@@ -65,7 +67,7 @@ def append_atom(
     atom: Sequence[float],
 ) -> None:
     molecule.results.append(
-        AtomResult(model=model, version=version, atom=[float(x) for x in atom])
+        AtomResult(model=model, model_version=version, atom=[float(x) for x in atom])
     )
 
 
@@ -77,7 +79,7 @@ def append_bond(
     bond: Sequence[float],
 ) -> None:
     molecule.results.append(
-        BondResult(model=model, version=version, bond=[float(x) for x in bond])
+        BondResult(model=model, model_version=version, bond=[float(x) for x in bond])
     )
 
 
@@ -92,7 +94,7 @@ def append_atom_bond(
     molecule.results.append(
         AtomBondResult(
             model=model,
-            version=version,
+            model_version=version,
             atom=[float(x) for x in atom],
             bond=[float(x) for x in bond],
         )
@@ -113,7 +115,7 @@ def append_atom_pair(
     molecule.results.append(
         MolAtomPairResult(
             model=model,
-            version=version,
+            model_version=version,
             mol=float(mol),
             atom=[float(x) for x in atom],
             pair=pp["pair"],

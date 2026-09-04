@@ -113,7 +113,7 @@ def test_chapter_0_public_predict_uses_principled_defaults():
     mol = _predict(NAPHTHALENE, "quinone")
     # v1 leaves _parameter empty; runners already default to updated flags.
     assert mol._parameter == {}
-    assert all(r.version == "1" for r in mol.results)
+    assert all(r.model_version == "1" for r in mol.results)
 
     explicit = _predict(NAPHTHALENE, "quinone", parameter=PRINCIPLED_PARAMETER)
     assert_equiv_results(_fields(mol, "quinone"), _fields(explicit, "quinone"), atol=0.0)
@@ -139,7 +139,7 @@ def test_chapter_0_version_0_uses_legacy_bundle():
         backend=OnnxBackend(onnx_root()),
     )
     assert v0._parameter["quinone_omp_mode"] == "legacy"
-    assert all(r.version == "0" for r in v0.results)
+    assert all(r.model_version == "0" for r in v0.results)
 
 
 # ---------------------------------------------------------------------------

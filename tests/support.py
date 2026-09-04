@@ -150,7 +150,7 @@ def serialize_molecule_results(mol) -> list[dict]:
     """Golden-row ``results`` list from a :class:`Molecule` after ``predict``."""
     out = []
     for r in mol.results:
-        rec = {"model": r.model, "version": r.version}
+        rec = {"model": r.model, "model_version": r.model_version}
         for key in ("mol", "atom", "bond", "pair", "pair_idx"):
             val = getattr(r, key, None)
             if val is not None:

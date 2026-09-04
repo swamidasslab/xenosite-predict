@@ -34,7 +34,7 @@ def test_predict_single_model(model):
     assert mol.atoms.num >= 2
     assert len(mol.bonds.idx) >= 1
     assert mol.results
-    assert all(r.version == "1" for r in mol.results)
+    assert all(r.model_version == "1" for r in mol.results)
 
 
 def test_predict_multi_model_appends():
@@ -47,7 +47,7 @@ def test_predict_multi_model_appends():
     heads = {r.model for r in mol.results}
     assert "epoxidation" in heads
     assert "quinone" in heads
-    assert all(r.version == "1" for r in mol.results)
+    assert all(r.model_version == "1" for r in mol.results)
 
 
 def test_predict_v0_stamps_legacy_version():
@@ -58,7 +58,10 @@ def test_predict_v0_stamps_legacy_version():
     be = OnnxBackend(onnx_root())
     mol = predict(ASPIRIN, models=[("epoxidation", "0")], backend=be)
     assert mol.results
-    assert all(r.version == "0" for r in mol.results)
+    assert all(r.model_version == "0" for r in mol.results)
+    dumped = mol.results[0].model_dump()
+    assert dumped["model_version"] == "0"
+    assert "version" not in dumped
     assert mol._parameter["ndealk_site_mode"] == "legacy"
     assert mol._parameter["symmetry_group_mode"] == "openbabel"
 
