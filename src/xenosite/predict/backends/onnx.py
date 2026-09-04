@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 import numpy as np
 
@@ -18,16 +18,52 @@ except ImportError:  # pragma: no cover
 
 # Cap ORT intra-op threads when many process workers share a host.
 ENV_ORT_INTRA = "XENOSITE_ORT_INTRA_OP"
+# Optional ORT profile prefix. Must be a real file path (parent dir exists).
+ENV_ORT_PROFILE = "XENOSITE_ORT_PROFILE"
+
+_DEFAULT_PROFILE_PREFIX = "ort_profile"
+_PROFILE_FLAGS = frozenset({"1", "0", "true", "false", "yes", "no", "on", "off"})
 
 
-def _session_options() -> Any:
+def _ort_profile_prefix(env: Optional[Mapping[str, str]] = None) -> Optional[str]:
+    """Return ``XENOSITE_ORT_PROFILE`` when it names a real file path.
+
+    A real path has a file name and an existing parent directory. Flag values
+    (``1``, ``true``, …) do not enable profiling.
+    """
+    e = os.environ if env is None else env
+    raw = (e.get(ENV_ORT_PROFILE) or "").strip()
+    if not raw or raw.lower() in _PROFILE_FLAGS:
+        return None
+    path = Path(raw).expanduser()
+    if path.name in {"", ".", ".."}:
+        return None
+    if path.exists() and path.is_dir():
+        return None
+    if not path.parent.is_dir():
+        return None
+    return str(path)
+
+
+def _session_options(env: Optional[Mapping[str, str]] = None) -> Any:
     if ort is None:
         return None
+    e = os.environ if env is None else env
     opts = ort.SessionOptions()
-    raw = (os.environ.get(ENV_ORT_INTRA) or "").strip()
+    raw = (e.get(ENV_ORT_INTRA) or "").strip()
     if raw:
         opts.intra_op_num_threads = max(1, int(raw))
         opts.inter_op_num_threads = 1
+    # Profiling dumps ``*.sess`` / JSON traces; mem-pattern persistence can
+    # write ``:mem:.sess`` when the prefix is left at an internal tag.
+    opts.enable_mem_pattern = False
+    prefix = _ort_profile_prefix(e)
+    if prefix:
+        opts.enable_profiling = True
+        opts.profile_file_prefix = prefix
+    else:
+        opts.enable_profiling = False
+        opts.profile_file_prefix = _DEFAULT_PROFILE_PREFIX
     return opts
 
 
