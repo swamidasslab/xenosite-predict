@@ -26,10 +26,12 @@ from xenosite.predict.forest import (
 from xenosite.predict.molecule import parse_smiles
 from xenosite.predict.types import (
     AtomBondResult,
+    AtomResult,
     Atoms,
     BondResult,
     Bonds,
     MolAtomPairResult,
+    MolAtomResult,
     MolBondResult,
     Molecule,
 )
@@ -43,6 +45,7 @@ NDEALK = "CN(C)Cc1ccccc1"
 PHENOL = "Oc1ccccc1"
 BENZENE = "c1ccccc1"
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
+STYRENE_OXIDE = "c1ccccc1C1OC1"
 
 
 def _forest_metabolite_keys(rdmol, ruleset: str) -> set[tuple[str, str, tuple[int, ...]]]:
@@ -156,6 +159,25 @@ def test_propane_includes_all_forest_metabolites_sorted():
     top = [m for m in mets if abs(float(m.score or 0.0) - 0.72) < 1e-9]
     assert top
     assert all(m.atom == [1] for m in top)
+
+
+def test_site_score_atom_result():
+    """``AtomResult`` (ugt) / ``MolAtomResult`` (reactivity): max over site atoms."""
+    _, mol = parse_smiles(PHENOL)
+    ugt = AtomResult(model="ugt", version="0", atom=[0.81, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
+    assert site_score(mol, ugt, frozenset({0})) == pytest.approx(0.81)
+    assert site_score(mol, ugt, frozenset({0, 1})) == pytest.approx(0.81)
+    assert site_score(mol, ugt, frozenset({2})) == pytest.approx(0.0)
+
+    gsh = MolAtomResult(
+        model="reactivity.gsh",
+        version="0",
+        mol=0.4,
+        atom=[0.0, 0.66, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    )
+    _, epox = parse_smiles(STYRENE_OXIDE)
+    assert site_score(epox, gsh, frozenset({1})) == pytest.approx(0.66)
+    assert site_score(epox, gsh, frozenset({0})) == pytest.approx(0.0)
 
 
 def test_site_score_bond_and_atom():
@@ -331,6 +353,73 @@ def test_hydrolysis_emits_both_cleavage_fragments():
     assert len(mets) == _unique_forest_count(rdmol, "HD")
     forest_keys = _forest_metabolite_keys(rdmol, "HD")
     assert _attached_metabolite_keys(mets) == forest_keys
+
+
+def test_ugt_metabolites_are_star_adducts():
+    """UGT glucuronides keep a dummy ``*``, not the glucuronic acid."""
+    rdmol, mol = parse_smiles(PHENOL)
+    mol.results = [
+        AtomResult(
+            model="ugt",
+            version="0",
+            atom=[0.81] + [0.0] * (mol.atoms.num - 1),
+        )
+    ]
+    attach_metabolites(mol, rdmol=rdmol)
+    mets = mol.results[0].metabolite
+    assert mets
+    assert all("*" in m.smiles for m in mets)
+    assert all("O=C(O)C1OC" not in m.smiles for m in mets)
+    phenol = [m for m in mets if m.smiles == "*Oc1ccccc1"]
+    assert phenol
+    assert phenol[0].pathway == "Glucuronidation"
+    assert phenol[0].score == pytest.approx(0.81)
+    assert phenol[0].atom == [0, 1]
+    assert 0 in phenol[0].map_idx
+    assert len(mets) == _unique_forest_count(rdmol, "CJ.Glucuronidation")
+
+
+def test_reactivity_gsh_and_protein_use_star_not_glutathione():
+    """GSH/protein adducts are dummy ``*`` at the forest site, not the GSH peptide."""
+    rdmol, mol = parse_smiles(STYRENE_OXIDE)
+    n = mol.atoms.num
+    sites = [site for _, site, _, _ in enumerate_metabolites(rdmol, "CJ.Glutathionation")]
+    assert sites
+    scored = next(iter(sites[0]))
+    mol.results = [
+        MolAtomResult(
+            model="reactivity.gsh",
+            version="0",
+            mol=0.5,
+            atom=[0.0] * n,
+        ),
+        MolAtomResult(
+            model="reactivity.protein",
+            version="0",
+            mol=0.4,
+            atom=[0.0] * n,
+        ),
+    ]
+    mol.results[0].atom[scored] = 0.77
+    mol.results[1].atom[scored] = 0.55
+    attach_metabolites(mol, rdmol=rdmol)
+
+    gsh = mol.results[0].metabolite
+    protein = mol.results[1].metabolite
+    assert gsh and protein
+    assert {m.smiles for m in gsh} == {m.smiles for m in protein}
+    for mets, pathway, score in (
+        (gsh, "Glutathionation", 0.77),
+        (protein, "Protein", 0.55),
+    ):
+        assert all("*" in m.smiles for m in mets)
+        assert all("NC(" not in m.smiles and "NCC(=O)O" not in m.smiles for m in mets)
+        assert all(m.pathway == pathway for m in mets)
+        top = [m for m in mets if scored in (m.atom or [])]
+        assert top
+        assert all(float(m.score or 0.0) == pytest.approx(score) for m in top)
+        assert all(0 in (m.map_idx or []) for m in mets)
+    assert len(gsh) == _unique_forest_count(rdmol, "CJ.Glutathionation")
 
 
 def test_attach_metabolites_multiple_model_results():

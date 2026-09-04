@@ -27,9 +27,11 @@ from xenosite.forest.base import can_smi
 from .molecule import parse_smiles
 from .types import (
     AtomBondResult,
+    AtomResult,
     BondResult,
     Metabolite,
     MolAtomPairResult,
+    MolAtomResult,
     MolBondResult,
     ModelResult,
     Molecule,
@@ -45,6 +47,25 @@ _MODEL_RULESETS: dict[str, str] = {
     "phase1.dehydrogenation": "DH",
     "phase1.reduction": "RD",
     "phase1.hydrolysis": "HD",
+    "ugt": "CJ.Glucuronidation",
+    "reactivity.gsh": "CJ.Glutathionation",
+    "reactivity.protein": "CJ.Glutathionation",
+}
+
+# Conjugation products replace the added group (glucuronide, GSH, …) with a dummy ``*``.
+_STAR_CONJUGATE_RULESETS: frozenset[str] = frozenset(
+    {
+        "CJ",
+        "CJ.Glucuronidation",
+        "CJ.Glutathionation",
+        "CJ.Acetylation",
+        "CJ.Sulfation",
+    }
+)
+
+# Forest rule name is Glutathionation; protein uses the same electrophile chemistry.
+_MODEL_PATHWAYS: dict[str, str] = {
+    "reactivity.protein": "Protein",
 }
 
 _INDEX_PROBE_SMILES = "CC"
@@ -266,7 +287,7 @@ def metabolite_atom_maps(
     map_idx = [
         int(atom.GetAtomMapNum())
         for atom in parsed.GetAtoms()
-        if atom.GetAtomicNum() > 1
+        if atom.GetAtomicNum() != 1
     ]
     return map_idx, mapped
 
@@ -320,7 +341,53 @@ def site_score(molecule: Molecule, result: ModelResult, site: frozenset[int]) ->
                 return float(score)
         return 0.0
 
+    if isinstance(result, (AtomResult, MolAtomResult)):
+        vals = [float(result.atom[a]) for a in atoms if 0 <= a < len(result.atom)]
+        return max(vals) if vals else 0.0
+
     return 0.0
+
+
+def _collapse_conjugate_to_star(
+    product: Chem.Mol,
+    *,
+    mode: Optional[ForestMapIndexing] = None,
+) -> Chem.Mol:
+    """Replace newly added conjugate atoms with a dummy ``*`` at each attachment."""
+    if mode is None:
+        mode = forest_map_indexing()
+
+    new_atoms: set[int] = set()
+    for atom in product.GetAtoms():
+        if atom.GetAtomicNum() == 1:
+            continue
+        if _parent_map_number(atom, mode) <= 0:
+            new_atoms.add(atom.GetIdx())
+    if not new_atoms:
+        return product
+
+    attach: set[int] = set()
+    for bond in product.GetBonds():
+        a, b = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+        a_new, b_new = a in new_atoms, b in new_atoms
+        if a_new == b_new:
+            continue
+        attach.add(b if a_new else a)
+    if not attach:
+        return product
+
+    def _after_remove(idx: int) -> int:
+        return idx - sum(1 for n in new_atoms if n < idx)
+
+    rw = Chem.RWMol(product)
+    for idx in sorted(new_atoms, reverse=True):
+        rw.RemoveAtom(idx)
+    for pa in sorted(_after_remove(a) for a in attach):
+        dummy = rw.AddAtom(Chem.Atom(0))
+        rw.AddBond(pa, dummy, Chem.BondType.SINGLE)
+    mol = rw.GetMol()
+    Chem.SanitizeMol(mol, catchErrors=True)
+    return mol
 
 
 def enumerate_metabolites(
@@ -332,9 +399,12 @@ def enumerate_metabolites(
     One call to ``RuleSet.metabolites`` enumerates all products for the substrate.
     Cleavage rules (hydrolysis, dealkylation, …) return one mol per fragment; each
     fragment is yielded as its own metabolite (same pathway and site).
+    Conjugation rulesets replace the added group with a dummy ``*``.
     """
     mode = forest_site_indexing()
+    map_mode = forest_map_indexing()
     n_atoms = rdmol.GetNumAtoms()
+    star = ruleset_spec in _STAR_CONJUGATE_RULESETS or ruleset_spec.startswith("CJ.")
     rs = load_ruleset(ruleset_spec)
     for (rule, site), mols in rs.metabolites(rdmol, unique=True):
         if not mols:
@@ -344,7 +414,12 @@ def enumerate_metabolites(
         for product in mols:
             if product is None or product.GetNumAtoms() == 0:
                 continue
-            yield pathway, rdkit_site, can_smi(rdmol=product)[0], product
+            if star:
+                product = _collapse_conjugate_to_star(product, mode=map_mode)
+            smiles = can_smi(rdmol=product)
+            if not smiles:
+                continue
+            yield pathway, rdkit_site, smiles[0], product
 
 
 def attach_metabolites(
@@ -412,6 +487,7 @@ def _attach_from_enumeration(
     seen: set[tuple[str, str, tuple[int, ...]]] = set()
 
     for pathway, site, smiles, product in products:
+        pathway = _MODEL_PATHWAYS.get(result.model, pathway)
         key = (pathway, smiles, tuple(site_rdkit_indices(site)))
         if key in seen:
             continue
