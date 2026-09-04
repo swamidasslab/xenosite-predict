@@ -429,6 +429,7 @@ def attach_metabolites(
     min_score: Optional[float] = None,
     mapped_smiles: bool = False,
     rdmol: Chem.Mol | None = None,
+    rdkit: bool = False,
 ) -> Molecule:
     """Attach forest-inferred metabolite structures to SOM results (in place).
 
@@ -444,9 +445,16 @@ def attach_metabolites(
     models:
         When set, only results whose ``model`` is in this collection are
         considered. ``None`` (default) considers every forest-supported result.
+    rdkit:
+        When ``True``, keep the parent RDKit mol on ``molecule.rdkit`` and each
+        forest product on ``Metabolite.rdkit`` (no extra parse). Default ``False``.
     """
     if rdmol is None:
+        rdmol = molecule.rdkit
+    if rdmol is None:
         rdmol, _ = parse_smiles(molecule.smiles)
+    if rdkit and molecule.rdkit is None:
+        molecule.rdkit = rdmol
 
     map_mode = forest_map_indexing()
     enumerated: dict[str, list[tuple[str, frozenset[int], str, Chem.Mol]]] = {}
@@ -470,6 +478,7 @@ def attach_metabolites(
             min_score=min_score,
             mapped_smiles=mapped_smiles,
             map_mode=map_mode,
+            rdkit=rdkit,
         )
     return molecule
 
@@ -482,6 +491,7 @@ def _attach_from_enumeration(
     min_score: Optional[float],
     mapped_smiles: bool,
     map_mode: ForestMapIndexing,
+    rdkit: bool,
 ) -> None:
     metabolites: list[Metabolite] = []
     seen: set[tuple[str, str, tuple[int, ...]]] = set()
@@ -506,6 +516,7 @@ def _attach_from_enumeration(
                 mapped_smiles=mapped,
                 pathway=pathway,
                 score=score,
+                rdkit=product if rdkit else None,
             )
         )
 

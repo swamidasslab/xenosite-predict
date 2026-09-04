@@ -83,6 +83,35 @@ def test_as_molecule_detailed_fills_existing():
     assert molecule.atoms.reordered == [0, 1, 2, 3, 4]
 
 
+def test_rdkit_default_omitted():
+    mol, molecule = parse_smiles("CCCCO")
+    assert molecule.rdkit is None
+    assert mol.GetNumAtoms() == 5
+    assert "rdkit" not in molecule.model_dump()
+
+
+def test_rdkit_flag_keeps_parse_mol():
+    from rdkit import Chem
+
+    mol, molecule = parse_smiles("OCCCC", rdkit=True)
+    assert molecule.rdkit is mol
+    assert Chem.MolToSmiles(molecule.rdkit, isomericSmiles=False) == "CCCCO"
+    assert "rdkit" not in molecule.model_dump()
+
+
+def test_as_molecule_rdkit_fills_existing():
+    from rdkit import Chem
+
+    from xenosite.predict.molecule import as_molecule
+
+    _, molecule = parse_smiles("OCCCC")
+    assert molecule.rdkit is None
+    rdkit_mol, filled = as_molecule(molecule, rdkit=True)
+    assert filled is molecule
+    assert rdkit_mol is molecule.rdkit
+    assert Chem.MolToSmiles(rdkit_mol, isomericSmiles=False) == "CCCCO"
+
+
 def test_append_requires_backend(tmp_path, monkeypatch):
     from xenosite.predict.errors import BackendNotConfigured
 

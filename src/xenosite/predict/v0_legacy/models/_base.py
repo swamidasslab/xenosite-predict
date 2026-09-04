@@ -70,6 +70,8 @@ class BaseRunner(ModelRunner):
         molecule.results.extend(incoming.results)
 
     def rdkit_mol(self, molecule: Mol):
+        if molecule.rdkit is not None:
+            return molecule.rdkit
         mol, _ = parse_smiles(molecule.smiles)
         return mol
 

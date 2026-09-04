@@ -29,6 +29,7 @@ def predict(
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
     detailed: bool = False,
+    rdkit: bool = False,
     _parameter: Optional[Mapping[str, Any]] = None,
 ) -> Molecule:
     """Run one or more models and return a :class:`Molecule` with appended results.
@@ -69,6 +70,10 @@ def predict(
         ``cipRank``, bond ``order``) and ``atoms.reordered`` — original input
         atom indices in canonical SMILES order. Topology and score arrays always
         use that canonical order, even when ``detailed`` is false.
+    rdkit:
+        When ``True``, keep the in-process RDKit mols already built during parse
+        and forest enumeration on ``Molecule.rdkit`` and ``Metabolite.rdkit``.
+        No extra parse. Omitted from JSON dumps. Default ``False``.
     _parameter:
         Overlay on the scoring-version defaults (not part of the public HTTP
         API). Runners read ``molecule._parameter``. Version ``"0"`` defaults
@@ -88,7 +93,7 @@ def predict(
     if models is None:
         models = model
     specs = normalize_models(models)
-    _, molecule = as_molecule(inp, detailed=detailed)
+    rdmol, molecule = as_molecule(inp, detailed=detailed, rdkit=rdkit)
     user_parameter = dict(_parameter) if _parameter is not None else None
 
     for spec in specs:
@@ -101,6 +106,8 @@ def predict(
             molecule,
             min_score=metabolites_min_score,
             mapped_smiles=mapped_smiles,
+            rdmol=rdmol,
+            rdkit=rdkit,
         )
     return molecule
 

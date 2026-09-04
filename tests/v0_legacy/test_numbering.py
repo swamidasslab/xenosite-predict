@@ -125,9 +125,9 @@ def test_quinone_normalize_parses_smiles_once(monkeypatch):
     calls: list[str] = []
     real_parse = mol_mod.parse_smiles
 
-    def counted(smiles: str, *, detailed: bool = False):
+    def counted(smiles: str, **kwargs):
         calls.append(smiles)
-        return real_parse(smiles, detailed=detailed)
+        return real_parse(smiles, **kwargs)
 
     monkeypatch.setattr(mol_mod, "parse_smiles", counted)
     fields = {"pair_idx": [[1, 2]], "pair": [0.5]}

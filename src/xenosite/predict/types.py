@@ -83,6 +83,12 @@ class Metabolite(BaseModel):
     mapped_smiles: Optional[str] = None
     pathway: Optional[str] = None
     score: Number = None  # type: ignore[assignment]
+    rdkit: Optional[Any] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description="In-process RDKit mol when ``rdkit=True``. Omitted from JSON.",
+    )
 
 
 class Result(BaseModel):
@@ -157,5 +163,11 @@ class Molecule(BaseModel):
     atoms: Atoms
     bonds: Bonds
     name: Optional[dict[str, Union[int, str]]] = Field(default_factory=dict)
+    rdkit: Optional[Any] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description="In-process RDKit mol when ``rdkit=True``. Omitted from JSON.",
+    )
     _parameter: dict[str, Any] = PrivateAttr(default_factory=dict)
     model_config = ConfigDict(json_schema_extra={}, protected_namespaces=())

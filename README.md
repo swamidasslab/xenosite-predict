@@ -30,6 +30,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 - **Many molecules:** ``predict_many`` / ``apredict_many`` run each input independently in parallel.
 - **Parse once** when several models run on one molecule. Canonical SMILES is **non-isomeric** (`isomericSmiles=False`). Atom/bond indices and score arrays use **canonical SMILES atom order**, not the input order.
 - **`detailed=True`** adds atom/bond properties (`z`, `chrg`, `impHs`, `cipRank`, bond `order`) and `atoms.reordered` (original input atom indices in canonical SMILES order).
+- **`rdkit=True`** keeps the in-process RDKit mols already built during parse and forest enumeration on `Molecule.rdkit` and `Metabolite.rdkit`. No extra parse. Omitted from JSON.
 - **`models=`** is a name (default scoring version `"1"`) or `(name, version)` pairs. **`"1"`** uses updated scoring parameters (HTTP `/v1`). **`"0"`** uses legacy parameters that match golden fixtures and HTTP `/v0`. Do not pass one version string for a whole list.
 - **Indices** are 0-based RDKit atom/bond indices. Scores are floats (`atol=1e-4` in tests).
 - **Name lookup is omitted.** Pass SMILES, not drug names.
@@ -48,7 +49,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 
 `workers` defaults to CPU count (`XENOSITE_WORKERS` overrides). New models reuse the existing `predict` / runner path — no per-model async code.
 
-### `predict(inp, model=..., models=..., backend=..., backends=..., env=..., detailed=...)`
+### `predict(inp, model=..., models=..., backend=..., backends=..., env=..., detailed=..., rdkit=...)`
 
 | Arg | Meaning |
 |---|---|
@@ -59,6 +60,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 | `backends` | Per-`(name, version)` override (ONNX epoxidation + HTTP bioactivation) |
 | `env` | Picker mapping; `None` uses `os.environ`. Tests clear `XENOSITE_*` |
 | `detailed` | When `True`, fill atom/bond properties and `atoms.reordered` (input → canonical map) |
+| `rdkit` | When `True`, keep in-process RDKit mols on `Molecule.rdkit` / `Metabolite.rdkit` |
 
 ### Return type (`Molecule`)
 

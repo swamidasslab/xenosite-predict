@@ -8,6 +8,9 @@ string). Name lookup is intentionally omitted.
 When ``detailed=True``, topology includes atomic numbers, charges, implicit
 hydrogens, CIP ranks, bond orders, and ``atoms.reordered``: the original
 (input) atom indices in canonical SMILES order.
+
+When ``rdkit=True``, the RDKit mol already built during parse is kept on
+``Molecule.rdkit`` (no extra parse). JSON dumps omit it.
 """
 
 from __future__ import annotations
@@ -47,11 +50,14 @@ def _smiles_atom_output_order(mol: RdkMol) -> list[int]:
     return [i for i in order if 0 <= i < n][:n]
 
 
-def parse_smiles(smiles: str, *, detailed: bool = False) -> tuple[RdkMol, Molecule]:
+def parse_smiles(
+    smiles: str, *, detailed: bool = False, rdkit: bool = False
+) -> tuple[RdkMol, Molecule]:
     """Parse SMILES into an RDKit mol (canonical atom order) and a :class:`Molecule`.
 
     Re-parses the canonical SMILES so atom indices — and therefore score arrays
-    — match that string. Bond ``idx`` follows ``mol.GetBonds()``.
+    — match that string. Bond ``idx`` follows ``mol.GetBonds()``. When
+    ``rdkit=True``, the reparsed mol is stored on ``Molecule.rdkit``.
     """
     src = _parse_rdkit(smiles)
     canonical = Chem.MolToSmiles(src, isomericSmiles=False)
@@ -60,7 +66,7 @@ def parse_smiles(smiles: str, *, detailed: bool = False) -> tuple[RdkMol, Molecu
     if mol is None:
         raise InvalidMolecule(f"Canonical SMILES could not be re-parsed: {canonical}")
     return mol, molecule_from_rdkit(
-        mol, smiles=canonical, detailed=detailed, reordered=reordered
+        mol, smiles=canonical, detailed=detailed, reordered=reordered, rdkit=rdkit
     )
 
 
@@ -71,6 +77,7 @@ def molecule_from_rdkit(
     detailed: bool = False,
     name: Optional[dict[str, Union[int, str]]] = None,
     reordered: Optional[Sequence[int]] = None,
+    rdkit: bool = False,
 ) -> Molecule:
     """Build topology-only :class:`Molecule` from an RDKit mol.
 
@@ -109,24 +116,30 @@ def molecule_from_rdkit(
         bonds=Bonds(**bonds),
         name=name or {},
         results=[],
+        rdkit=mol if rdkit else None,
     )
 
 
-def _ensure_details(molecule: Molecule) -> None:
+def _ensure_details(molecule: Molecule, *, rdkit: bool = False) -> None:
     """Fill detailed topology on an already-canonical :class:`Molecule`."""
     if molecule.atoms.z is not None:
         return
-    _, filled = parse_smiles(molecule.smiles, detailed=True)
+    mol, filled = parse_smiles(molecule.smiles, detailed=True, rdkit=rdkit)
     molecule.atoms = filled.atoms
     molecule.bonds.order = filled.bonds.order
+    if rdkit and molecule.rdkit is None:
+        molecule.rdkit = mol
 
 
 def as_molecule(
-    inp: Union[str, Molecule], *, detailed: bool = False
+    inp: Union[str, Molecule], *, detailed: bool = False, rdkit: bool = False
 ) -> tuple[Optional[RdkMol], Molecule]:
     """Accept SMILES or an existing :class:`Molecule`. Parse only when needed."""
     if isinstance(inp, Molecule):
         if detailed:
-            _ensure_details(inp)
-        return None, inp
-    return parse_smiles(inp, detailed=detailed)
+            _ensure_details(inp, rdkit=rdkit)
+        elif rdkit and inp.rdkit is None:
+            mol, _ = parse_smiles(inp.smiles, rdkit=True)
+            inp.rdkit = mol
+        return inp.rdkit, inp
+    return parse_smiles(inp, detailed=detailed, rdkit=rdkit)

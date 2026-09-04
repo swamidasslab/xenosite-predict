@@ -88,6 +88,16 @@ def test_predict_many_detailed_keeps_input_reordering(ugt_onnx_root):
     assert len(mol.results[0].atom) == 5
 
 
+def test_predict_many_rdkit_survives_process_pool(ugt_onnx_root):
+    be = OnnxBackend(ugt_onnx_root)
+    mols = predict_many(["OCCCC", "CCO"], model="ugt", backend=be, workers=2, rdkit=True)
+    assert len(mols) == 2
+    for mol in mols:
+        assert mol.rdkit is not None
+        assert mol.rdkit.GetNumAtoms() == mol.atoms.num
+        assert "rdkit" not in mol.model_dump()
+
+
 def test_apredict_many_matches_predict_many(ugt_onnx_root):
     be = OnnxBackend(ugt_onnx_root)
     smiles = BATCH_SMILES[:8]

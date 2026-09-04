@@ -137,6 +137,22 @@ def test_ethylene_epoxidation_rdkit_indices():
     assert met.mapped_smiles is None
     assert met.pathway == "Epoxidation"
     assert met.score == pytest.approx(0.85)
+    assert met.rdkit is None
+    assert mol.rdkit is None
+
+
+def test_attach_metabolites_rdkit_passthrough():
+    rdmol, mol = parse_smiles(ETHYLENE, rdkit=True)
+    mol.results = [
+        MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])
+    ]
+    attach_metabolites(mol, rdmol=rdmol, rdkit=True)
+    assert mol.rdkit is rdmol
+    met = mol.results[0].metabolite[0]
+    assert met.rdkit is not None
+    assert Chem.MolToSmiles(met.rdkit, isomericSmiles=False) == met.smiles
+    assert "rdkit" not in met.model_dump()
+    assert "rdkit" not in mol.model_dump()
 
 
 def test_propane_includes_all_forest_metabolites_sorted():

@@ -105,6 +105,36 @@ def test_predict_default_omits_details():
     assert mol.atoms.z is None
     assert mol.atoms.reordered is None
     assert mol.bonds.order is None
+    assert mol.rdkit is None
+    assert "rdkit" not in mol.model_dump()
+
+
+def test_predict_rdkit_keeps_mol():
+    if not onnx_weights_present("ugt"):
+        pytest.skip("no ugt ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    mol = predict("OCCCC", model="ugt", backend=be, rdkit=True)
+    assert mol.rdkit is not None
+    assert mol.rdkit.GetNumAtoms() == mol.atoms.num
+    assert "rdkit" not in mol.model_dump()
+
+
+def test_predict_rdkit_with_metabolites():
+    if not onnx_weights_present("epoxidation"):
+        pytest.skip("no epoxidation ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    mol = predict("C=C", model="epoxidation", backend=be, rdkit=True, metabolites=True)
+    assert mol.rdkit is not None
+    mets = mol.results[0].metabolite
+    assert mets
+    assert all(m.rdkit is not None for m in mets)
+    dumped = mol.model_dump()
+    assert "rdkit" not in dumped
+    assert all("rdkit" not in m for m in dumped["results"][0]["metabolite"])
 
 
 def test_list_models_reports_phase1():

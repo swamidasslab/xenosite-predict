@@ -67,6 +67,7 @@ class _PredictJob:
     metabolites_min_score: float | None = None
     mapped_smiles: bool = False
     detailed: bool = False
+    rdkit: bool = False
     parameter: tuple[tuple[str, Any], ...] = ()
 
 
@@ -150,6 +151,7 @@ def _job_from_input(
     metabolites_min_score: float | None,
     mapped_smiles: bool,
     detailed: bool,
+    rdkit: bool,
     parameter: Mapping[str, Any] | None,
 ) -> _PredictJob:
     _, molecule = as_molecule(inp)
@@ -163,15 +165,19 @@ def _job_from_input(
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
         detailed=detailed,
+        rdkit=rdkit,
         parameter=tuple(sorted((parameter or {}).items())),
     )
 
 
-def _run_job(job: _PredictJob, *, workers: int = 1) -> dict[str, Any]:
-    """Worker entrypoint: run sync :func:`predict` and return a Molecule dump."""
+def _run_job(job: _PredictJob, *, workers: int = 1) -> Molecule:
+    """Worker entrypoint: run sync :func:`predict` and return a :class:`Molecule`.
+
+    Returning the object (not a dump) keeps ``Molecule.rdkit`` when ``rdkit=True``.
+    """
     ensure_builtins()
     be = _resolve_cached(job.backend, workers=workers)
-    mol = predict(
+    return predict(
         job.smiles,
         models=list(job.models),
         backend=be,
@@ -179,13 +185,13 @@ def _run_job(job: _PredictJob, *, workers: int = 1) -> dict[str, Any]:
         metabolites_min_score=job.metabolites_min_score,
         mapped_smiles=job.mapped_smiles,
         detailed=job.detailed,
+        rdkit=job.rdkit,
         _parameter=dict(job.parameter) or None,
         env=dict(job.backend.env) or None,
     )
-    return mol.model_dump(mode="python")
 
 
-def _run_job_process(job: _PredictJob) -> dict[str, Any]:
+def _run_job_process(job: _PredictJob) -> Molecule:
     # workers hint is approximate inside the child; ORT intra-op already set via env.
     return _run_job(job, workers=default_workers())
 
@@ -248,6 +254,7 @@ def _prepare_jobs(
     metabolites_min_score: float | None,
     mapped_smiles: bool,
     detailed: bool,
+    rdkit: bool,
     _parameter: Optional[Mapping[str, Any]],
 ) -> tuple[list[_PredictJob], _BackendSpec]:
     if backends:
@@ -269,6 +276,7 @@ def _prepare_jobs(
             metabolites_min_score=metabolites_min_score,
             mapped_smiles=mapped_smiles,
             detailed=detailed,
+            rdkit=rdkit,
             parameter=_parameter,
         )
         for inp in inputs
@@ -286,18 +294,15 @@ def _map_jobs(
     if not jobs:
         return []
     if workers == 1 or len(jobs) == 1:
-        dumps = [_run_job(j, workers=1) for j in jobs]
-        return [Molecule.model_validate(d) for d in dumps]
+        return [_run_job(j, workers=1) for j in jobs]
 
     if _use_processes(bspec):
         # Advertise ORT thread budget to children via env before spawn.
         os.environ.setdefault(ENV_ORT_INTRA, str(_ort_intra_op_for_workers(workers)))
         pool = _get_process_pool(workers)
-        dumps = list(pool.map(_run_job_process, jobs, chunksize=max(1, chunksize)))
-    else:
-        pool_t = _get_thread_pool(workers)
-        dumps = list(pool_t.map(lambda j: _run_job(j, workers=workers), jobs))
-    return [Molecule.model_validate(d) for d in dumps]
+        return list(pool.map(_run_job_process, jobs, chunksize=max(1, chunksize)))
+    pool_t = _get_thread_pool(workers)
+    return list(pool_t.map(lambda j: _run_job(j, workers=workers), jobs))
 
 
 def predict_many(
@@ -312,6 +317,7 @@ def predict_many(
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
     detailed: bool = False,
+    rdkit: bool = False,
     workers: Optional[int] = None,
     chunksize: int = 1,
     _parameter: Optional[Mapping[str, Any]] = None,
@@ -333,6 +339,7 @@ def predict_many(
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
         detailed=detailed,
+        rdkit=rdkit,
         _parameter=_parameter,
     )
     n = default_workers(env) if workers is None else max(1, int(workers))
@@ -351,6 +358,7 @@ async def apredict(
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
     detailed: bool = False,
+    rdkit: bool = False,
     workers: Optional[int] = None,
     _parameter: Optional[Mapping[str, Any]] = None,
 ) -> Molecule:
@@ -374,6 +382,7 @@ async def apredict(
             metabolites_min_score=metabolites_min_score,
             mapped_smiles=mapped_smiles,
             detailed=detailed,
+            rdkit=rdkit,
             _parameter=_parameter,
         )
     jobs, bspec = _prepare_jobs(
@@ -387,21 +396,20 @@ async def apredict(
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
         detailed=detailed,
+        rdkit=rdkit,
         _parameter=_parameter,
     )
     n = default_workers(env) if workers is None else max(1, int(workers))
     loop = asyncio.get_running_loop()
     job = jobs[0]
     if n == 1:
-        dump = await asyncio.to_thread(_run_job, job, workers=1)
-    elif _use_processes(bspec):
+        return await asyncio.to_thread(_run_job, job, workers=1)
+    if _use_processes(bspec):
         os.environ.setdefault(ENV_ORT_INTRA, str(_ort_intra_op_for_workers(n)))
-        dump = await loop.run_in_executor(_get_process_pool(n), _run_job_process, job)
-    else:
-        dump = await loop.run_in_executor(
-            _get_thread_pool(n), lambda: _run_job(job, workers=n)
-        )
-    return Molecule.model_validate(dump)
+        return await loop.run_in_executor(_get_process_pool(n), _run_job_process, job)
+    return await loop.run_in_executor(
+        _get_thread_pool(n), lambda: _run_job(job, workers=n)
+    )
 
 
 async def apredict_many(
@@ -416,6 +424,7 @@ async def apredict_many(
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
     detailed: bool = False,
+    rdkit: bool = False,
     workers: Optional[int] = None,
     chunksize: int = 1,
     _parameter: Optional[Mapping[str, Any]] = None,
@@ -433,6 +442,7 @@ async def apredict_many(
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
         detailed=detailed,
+        rdkit=rdkit,
         workers=workers,
         chunksize=chunksize,
         _parameter=_parameter,
