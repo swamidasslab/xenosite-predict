@@ -1,6 +1,7 @@
 """User-API molecule types, ported from ``xenosite-api`` ``types.py``.
 
-Indices are **0-based RDKit** atom and bond indices. Scores are floats.
+Indices are **0-based RDKit** atom and bond indices in canonical SMILES
+order. Scores are floats aligned with ``atoms`` / ``bonds.idx``.
 This package does not perform name lookup; ``name`` is optional metadata.
 """
 
@@ -20,21 +21,47 @@ class BaseModel(_BaseModel):
 
 
 class Bonds(BaseModel):
-    """Bonds in RDKit order (``GetBonds()``). ``idx`` is ``(begin, end)`` atom pairs."""
+    """Bonds in canonical-SMILES atom order, listed to match score arrays."""
 
-    idx: list[tuple[NonNegativeInt, NonNegativeInt]]
-    order: Optional[list[Number]] = None
+    idx: list[tuple[NonNegativeInt, NonNegativeInt]] = Field(
+        description=(
+            "Bond endpoints as pairs of 0-based atom indices. Score arrays such "
+            "as `bond` line up with this list."
+        )
+    )
+    order: Optional[list[Number]] = Field(
+        default=None,
+        description="Bond orders (single, double, …) for each bond in `idx` when `detailed=True`.",
+    )
 
 
 class Atoms(BaseModel):
     """Heavy-atom topology in RDKit canonical-SMILES atom order."""
 
-    num: PositiveInt
-    reordered: Optional[list[NonNegativeInt]] = None
-    z: Optional[list[NonNegativeInt]] = None
-    impHs: Optional[list[NonNegativeInt]] = None
-    cipRank: Optional[list[NonNegativeInt]] = None
-    chrg: Optional[list[int]] = None
+    num: PositiveInt = Field(description="Number of heavy atoms.")
+    reordered: Optional[list[NonNegativeInt]] = Field(
+        default=None,
+        description=(
+            "When `detailed=True`, original (input) atom indices in canonical "
+            "SMILES order. Omitted otherwise."
+        ),
+    )
+    z: Optional[list[NonNegativeInt]] = Field(
+        default=None,
+        description="Atomic numbers for each heavy atom when `detailed=True`.",
+    )
+    impHs: Optional[list[NonNegativeInt]] = Field(
+        default=None,
+        description="Implicit hydrogen counts for each heavy atom when `detailed=True`.",
+    )
+    cipRank: Optional[list[NonNegativeInt]] = Field(
+        default=None,
+        description="CIP stereochemistry ranks for each heavy atom when `detailed=True`.",
+    )
+    chrg: Optional[list[int]] = Field(
+        default=None,
+        description="Formal charges for each heavy atom when `detailed=True`.",
+    )
 
 
 class Metabolite(BaseModel):
@@ -74,20 +101,24 @@ class Result(BaseModel):
 
 class MolBondResult(Result):
     mol: Number
-    bond: list[Number]
+    bond: list[Number] = Field(description="Per-bond scores, aligned with `bonds.idx`.")
 
 
 class AtomResult(Result):
-    atom: list[Number]
+    atom: list[Number] = Field(
+        description="Per-atom scores in canonical SMILES atom order (same as `Molecule.atoms`)."
+    )
 
 
 class BondResult(Result):
-    bond: list[Number]
+    bond: list[Number] = Field(description="Per-bond scores, aligned with `bonds.idx`.")
 
 
 class MolAtomResult(Result):
     mol: Number
-    atom: list[Number]
+    atom: list[Number] = Field(
+        description="Per-atom scores in canonical SMILES atom order (same as `Molecule.atoms`)."
+    )
 
 
 class MolAtomPairResult(MolAtomResult):
@@ -96,8 +127,10 @@ class MolAtomPairResult(MolAtomResult):
 
 
 class AtomBondResult(Result):
-    bond: list[Number]
-    atom: list[Number]
+    bond: list[Number] = Field(description="Per-bond scores, aligned with `bonds.idx`.")
+    atom: list[Number] = Field(
+        description="Per-atom scores in canonical SMILES atom order (same as `Molecule.atoms`)."
+    )
 
 
 ModelResult = Union[
@@ -114,7 +147,10 @@ Results = list[ModelResult]
 
 
 class Molecule(BaseModel):
-    """Primary return type: canonical SMILES, topology, and appended model results."""
+    """Primary return type: canonical SMILES, topology, and appended model results.
+
+    ``atoms`` and score arrays use the same 0-based canonical-SMILES atom order.
+    """
 
     smiles: str = Field(description="Non-isomeric canonical SMILES.")
     results: Results = Field(default_factory=list)

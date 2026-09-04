@@ -66,6 +66,7 @@ class _PredictJob:
     metabolites: bool = False
     metabolites_min_score: float | None = None
     mapped_smiles: bool = False
+    detailed: bool = False
     parameter: tuple[tuple[str, Any], ...] = ()
 
 
@@ -148,16 +149,20 @@ def _job_from_input(
     metabolites: bool,
     metabolites_min_score: float | None,
     mapped_smiles: bool,
+    detailed: bool,
     parameter: Mapping[str, Any] | None,
 ) -> _PredictJob:
     _, molecule = as_molecule(inp)
+    # Keep the original SMILES so workers can recover ``atoms.reordered``.
+    smiles = inp if isinstance(inp, str) else molecule.smiles
     return _PredictJob(
-        smiles=molecule.smiles,
+        smiles=smiles,
         models=models,
         backend=backend,
         metabolites=metabolites,
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
+        detailed=detailed,
         parameter=tuple(sorted((parameter or {}).items())),
     )
 
@@ -173,6 +178,7 @@ def _run_job(job: _PredictJob, *, workers: int = 1) -> dict[str, Any]:
         metabolites=job.metabolites,
         metabolites_min_score=job.metabolites_min_score,
         mapped_smiles=job.mapped_smiles,
+        detailed=job.detailed,
         _parameter=dict(job.parameter) or None,
         env=dict(job.backend.env) or None,
     )
@@ -241,6 +247,7 @@ def _prepare_jobs(
     metabolites: bool,
     metabolites_min_score: float | None,
     mapped_smiles: bool,
+    detailed: bool,
     _parameter: Optional[Mapping[str, Any]],
 ) -> tuple[list[_PredictJob], _BackendSpec]:
     if backends:
@@ -261,6 +268,7 @@ def _prepare_jobs(
             metabolites=metabolites,
             metabolites_min_score=metabolites_min_score,
             mapped_smiles=mapped_smiles,
+            detailed=detailed,
             parameter=_parameter,
         )
         for inp in inputs
@@ -303,6 +311,7 @@ def predict_many(
     metabolites: bool = False,
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
+    detailed: bool = False,
     workers: Optional[int] = None,
     chunksize: int = 1,
     _parameter: Optional[Mapping[str, Any]] = None,
@@ -323,6 +332,7 @@ def predict_many(
         metabolites=metabolites,
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
+        detailed=detailed,
         _parameter=_parameter,
     )
     n = default_workers(env) if workers is None else max(1, int(workers))
@@ -340,6 +350,7 @@ async def apredict(
     metabolites: bool = False,
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
+    detailed: bool = False,
     workers: Optional[int] = None,
     _parameter: Optional[Mapping[str, Any]] = None,
 ) -> Molecule:
@@ -362,6 +373,7 @@ async def apredict(
             metabolites=metabolites,
             metabolites_min_score=metabolites_min_score,
             mapped_smiles=mapped_smiles,
+            detailed=detailed,
             _parameter=_parameter,
         )
     jobs, bspec = _prepare_jobs(
@@ -374,6 +386,7 @@ async def apredict(
         metabolites=metabolites,
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
+        detailed=detailed,
         _parameter=_parameter,
     )
     n = default_workers(env) if workers is None else max(1, int(workers))
@@ -402,6 +415,7 @@ async def apredict_many(
     metabolites: bool = False,
     metabolites_min_score: Optional[float] = None,
     mapped_smiles: bool = False,
+    detailed: bool = False,
     workers: Optional[int] = None,
     chunksize: int = 1,
     _parameter: Optional[Mapping[str, Any]] = None,
@@ -418,6 +432,7 @@ async def apredict_many(
         metabolites=metabolites,
         metabolites_min_score=metabolites_min_score,
         mapped_smiles=mapped_smiles,
+        detailed=detailed,
         workers=workers,
         chunksize=chunksize,
         _parameter=_parameter,

@@ -78,6 +78,16 @@ def test_apredict_matches_predict(ugt_onnx_root):
     assert async_mol.results[0].atom == pytest.approx(sync.results[0].atom)
 
 
+def test_predict_many_detailed_keeps_input_reordering(ugt_onnx_root):
+    be = OnnxBackend(ugt_onnx_root)
+    mols = predict_many(["OCCCC"], model="ugt", backend=be, workers=1, detailed=True)
+    mol = mols[0]
+    assert mol.smiles == "CCCCO"
+    assert mol.atoms.z == [6, 6, 6, 6, 8]
+    assert mol.atoms.reordered == [4, 3, 2, 1, 0]
+    assert len(mol.results[0].atom) == 5
+
+
 def test_apredict_many_matches_predict_many(ugt_onnx_root):
     be = OnnxBackend(ugt_onnx_root)
     smiles = BATCH_SMILES[:8]

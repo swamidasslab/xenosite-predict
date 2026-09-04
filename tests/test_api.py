@@ -79,6 +79,34 @@ def test_predict_reuses_molecule_object():
     assert len(mol.results) > n0
 
 
+def test_predict_detailed_canonical_order():
+    if not onnx_weights_present("ugt"):
+        pytest.skip("no ugt ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    mol = predict("OCCCC", model="ugt", backend=be, detailed=True)
+    assert mol.smiles == "CCCCO"
+    assert mol.atoms.z == [6, 6, 6, 6, 8]
+    assert mol.atoms.reordered == [4, 3, 2, 1, 0]
+    assert mol.bonds.order == [1.0, 1.0, 1.0, 1.0]
+    atom_scores = mol.results[0].atom
+    assert len(atom_scores) == mol.atoms.num
+
+
+def test_predict_default_omits_details():
+    if not onnx_weights_present("ugt"):
+        pytest.skip("no ugt ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    mol = predict("OCCCC", model="ugt", backend=be)
+    assert mol.smiles == "CCCCO"
+    assert mol.atoms.z is None
+    assert mol.atoms.reordered is None
+    assert mol.bonds.order is None
+
+
 def test_list_models_reports_phase1():
     rows = list_models(env={"XENOSITE_MODELS_WEIGHTS": str(onnx_root())})
     versions = {(r["name"], r["version"]) for r in rows}
