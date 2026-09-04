@@ -22,9 +22,10 @@ from xenosite.predict import predict_many
 from xenosite.predict.backends.http import HttpBackend
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.parallel import reset_pools_for_tests
-from tests.support import onnx_root, onnx_weights_present
+from xenosite.predict.weights import generation_root
 
 DEFAULT_HTTP = "https://swami.wustl.edu/xenosite-api"
+ROOT = Path(__file__).resolve().parents[1]
 
 SMILES = [
     "CC(=O)Oc1ccccc1C(=O)O",
@@ -38,6 +39,14 @@ SMILES = [
     "CC(C)NCC(O)c1ccc(O)c(CO)c1",
     "Nc1ncnc2n(cnc12)C3OC(CO)C(O)C3O",
 ]
+
+
+def _onnx_root() -> Path:
+    return generation_root(ROOT / "weights" / "onnx")
+
+
+def _onnx_weights_present(model: str) -> bool:
+    return any((_onnx_root() / model).glob("*.onnx"))
 
 
 def _bench(label: str, fn) -> float:
@@ -62,8 +71,9 @@ def main() -> None:
     smiles = (SMILES * ((args.n // len(SMILES)) + 1))[: args.n]
     print(f"n={len(smiles)} model={args.model}")
 
-    if onnx_weights_present(args.model):
-        be = OnnxBackend(onnx_root())
+    root = _onnx_root()
+    if _onnx_weights_present(args.model):
+        be = OnnxBackend(root)
         # warmup
         predict_many(smiles[:2], model=args.model, backend=be, workers=1)
         dt = _bench(
@@ -74,7 +84,7 @@ def main() -> None:
         )
         print(f"ONNX  predict_many: {dt:.3f}s ({len(smiles) / dt:.1f} mol/s)")
     else:
-        print(f"ONNX  skipped (no weights for {args.model} under {onnx_root()})")
+        print(f"ONNX  skipped (no weights for {args.model} under {root})")
 
     url = (args.http or "").rstrip("/")
     if not url:

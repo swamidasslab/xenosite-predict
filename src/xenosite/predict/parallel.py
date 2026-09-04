@@ -22,7 +22,7 @@ from .backends.http import HttpBackend
 from .backends.legacy import LegacyTestBackend
 from .backends.onnx import ENV_ORT_INTRA, OnnxBackend
 from .molecule import as_molecule
-from .registry import Spec, ensure_builtins, normalize_models
+from .registry import Spec, ensure_builtins, load_runner, normalize_models
 from .types import Molecule
 
 ModelsArg = Union[str, Spec, Iterable[str | Spec]]
@@ -267,11 +267,59 @@ def _map_jobs_onnx(
     return list(pool.map(_run_job_process, jobs, chunksize=max(1, chunksize)))
 
 
+async def _run_job_http_async(job: _PredictJob) -> Molecule:
+    """One HTTP molecule on the current event loop (awaits ``apredict_native``)."""
+    from ._private import add_metabolites
+    from .api import _attach_rdkit
+    from .molecule import apply_presentation, prepare_backend_molecule
+    from .scoring import apply_scoring_parameters
+
+    ensure_builtins()
+    be = _resolve_cached(job.backend)
+    if not isinstance(be, HttpBackend):
+        return _run_job(job, workers=1)
+
+    want_rdkit_during = job.rdkit and job.canonicalize
+    rdmol, molecule, input_smiles = prepare_backend_molecule(
+        job.smiles, rdkit=want_rdkit_during
+    )
+    user_parameter = dict(job.parameter) or None
+    for name, version in job.models:
+        runner = load_runner(name, version)
+        molecule._parameter = apply_scoring_parameters(version, user_parameter)
+        payload = await be.apredict_native(molecule.smiles, name, version)
+        runner._merge_molecule_payload(molecule, payload)
+
+    if job.metabolites:
+        add_metabolites(
+            molecule,
+            min_score=job.metabolites_min_score,
+            mapped_smiles=job.mapped_smiles,
+            rdmol=rdmol,
+            rdkit=False,
+        )
+    apply_presentation(
+        molecule,
+        canonicalize=job.canonicalize,
+        detailed=job.detailed,
+        input_smiles=input_smiles,
+    )
+    _attach_rdkit(
+        molecule,
+        rdkit=job.rdkit,
+        used_http=True,
+        canonicalize=job.canonicalize,
+        input_smiles=input_smiles,
+        rdmol=rdmol,
+    )
+    return molecule
+
+
 async def _amap_jobs_http(jobs: list[_PredictJob]) -> list[Molecule]:
-    """Run HTTP jobs concurrently via asyncio (semaphore lives in HttpBackend)."""
+    """Run HTTP jobs concurrently on one event loop under the per-origin semaphore."""
     if not jobs:
         return []
-    return list(await asyncio.gather(*[asyncio.to_thread(_run_job, j, workers=1) for j in jobs]))
+    return list(await asyncio.gather(*[_run_job_http_async(j) for j in jobs]))
 
 
 def predict_many(
@@ -377,7 +425,9 @@ async def apredict(
     )
     job = jobs[0]
     if bspec.kind == "http":
-        return await asyncio.to_thread(_run_job, job, workers=1)
+        if isinstance(backend, HttpBackend):
+            _BACKEND_CACHE[("http", backend.origin)] = backend
+        return await _run_job_http_async(job)
     n = default_workers(env) if workers is None else max(1, int(workers))
     loop = asyncio.get_running_loop()
     if n == 1:

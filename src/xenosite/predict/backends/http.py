@@ -57,9 +57,9 @@ DEFAULT_RETRY_MAX = 5
 _RETRY_STATUS = frozenset({408, 429, 503})
 _MSGPACK_ACCEPT = "application/x-msgpack"
 
-# Shared per-origin state (process-wide).
+# Shared per-origin+loop AsyncClients (process-wide).
 _lock = threading.Lock()
-_clients: dict[str, httpx.AsyncClient] = {}
+_clients: dict[tuple[str, int], httpx.AsyncClient] = {}
 _semaphores: dict[str, threading.BoundedSemaphore] = {}
 _sem_limits: dict[str, int] = {}
 
@@ -111,15 +111,17 @@ async def _get_client(
             timeout=timeout,
             transport=transport,
         )
+    loop = asyncio.get_running_loop()
+    key = (origin, id(loop))
     with _lock:
-        client = _clients.get(origin)
+        client = _clients.get(key)
         if client is None or client.is_closed:
             client = httpx.AsyncClient(
                 base_url=origin,
                 headers=headers,
                 timeout=timeout,
             )
-            _clients[origin] = client
+            _clients[key] = client
         return client
 
 
@@ -153,14 +155,6 @@ def reset_http_state_for_tests() -> None:
     except RuntimeError:
         if clients:
             asyncio.run(_close_all())
-    else:
-        # Best-effort from async context; tests usually call from sync.
-        for c in clients:
-            try:
-                if not c.is_closed:
-                    asyncio.create_task(c.aclose())
-            except Exception:
-                pass
 
 
 def run_sync(coro):
