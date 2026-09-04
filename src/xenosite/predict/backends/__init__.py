@@ -34,6 +34,18 @@ ENV_BACKEND = "XENOSITE_BACKEND"
 ENV_API_KEY = "XENOSITE_API_KEY"
 ENV_LEGACY_URL = "XENOSITE_LEGACY_TEST_URL"
 
+__all__ = [
+    "ENV_BACKEND",
+    "ENV_API_KEY",
+    "ENV_LEGACY_URL",
+    "PredictBackend",
+    "Spec",
+    "is_url",
+    "resolve_backend",
+    "resolve_for_model",
+    "BackendNotConfigured",
+]
+
 Spec = tuple[str, str]
 
 
@@ -74,8 +86,9 @@ def resolve_backend(
     from .onnx import OnnxBackend
 
     if isinstance(backend, str):
+        e = env if env is not None else os.environ
         if is_url(backend):
-            return HttpBackend(backend)
+            return HttpBackend(backend, api_key=e.get(ENV_API_KEY), env=e)
         key = backend.lower()
         if key in {"onnx", "local"}:
             weights = resolve_onnx_dir(
@@ -88,16 +101,15 @@ def resolve_backend(
                 )
             return OnnxBackend(weights)
         if key in {"legacy", "legacy-test", "test-api"}:
-            url = (env or os.environ).get(ENV_LEGACY_URL, "http://127.0.0.1:8099")
+            url = e.get(ENV_LEGACY_URL, "http://127.0.0.1:8099")
             return LegacyTestBackend(url)
         if key == "http":
-            e = env if env is not None else os.environ
             url = e.get(ENV_BACKEND, "")
             if not is_url(url):
                 raise BackendNotConfigured(
                     "backend='http' requires XENOSITE_BACKEND to be an http(s) URL"
                 )
-            return HttpBackend(url, api_key=e.get(ENV_API_KEY))
+            return HttpBackend(url, api_key=e.get(ENV_API_KEY), env=e)
         raise BackendNotConfigured(f"Unknown backend {backend!r}")
 
     e = dict(os.environ if env is None else env)
@@ -105,7 +117,7 @@ def resolve_backend(
 
     url = e.get(ENV_BACKEND, "").strip()
     if is_url(url):
-        return HttpBackend(url, api_key=e.get(ENV_API_KEY))
+        return HttpBackend(url, api_key=e.get(ENV_API_KEY), env=e)
 
     weights = resolve_onnx_dir(env=env, cwd=cwd, auto_download=auto_download)
     if weights is not None:

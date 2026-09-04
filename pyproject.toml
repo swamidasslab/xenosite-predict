@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.5",
     "openbabel>=3.2.1",
     "xenosite-forest>=0.1.0",
+    "msgpack>=1.0",
 ]
 
 [build-system]
