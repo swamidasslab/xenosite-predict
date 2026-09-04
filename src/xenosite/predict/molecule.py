@@ -1,28 +1,33 @@
-"""SMILES parse / canonicalize and topology (shared by every model).
+"""SMILES parse / canonicalize, topology, and presentation helpers.
 
 Canonical SMILES is **non-isomeric** (``isomericSmiles=False``), matching the
-current XenoSite API gather path. Atom and bond indices are 0-based RDKit
-indices in **canonical SMILES atom order** (the input is re-parsed from that
-string). Name lookup is intentionally omitted.
-
-When ``detailed=True``, topology includes atomic numbers, charges, implicit
-hydrogens, CIP ranks, bond orders, and ``atoms.reordered``: the original
-(input) atom indices in canonical SMILES order.
-
-When ``rdkit=True``, the RDKit mol already built during parse is kept on
-``Molecule.rdkit`` (no extra parse). JSON dumps omit it.
+XenoSite API. Backends always see canonical atom order with detailed topology.
+User-facing ``canonicalize`` / ``detailed`` are applied after prediction.
 """
 
 from __future__ import annotations
 
 import ast
-from typing import Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 from rdkit import Chem
 from rdkit.Chem import rdchem
 
 from .errors import InvalidMolecule
-from .types import Atoms, Bonds, Molecule
+from .types import (
+    AtomBondResult,
+    AtomResult,
+    Atoms,
+    BondResult,
+    Bonds,
+    Metabolite,
+    ModelResult,
+    MolAtomPairResult,
+    MolAtomResult,
+    MolBondResult,
+    Molecule,
+    Result,
+)
 
 RdkMol = rdchem.Mol
 
@@ -41,6 +46,11 @@ def _parse_rdkit(smiles: str) -> RdkMol:
 def canonicalize_smiles(smiles: str) -> str:
     """Return non-isomeric canonical SMILES, or raise :class:`InvalidMolecule`."""
     return Chem.MolToSmiles(_parse_rdkit(smiles), isomericSmiles=False)
+
+
+def is_canonical_smiles(smiles: str) -> bool:
+    """True when ``smiles`` already equals its non-isomeric canonical form."""
+    return smiles == canonicalize_smiles(smiles)
 
 
 def _smiles_atom_output_order(mol: RdkMol) -> list[int]:
@@ -65,9 +75,11 @@ def parse_smiles(
     mol = Chem.MolFromSmiles(canonical)
     if mol is None:
         raise InvalidMolecule(f"Canonical SMILES could not be re-parsed: {canonical}")
-    return mol, molecule_from_rdkit(
+    molecule = molecule_from_rdkit(
         mol, smiles=canonical, detailed=detailed, reordered=reordered, rdkit=rdkit
     )
+    molecule._input_smiles = smiles
+    return mol, molecule
 
 
 def molecule_from_rdkit(
@@ -122,7 +134,10 @@ def molecule_from_rdkit(
 
 def _ensure_details(molecule: Molecule, *, rdkit: bool = False) -> None:
     """Fill detailed topology on an already-canonical :class:`Molecule`."""
-    if molecule.atoms.z is not None:
+    if molecule.atoms.z is not None and molecule.atoms.reordered is not None:
+        if rdkit and molecule.rdkit is None:
+            mol, _ = parse_smiles(molecule.smiles, rdkit=True)
+            molecule.rdkit = mol
         return
     mol, filled = parse_smiles(molecule.smiles, detailed=True, rdkit=rdkit)
     molecule.atoms = filled.atoms
@@ -143,3 +158,170 @@ def as_molecule(
             inp.rdkit = mol
         return inp.rdkit, inp
     return parse_smiles(inp, detailed=detailed, rdkit=rdkit)
+
+
+def prepare_backend_molecule(
+    inp: Union[str, Molecule], *, rdkit: bool = False
+) -> tuple[Optional[RdkMol], Molecule, str]:
+    """Build the canonical + detailed molecule every backend call must see.
+
+    Returns ``(rdmol, molecule, input_smiles)``. ``input_smiles`` is the original
+    user string (for ``canonicalize=False`` presentation).
+
+    Raises :class:`InvalidMolecule` when appending to a non-canonical molecule
+    that already has results.
+    """
+    if isinstance(inp, str):
+        rdmol, molecule = parse_smiles(inp, detailed=True, rdkit=rdkit)
+        return rdmol, molecule, inp
+
+    input_smiles = inp._input_smiles or inp.smiles
+    if not is_canonical_smiles(inp.smiles):
+        if inp.results:
+            raise InvalidMolecule(
+                "Cannot append predictions to a non-canonical Molecule that "
+                "already has results; pass a SMILES string or a canonical Molecule."
+            )
+        rdmol, molecule = parse_smiles(inp.smiles, detailed=True, rdkit=rdkit)
+        molecule._input_smiles = input_smiles
+        return rdmol, molecule, input_smiles
+
+    _ensure_details(inp, rdkit=rdkit)
+    if inp._input_smiles is None:
+        inp._input_smiles = input_smiles
+    return inp.rdkit, inp, input_smiles
+
+
+def _permute_atom_vector(values: Sequence[Any], reordered: Sequence[int]) -> list[Any]:
+    """Map canonical-order vector → input-order using ``reordered[i]=input_idx``."""
+    out: list[Any] = [None] * len(reordered)
+    for can_i, inp_i in enumerate(reordered):
+        out[int(inp_i)] = values[can_i]
+    return out
+
+
+def _map_atom_index(i: int, reordered: Sequence[int]) -> int:
+    return int(reordered[i])
+
+
+def _reorder_metabolite(met: Metabolite, reordered: Sequence[int]) -> Metabolite:
+    data = met.model_dump()
+    if met.atom is not None:
+        data["atom"] = [_map_atom_index(i, reordered) for i in met.atom]
+    if met.map_idx is not None:
+        # 1-based parent indices in canonical parent order; 0 = new atom.
+        mapped: list[int] = []
+        for v in met.map_idx:
+            if not v:
+                mapped.append(0)
+            else:
+                mapped.append(_map_atom_index(int(v) - 1, reordered) + 1)
+        data["map_idx"] = mapped
+    data["rdkit"] = met.rdkit
+    return Metabolite.model_validate(data)
+
+
+def _reorder_result(result: ModelResult, reordered: Sequence[int]) -> ModelResult:
+    data = result.model_dump()
+    if result.metabolite is not None:
+        data["metabolite"] = [
+            _reorder_metabolite(m, reordered).model_dump() for m in result.metabolite
+        ]
+    if isinstance(result, (AtomResult, MolAtomResult, MolAtomPairResult, AtomBondResult)):
+        if getattr(result, "atom", None) is not None:
+            data["atom"] = _permute_atom_vector(result.atom, reordered)
+    if isinstance(result, MolAtomPairResult):
+        data["pair_idx"] = [
+            (_map_atom_index(a, reordered), _map_atom_index(b, reordered))
+            for a, b in result.pair_idx
+        ]
+        # pair scores stay aligned with pair_idx entries (same chemical pairs).
+    if isinstance(result, (MolBondResult, BondResult, AtomBondResult)):
+        # Bond score arrays stay aligned with remapped bonds.idx (same order).
+        pass
+    # Re-validate as the same result variant.
+    for cls in (
+        MolAtomPairResult,
+        MolAtomResult,
+        MolBondResult,
+        AtomBondResult,
+        AtomResult,
+        BondResult,
+        Result,
+    ):
+        if isinstance(result, cls):
+            return cls.model_validate(data)
+    return Result.model_validate(data)
+
+
+def in_input_order(molecule: Molecule, *, input_smiles: Optional[str] = None) -> Molecule:
+    """Permute a canonical-order :class:`Molecule` into input atom order (in place).
+
+    Requires ``atoms.reordered`` where ``reordered[i]`` is the input atom index at
+    canonical position ``i``. Sets ``smiles`` to the original input SMILES.
+    """
+    reordered = molecule.atoms.reordered
+    if not reordered:
+        raise InvalidMolecule(
+            "Cannot remap to input order without atoms.reordered "
+            "(backend molecules must be detailed=True)."
+        )
+    if len(reordered) != molecule.atoms.num:
+        raise InvalidMolecule(
+            f"atoms.reordered length {len(reordered)} != atoms.num {molecule.atoms.num}"
+        )
+
+    smi = input_smiles or molecule._input_smiles
+    if smi is None:
+        raise InvalidMolecule("Cannot remap to input order without the original input SMILES.")
+
+    # Atom property vectors (canonical → input).
+    for field in ("z", "chrg", "impHs", "cipRank"):
+        vals = getattr(molecule.atoms, field)
+        if vals is not None:
+            setattr(molecule.atoms, field, _permute_atom_vector(vals, reordered))
+
+    # Bonds: endpoints mapped; keep score alignment by rewriting idx in place.
+    new_idx = [
+        (_map_atom_index(a, reordered), _map_atom_index(b, reordered))
+        for a, b in molecule.bonds.idx
+    ]
+    molecule.bonds.idx = new_idx
+    # order stays parallel to idx
+
+    molecule.results = [_reorder_result(r, reordered) for r in molecule.results]
+
+    # After remap, identity mapping in input order.
+    molecule.atoms.reordered = list(range(molecule.atoms.num))
+    molecule.smiles = smi
+    molecule.rdkit = None
+    return molecule
+
+
+def strip_details(molecule: Molecule) -> Molecule:
+    """Clear detailed topology fields (in place)."""
+    molecule.atoms.reordered = None
+    molecule.atoms.z = None
+    molecule.atoms.chrg = None
+    molecule.atoms.impHs = None
+    molecule.atoms.cipRank = None
+    molecule.bonds.order = None
+    return molecule
+
+
+def apply_presentation(
+    molecule: Molecule,
+    *,
+    canonicalize: bool = True,
+    detailed: bool = False,
+    input_smiles: Optional[str] = None,
+) -> Molecule:
+    """Apply user-facing ``canonicalize`` / ``detailed`` after backend prediction."""
+    if not canonicalize:
+        in_input_order(molecule, input_smiles=input_smiles)
+    if not detailed:
+        strip_details(molecule)
+    elif canonicalize and molecule.atoms.reordered is None:
+        # detailed requested but mapping missing — should not happen for backend path
+        pass
+    return molecule

@@ -153,12 +153,13 @@ Results = list[ModelResult]
 
 
 class Molecule(BaseModel):
-    """Primary return type: canonical SMILES, topology, and appended model results.
+    """Primary return type: SMILES, topology, and appended model results.
 
-    ``atoms`` and score arrays use the same 0-based canonical-SMILES atom order.
+    Backends always see canonical non-isomeric SMILES atom order. After
+    presentation (``canonicalize=False``), indices may match the input order.
     """
 
-    smiles: str = Field(description="Non-isomeric canonical SMILES.")
+    smiles: str = Field(description="Non-isomeric SMILES (canonical unless remapped).")
     results: Results = Field(default_factory=list)
     atoms: Atoms
     bonds: Bonds
@@ -170,4 +171,5 @@ class Molecule(BaseModel):
         description="In-process RDKit mol when ``rdkit=True``. Omitted from JSON.",
     )
     _parameter: dict[str, Any] = PrivateAttr(default_factory=dict)
+    _input_smiles: Optional[str] = PrivateAttr(default=None)
     model_config = ConfigDict(json_schema_extra={}, protected_namespaces=())

@@ -31,3 +31,7 @@ class ModelNotAvailable(XenositePredictError, RuntimeError):
 
 class OpenBabelNotAvailable(XenositePredictError, RuntimeError):
     """OpenBabel 2.4 is not installed; internal descriptors cannot run."""
+
+
+class BackendRequestError(XenositePredictError, RuntimeError):
+    """HTTP (or other remote) backend request failed after retries."""
