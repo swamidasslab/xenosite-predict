@@ -13,6 +13,7 @@ from .parallel import apredict, apredict_many, predict_many
 from .registry import register_model
 from .errors import (
     BackendNotConfigured,
+    BackendRequestError,
     InvalidMolecule,
     ModelNotAvailable,
     OpenBabelNotAvailable,
@@ -58,6 +59,7 @@ __all__ = [
     "InvalidMolecule",
     "UnknownModel",
     "BackendNotConfigured",
+    "BackendRequestError",
     "WeightsNotFound",
     "WeightsDownloadError",
     "ModelNotAvailable",
