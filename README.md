@@ -49,7 +49,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 
 `workers` defaults to CPU count (`XENOSITE_WORKERS` overrides). New models reuse the existing `predict` / runner path — no per-model async code.
 
-### `predict(inp, model=..., models=..., backend=..., backends=..., env=..., detailed=..., rdkit=...)`
+### `predict(inp, model=..., models=..., backend=..., backends=..., env=..., detailed=..., canonicalize=..., rdkit=...)`
 
 | Arg | Meaning |
 |---|---|
@@ -57,10 +57,13 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 | `model` | Single name; ignored if `models` is set |
 | `models` | `str` or `(name, version)` iterable. `"1"` (default) = updated params; `"0"` = legacy / `/v0` |
 | `backend` | Pin the whole call: `"onnx"`, `"http"`, `"legacy"`, a URL, or a backend object |
-| `backends` | Per-`(name, version)` override (ONNX epoxidation + HTTP bioactivation) |
+| `backends` | Per-`(name, version)` override |
 | `env` | Picker mapping; `None` uses `os.environ`. Tests clear `XENOSITE_*` |
-| `detailed` | When `True`, fill atom/bond properties and `atoms.reordered` (input → canonical map) |
-| `rdkit` | When `True`, keep in-process RDKit mols on `Molecule.rdkit` / `Metabolite.rdkit` |
+| `canonicalize` | Default `True`. Backends always score in canonical order; `False` remaps the returned molecule to **input** atom order |
+| `detailed` | Presentation only: when `True`, keep atom/bond properties and `atoms.reordered`. Backends always see detailed topology |
+| `rdkit` | When `True`, keep RDKit mols on `Molecule.rdkit` / `Metabolite.rdkit`. With HTTP this triggers a local reparse and a warning |
+
+Backends always receive a **canonical** SMILES molecule with **detailed** topology (identical calls → better cache dedupe). `canonicalize` / `detailed` only change what is returned.
 
 ### Return type (`Molecule`)
 
@@ -83,28 +86,34 @@ are optional pre-fetch helpers.
 
 ### Errors
 
-`InvalidMolecule`, `UnknownModel`, `BackendNotConfigured`, `WeightsNotFound`, `WeightsDownloadError`, `ModelNotAvailable`, `OpenBabelNotAvailable`.
+`InvalidMolecule`, `UnknownModel`, `BackendNotConfigured`, `BackendRequestError`, `WeightsNotFound`, `WeightsDownloadError`, `ModelNotAvailable`, `OpenBabelNotAvailable`.
 
 ## Backends
 
 Picker (explicit env wins; first match):
 
-1. `XENOSITE_BACKEND` is an `http://` / `https://` URL → **HTTP** against that deployed **xenosite-api**. Optional `XENOSITE_API_KEY` as Bearer.
+1. `XENOSITE_BACKEND` is an `http://` / `https://` URL → **HTTP** against that deployed **xenosite-api**. Optional `XENOSITE_API_KEY` as Bearer (also applied when `backend=` is a URL).
 2. Else `XENOSITE_MODELS_WEIGHTS` → local **ONNX** directory.
 3. Else auto-detect `./weights/onnx/v0` (or a flat `./weights/onnx` tree) → local ONNX.
 4. Else user cache (`$XDG_CACHE_HOME/xenosite/onnx/v0`) if `*.onnx` exist.
 5. Else, when `XENOSITE_ONNX_URL` is set in the process env, download that archive into the cache (INFO on found/download).
 6. Else raise `BackendNotConfigured`.
 
-Live parity compares **ONNX vs the legacy test-API**, not vs production HTTP. Tests must pass `backend=` and must not inherit a developer shell (`XENOSITE_*` are cleared in `conftest.py`).
-
 | Backend | Role |
 |---|---|
-| ONNX | Converted numpy-NN heads under `weights/onnx/v0/<model>/<head>.onnx` |
-| HTTP | `GET {origin}/v0/<model>?smiles=` (xenosite-api) |
+| ONNX | Converted numpy-NN heads under `weights/onnx/v0/<model>/<head>.onnx` (process pool for `predict_many`) |
+| HTTP | Async `GET {origin}/v{0\|1}/<model>?smiles=&detailed=true` with **msgpack** (`Accept: application/x-msgpack`) so NaN scores round-trip. Per-origin concurrency cap `XENOSITE_HTTP_MAX_CONCURRENT` (default 64) and full-jitter exponential backoff on 429/503/timeouts |
 | Legacy | Derived Docker test API (`POST /predict/<model>`, `POST /nn/<model>/<head>`) |
 
-Per-model override: `predict(..., backends={("bioactivation", "0"): "http"})`.
+`bioactivation` is not available on HTTP (no route on xenosite-api). `_parameter` overlays are ONNX-only (error on HTTP/legacy).
+
+Benchmark ONNX vs HTTP `predict_many`:
+
+```
+uv run python tools/bench_http_vs_onnx.py --n 32 --model ugt
+```
+
+Live parity compares **ONNX vs the legacy test-API**, not vs production HTTP. Tests must pass `backend=` and must not inherit a developer shell (`XENOSITE_*` are cleared in `conftest.py`).
 
 ## Built-in models (version `"0"`)
 
