@@ -67,7 +67,7 @@ Backends always receive a **canonical** SMILES molecule with **detailed** topolo
 
 ### Return type (`Molecule`)
 
-Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Result variants: `MolBondResult`, `MolAtomResult`, `MolAtomPairResult`, `AtomResult`, `BondResult`, `AtomBondResult`. Each result has `model` and `model_version` (`"0"` or `"1"`, the scoring generation). `Metabolite.smiles` is canonical SMILES except for conjugation adducts (`ugt`, `reactivity.*`), which are **CXSMILES** (`*` with an `atomLabel` such as `GlcA` / `GSH`).
+Ported from `xenosite-api` `types.py`: `smiles`, `atoms`, `bonds`, `results`. Result variants: `MolBondResult`, `MolAtomResult`, `MolAtomPairResult`, `AtomResult`, `BondResult`, `AtomBondResult`. Each result has `model` and `model_version` (`"0"` or `"1"`, the scoring generation). `Metabolite.smiles` is canonical SMILES except for conjugation adducts (`ugt`, `reactivity.*`), which are **CXSMILES** (`*` with an `atomLabel` such as `GlcA` / `GSH`). The SMILES token before `|` is valid on its own and depicts as `*` if the CX block is ignored.
 
 ### `list_models()`
 

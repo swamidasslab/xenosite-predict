@@ -440,7 +440,8 @@ def attach_metabolites(
     ``mapped_smiles`` with ``:N`` atom-map labels in the SMILES string.
 
     Conjugation heads (``ugt``, ``reactivity.*``) write **CXSMILES** on
-    ``Metabolite.smiles`` (dummy ``*`` + ``atomLabel``).
+    ``Metabolite.smiles`` (dummy ``*`` + ``atomLabel``). The SMILES token
+    before ``|`` is valid on its own and depicts as ``*`` if CX is ignored.
 
     Parameters
     ----------

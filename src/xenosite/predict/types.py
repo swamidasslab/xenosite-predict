@@ -73,7 +73,9 @@ class Metabolite(BaseModel):
     ``smiles`` is a structure string. Phase I / quinone products are ordinary
     canonical SMILES. **Conjugation adducts are CXSMILES**: a dummy ``*`` plus
     an ``atomLabel`` (``GlcA``, ``GSH``, ``Protein``, ``DNA``, ``CN``) so RDKit
-    depictions can name the conjugate.
+    depictions can name the conjugate. The substring before ``|`` is still
+    valid SMILES; parsers or depictors that ignore the CX block fall back to
+    a bare ``*``.
 
     ``map_idx`` lists **1-based** parent atom numbers for each heavy atom in
     ``smiles`` (canonical order). ``0`` marks newly introduced atoms (including
@@ -87,7 +89,8 @@ class Metabolite(BaseModel):
     smiles: str = Field(
         description=(
             "Canonical SMILES, or CXSMILES for conjugation adducts "
-            "(dummy * with atomLabel GlcA/GSH/Protein/DNA/CN)."
+            "(dummy * with atomLabel GlcA/GSH/Protein/DNA/CN). "
+            "The SMILES token before | is valid on its own and depicts as *."
         )
     )
     atom: Optional[list[NonNegativeInt]] = None

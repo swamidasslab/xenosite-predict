@@ -8,6 +8,9 @@ reaction.
 Dummy ``*`` atoms are written as **CXSMILES** on ``Metabolite.smiles`` (the
 field is still named ``smiles``). The CX ``atomLabel`` is ``GlcA`` / ``GSH`` /
 ``Protein`` / ``DNA`` / ``CN`` so RDKit depictions can name the conjugate.
+The SMILES token before ``|`` is valid on its own; consumers that drop the
+CX block depict a bare ``*``. ``mol_to_cxsmiles`` falls back to plain SMILES
+if CX writing fails.
 """
 
 from __future__ import annotations
@@ -92,7 +95,10 @@ def labeled_star_mol(product: Chem.Mol, label: str) -> Chem.Mol:
 
 
 def mol_to_cxsmiles(mol: Chem.Mol) -> Optional[str]:
-    """Non-isomeric CXSMILES (atom labels kept). ``None`` if the mol will not write."""
+    """Non-isomeric CXSMILES (atom labels kept).
+
+    Falls back to plain SMILES (dummy depicted as ``*``) if CX writing fails.
+    """
     try:
         out = Chem.MolToCXSmiles(mol, False)
     except Exception:
