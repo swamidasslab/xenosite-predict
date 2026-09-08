@@ -50,10 +50,11 @@ def _session_options(env: Optional[Mapping[str, str]] = None) -> Any:
         return None
     e = os.environ if env is None else env
     opts = ort.SessionOptions()
+    # Default 1 ORT thread so process pools / multi-gunicorn workers do not
+    # oversubscribe. Override with XENOSITE_ORT_INTRA_OP.
     raw = (e.get(ENV_ORT_INTRA) or "").strip()
-    if raw:
-        opts.intra_op_num_threads = max(1, int(raw))
-        opts.inter_op_num_threads = 1
+    opts.intra_op_num_threads = max(1, int(raw)) if raw else 1
+    opts.inter_op_num_threads = 1
     # Profiling dumps ``*.sess`` / JSON traces; mem-pattern persistence can
     # write ``:mem:.sess`` when the prefix is left at an internal tag.
     opts.enable_mem_pattern = False

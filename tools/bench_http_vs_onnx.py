@@ -64,22 +64,40 @@ def main() -> None:
         default=os.environ.get("XENOSITE_BACKEND", DEFAULT_HTTP),
         help="xenosite-api origin",
     )
-    parser.add_argument("--workers", type=int, default=None)
+    cpus = os.cpu_count() or 1
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=cpus,
+        help=f"ONNX process-pool size (default: all CPUs, currently {cpus})",
+    )
+    parser.add_argument(
+        "--ort-intra",
+        type=int,
+        default=1,
+        help="ORT intra-op threads per ONNX worker (default: 1 so workers scale)",
+    )
     args = parser.parse_args()
+    workers = max(1, int(args.workers))
+    ort_intra = max(1, int(args.ort_intra))
 
     reset_pools_for_tests()
+    # Prefer many processes × 1 ORT thread over few processes × many ORT threads.
+    os.environ["XENOSITE_ORT_INTRA_OP"] = str(ort_intra)
+    os.environ["XENOSITE_WORKERS"] = str(workers)
+
     smiles = (SMILES * ((args.n // len(SMILES)) + 1))[: args.n]
-    print(f"n={len(smiles)} model={args.model}")
+    print(f"n={len(smiles)} model={args.model} onnx_workers={workers} ort_intra={ort_intra}")
 
     root = _onnx_root()
     if _onnx_weights_present(args.model):
         be = OnnxBackend(root)
-        # warmup
-        predict_many(smiles[:2], model=args.model, backend=be, workers=1)
+        # Warm the process pool at the timed worker count.
+        predict_many(smiles[: min(len(smiles), workers)], model=args.model, backend=be, workers=workers)
         dt = _bench(
             "onnx",
             lambda: predict_many(
-                smiles, model=args.model, backend=be, workers=args.workers
+                smiles, model=args.model, backend=be, workers=workers
             ),
         )
         print(f"ONNX  predict_many: {dt:.3f}s ({len(smiles) / dt:.1f} mol/s)")

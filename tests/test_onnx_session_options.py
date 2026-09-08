@@ -27,6 +27,14 @@ def test_session_options_disable_profiling_by_default():
     assert opts.enable_profiling is False
     assert opts.enable_mem_pattern is False
     assert opts.profile_file_prefix == "ort_profile"
+    assert opts.intra_op_num_threads == 1
+    assert opts.inter_op_num_threads == 1
+
+
+def test_session_options_honor_ort_intra_env():
+    opts = _session_options(env={"XENOSITE_ORT_INTRA_OP": "4"})
+    assert opts.intra_op_num_threads == 4
+    assert opts.inter_op_num_threads == 1
 
 
 @pytest.mark.parametrize("value", ["", "  ", "1", "true", "TRUE", "yes", "on"])

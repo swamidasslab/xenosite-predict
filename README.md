@@ -36,7 +36,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 - **Name lookup is omitted.** Pass SMILES, not drug names.
 - Import does **not** open ONNX, HTTP, or OpenBabel. Load on first use of that `(model, version)`. Callers never import `openbabel` / `pybel`.
 - First `predict()` downloads ONNX weights when `XENOSITE_ONNX_URL` is set and none are cached (an **INFO** line reports when they are found or downloaded). No separate `download_weights()` call is required.
-- **Workers:** ONNX batch/async paths use a process pool (descriptor generation is CPU-bound; threads do not help). Set ``workers=`` or ``XENOSITE_WORKERS``. ``XENOSITE_ORT_INTRA_OP`` caps ORT threads per process under concurrency. ORT profiling is off (no ``:mem:.sess`` dumps). Set ``XENOSITE_ORT_PROFILE`` to a real file path to write an ORT profile.
+- **Workers:** ONNX batch/async paths use a process pool (descriptor generation is CPU-bound; threads do not help). Defaults: ``workers=min(cpu_count, 32)`` and ``XENOSITE_ORT_INTRA_OP=1`` (many processes × one ORT thread). Override with ``workers=`` / ``XENOSITE_WORKERS``. Server deployments (gunicorn / Lambda) should keep ``XENOSITE_WORKERS=1`` so request-level workers provide parallelism without a nested pool. ORT profiling is off (no ``:mem:.sess`` dumps). Set ``XENOSITE_ORT_PROFILE`` to a real file path to write an ORT profile.
 - **Scoring versions:** `predict(..., models=[("epoxidation", "0")])` is v0/legacy parameters; omit the version or pass `"1"` for the updated mapping. Same ONNX weights. **Score impact summary:** [`docs/legacy-vs-principled.md`](docs/legacy-vs-principled.md#expected-score-impact-production-vs-legacy). Walkthrough: `tests/v0_legacy/test_legacy_vs_principled_guide.py`. `_parameter` overlays individual flags for tests.
 
 ### `predict_many` / `apredict` / `apredict_many`
@@ -47,7 +47,7 @@ mols = await asyncio.gather(*[apredict(s, model="ugt") for s in smiles_list])
 | `apredict(inp, …)` | Async single molecule (offloads to the shared pool) |
 | `apredict_many(inputs, …)` | Async batch (same workers as `predict_many`) |
 
-`workers` defaults to CPU count (`XENOSITE_WORKERS` overrides). New models reuse the existing `predict` / runner path — no per-model async code.
+`workers` defaults to ``min(cpu_count, 32)`` (``XENOSITE_WORKERS`` overrides); ORT defaults to 1 intra-op thread per process. New models reuse the existing `predict` / runner path — no per-model async code.
 
 ### `predict(inp, model=..., models=..., backend=..., backends=..., env=..., detailed=..., canonicalize=..., rdkit=...)`
 

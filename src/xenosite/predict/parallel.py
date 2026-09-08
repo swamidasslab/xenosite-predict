@@ -31,6 +31,8 @@ BackendMap = Optional[Mapping[Spec, str | PredictBackend]]
 InputsArg = Sequence[str | Molecule]
 
 ENV_WORKERS = "XENOSITE_WORKERS"
+# Soft cap so huge hosts do not spawn hundreds of OpenBabel processes by default.
+MAX_DEFAULT_WORKERS = 32
 
 _process_pool: ProcessPoolExecutor | None = None
 _process_pool_workers: int | None = None
@@ -63,22 +65,31 @@ class _PredictJob:
 
 
 def default_workers(env: Optional[Mapping[str, str]] = None) -> int:
-    """Worker count: ``XENOSITE_WORKERS``, else CPU count (minimum 1)."""
+    """Worker count: ``XENOSITE_WORKERS``, else ``min(cpu_count, 32)`` (minimum 1).
+
+    Batch/CLI defaults to one process per core (capped). Server deployments
+    (gunicorn / Lambda) should set ``XENOSITE_WORKERS=1`` so request-level
+    workers provide parallelism without a nested process pool.
+    """
     e = os.environ if env is None else env
     raw = (e.get(ENV_WORKERS) or "").strip()
     if raw:
         return max(1, int(raw))
     cpus = os.cpu_count() or 1
-    return max(1, cpus)
+    return max(1, min(cpus, MAX_DEFAULT_WORKERS))
 
 
 def _ort_intra_op_for_workers(workers: int, env: Optional[Mapping[str, str]] = None) -> int:
+    """ORT threads per process. Default **1** so process workers scale without oversubscribe.
+
+    ``XENOSITE_ORT_INTRA_OP`` overrides. Prefer many workers × 1 ORT thread;
+    OpenBabel/feature work dominates wall time.
+    """
     e = os.environ if env is None else env
     raw = (e.get(ENV_ORT_INTRA) or "").strip()
     if raw:
         return max(1, int(raw))
-    cpus = os.cpu_count() or 1
-    return max(1, cpus // max(1, workers))
+    return 1
 
 
 def _backend_spec(
