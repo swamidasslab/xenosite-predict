@@ -1,0 +1,23 @@
+---
+description: Keep tqdm progress bars visible during long tool runs; let pytest stream
+globs:
+alwaysApply: true
+---
+
+# Progress bars and test output
+
+Long tool loops (capture, gather, drift) use `tools/progress.py` (tqdm on `/dev/tty`, fallback stderr).
+
+## Do not clobber output
+
+- **Tool report text → stdout.** Tool progress bar → tty/stderr via `tools/progress.py`.
+- **Pytest:** run without `-q`, `--tb=no`, `tail`, `head`, or `2>&1` pipes — let pytest’s own progress and failures stream to the terminal.
+- **Never** redirect stderr to stdout (`2>&1`) when monitoring capture, drift, or pytest runs.
+- Use `worker_quiet()` in pool workers so ORT/warnings do not scroll over tool bars.
+- To disable tool bars: `XENOSITE_NO_PROGRESS=1`. To force stderr instead of tty: `XENOSITE_PROGRESS_STDERR=1`.
+
+## Parallel workers (required)
+
+- **pytest:** always `-n auto` (configured in `pyproject.toml` addopts). Do not run single-process pytest on the golden suite.
+- **capture / drift / gather:** use `--workers 8` (or `CAPTURE_WORKERS` / `DRIFT_WORKERS` Makefile vars).
+- Run drift report and pytest as separate background processes without piping either one.

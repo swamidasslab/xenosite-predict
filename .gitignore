@@ -52,6 +52,8 @@ tests/fixtures/suite_onnx_cache.json
 # Local scratch / ad-hoc investigation scripts (see tools/archive/)
 tools/archive/
 
-# Editor / session artifacts
-.cursor/
+# Editor / session artifacts. Keep committed agent rules.
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 :memory:.ses

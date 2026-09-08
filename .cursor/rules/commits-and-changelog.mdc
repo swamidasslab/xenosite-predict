@@ -1,0 +1,27 @@
+---
+description: Focused commits as you go; towncrier fragments for user-facing changes
+alwaysApply: true
+---
+
+# Commits and changelog
+
+This repo’s standing request: finish each unit of work with a commit, and record key user-facing changes in towncrier. Do not wait for a separate “please commit.”
+
+## Focused commits as you go
+
+- Commit when a logical unit is done (one behavior, one fix, one wiring change). Do not batch an entire session into one commit.
+- One concern per commit. Do not mix API changes with unrelated test or tooling edits.
+- Subject style matches history: imperative, sentence case, period at the end (`Add HTTP backend tests.` / `Fix HTTP predict_many loop reuse.`).
+- Never `git commit --amend` unless this conversation created HEAD and it is unpushed. Never skip hooks. No Cursor authorship trailers.
+
+## Towncrier for key changes
+
+User-facing API, scoring, defaults, errors, or install/publish behavior needs a fragment in `changelog.d/` in the same unit of work (often the same commit).
+
+```
+make changelog-create TYPE=added NAME=slug MSG="Keep RDKit mols when rdkit=True."
+```
+
+Types: `added` | `changed` | `fixed` | `removed` | `deprecated` | `security`. For a GitHub issue, `uv run towncrier create --no-edit -c "..." 123.fixed.md`.
+
+Skip fragments for internal-only tests, refactors, and tooling. Do not run `make changelog-release` except when cutting a version (after bumping `project.version`). Preview with `make changelog VERSION=X.Y.Z`.
