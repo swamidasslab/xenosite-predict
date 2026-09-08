@@ -5,8 +5,9 @@ directly. DNA and cyanide reuse glutathionation electrophile SMARTS (epoxide,
 C-Cl, terminal alkene) and drop the thiol-disulfide rule, which is not a DNA/CN
 reaction.
 
-Dummy ``*`` atoms carry a CX ``atomLabel`` (``GlcA`` / ``GSH`` /
-``Protein`` / ``DNA`` / ``CN``) so RDKit depictions can name the conjugate.
+Dummy ``*`` atoms are written as **CXSMILES** on ``Metabolite.smiles`` (the
+field is still named ``smiles``). The CX ``atomLabel`` is ``GlcA`` / ``GSH`` /
+``Protein`` / ``DNA`` / ``CN`` so RDKit depictions can name the conjugate.
 """
 
 from __future__ import annotations

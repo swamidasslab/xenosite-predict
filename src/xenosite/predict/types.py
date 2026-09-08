@@ -70,18 +70,26 @@ class Metabolite(BaseModel):
     ``atom`` lists **0-based RDKit** indices for the site of metabolism on the
     parent, matching ``Molecule.atoms`` / ``Molecule.bonds.idx``.
 
+    ``smiles`` is a structure string. Phase I / quinone products are ordinary
+    canonical SMILES. **Conjugation adducts are CXSMILES**: a dummy ``*`` plus
+    an ``atomLabel`` (``GlcA``, ``GSH``, ``Protein``, ``DNA``, ``CN``) so RDKit
+    depictions can name the conjugate.
+
     ``map_idx`` lists **1-based** parent atom numbers for each heavy atom in
-    ``smiles`` (canonical order). ``0`` marks newly introduced atoms.
+    ``smiles`` (canonical order). ``0`` marks newly introduced atoms (including
+    the dummy ``*``).
 
-    When requested, ``mapped_smiles`` is the same structure with atom-map
-    numbers embedded (e.g. ``[CH2:1]``) tracing atoms back to the parent.
-
-    Conjugation adducts use a dummy ``*`` with a CXSMILES ``atomLabel``
-    (``GlcA``, ``GSH``, ``Protein``, ``DNA``, ``CN``) so depictions can name
-    the conjugate.
+    When requested, ``mapped_smiles`` is the same encoding (SMILES or CXSMILES)
+    with atom-map numbers embedded (e.g. ``[CH2:1]``) tracing atoms back to the
+    parent.
     """
 
-    smiles: str
+    smiles: str = Field(
+        description=(
+            "Canonical SMILES, or CXSMILES for conjugation adducts "
+            "(dummy * with atomLabel GlcA/GSH/Protein/DNA/CN)."
+        )
+    )
     atom: Optional[list[NonNegativeInt]] = None
     map_idx: Optional[list[NonNegativeInt]] = None
     mapped_smiles: Optional[str] = None

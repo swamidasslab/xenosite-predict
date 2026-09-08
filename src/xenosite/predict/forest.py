@@ -439,6 +439,9 @@ def attach_metabolites(
     atom numbers via AtomTracker). When ``mapped_smiles`` is ``True``, also set
     ``mapped_smiles`` with ``:N`` atom-map labels in the SMILES string.
 
+    Conjugation heads (``ugt``, ``reactivity.*``) write **CXSMILES** on
+    ``Metabolite.smiles`` (dummy ``*`` + ``atomLabel``).
+
     Parameters
     ----------
     models:
