@@ -9,6 +9,7 @@ This repo’s standing request: finish each unit of work with a commit, and reco
 
 ## Focused commits as you go
 
+- Before every commit, check `git branch --show-current` (and whether it tracks the intended remote). Stop if you are on a detached HEAD, a surprise branch, or not the branch the user asked for. Do not commit until the branch is correct.
 - Commit when a logical unit is done (one behavior, one fix, one wiring change). Do not batch an entire session into one commit.
 - One concern per commit. Do not mix API changes with unrelated test or tooling edits.
 - Subject style matches history: imperative, sentence case, period at the end (`Add HTTP backend tests.` / `Fix HTTP predict_many loop reuse.`).
