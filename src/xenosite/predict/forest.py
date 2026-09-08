@@ -21,9 +21,16 @@ from functools import lru_cache
 from typing import Collection, Iterator, Optional
 
 from rdkit import Chem
-from xenosite.forest import load_ruleset
 from xenosite.forest.base import can_smi
 
+from .conjugates import (
+    HEADS as _CONJUGATE_HEADS,
+    head_for_model,
+    is_star_conjugate,
+    labeled_star_mol,
+    load_conjugate_ruleset,
+    mol_to_cxsmiles,
+)
 from .molecule import parse_smiles
 from .types import (
     AtomBondResult,
@@ -38,6 +45,7 @@ from .types import (
 )
 
 # ``result.model`` → ``load_ruleset(...)`` specifier (see xenosite-forest docs/rulesets.md).
+# Conjugation heads live in :mod:`xenosite.predict.conjugates`.
 _MODEL_RULESETS: dict[str, str] = {
     "epoxidation": "SO.Epoxidation",
     "ndealk": "UO.Dealkylation",
@@ -47,25 +55,6 @@ _MODEL_RULESETS: dict[str, str] = {
     "phase1.dehydrogenation": "DH",
     "phase1.reduction": "RD",
     "phase1.hydrolysis": "HD",
-    "ugt": "CJ.Glucuronidation",
-    "reactivity.gsh": "CJ.Glutathionation",
-    "reactivity.protein": "CJ.Glutathionation",
-}
-
-# Conjugation products replace the added group (glucuronide, GSH, …) with a dummy ``*``.
-_STAR_CONJUGATE_RULESETS: frozenset[str] = frozenset(
-    {
-        "CJ",
-        "CJ.Glucuronidation",
-        "CJ.Glutathionation",
-        "CJ.Acetylation",
-        "CJ.Sulfation",
-    }
-)
-
-# Forest rule name is Glutathionation; protein uses the same electrophile chemistry.
-_MODEL_PATHWAYS: dict[str, str] = {
-    "reactivity.protein": "Protein",
 }
 
 _INDEX_PROBE_SMILES = "CC"
@@ -92,6 +81,9 @@ class ForestMapIndexing(str, Enum):
 
 def ruleset_for_model(model: str) -> Optional[str]:
     """Return a forest ruleset name for a predict result model, if supported."""
+    head = head_for_model(model)
+    if head is not None:
+        return head.ruleset
     if model in _MODEL_RULESETS:
         return _MODEL_RULESETS[model]
     if model.startswith("isozyme."):
@@ -106,7 +98,7 @@ def metabolite_supported(model: str) -> bool:
 
 def supported_metabolite_models() -> frozenset[str]:
     """``result.model`` names with explicit forest ruleset mappings."""
-    return frozenset(_MODEL_RULESETS)
+    return frozenset(_MODEL_RULESETS) | frozenset(_CONJUGATE_HEADS)
 
 
 def pathway_name(rule: str) -> str:
@@ -148,7 +140,7 @@ def _probe_forest_site_indexing() -> ForestSiteIndexing:
         return ForestSiteIndexing.RDKIT_ZERO
     n_heavy = mol.GetNumAtoms()
 
-    rs = load_ruleset(_INDEX_PROBE_RULESET)
+    rs = load_conjugate_ruleset(_INDEX_PROBE_RULESET)
     saw_zero = False
     saw_one_based_high = False
     for (_rule, site), _mols in rs.metabolites(mol, unique=True):
@@ -175,7 +167,7 @@ def _probe_forest_map_indexing() -> ForestMapIndexing:
     if mol is None:
         return ForestMapIndexing.RDKIT_ZERO
 
-    rs = load_ruleset(_INDEX_PROBE_RULESET)
+    rs = load_conjugate_ruleset(_INDEX_PROBE_RULESET)
     for (_rule, _site), mols in rs.metabolites(mol, unique=True):
         product = mols[-1]
         for atom in product.GetAtoms():
@@ -279,8 +271,15 @@ def metabolite_atom_maps(
         if parent > 0:
             atom.SetAtomMapNum(parent)
 
-    mapped = can_smi(rdmol=tagged)[0] if mapped_smiles else None
-    parsed = Chem.MolFromSmiles(mapped or can_smi(rdmol=tagged)[0])
+    has_star_label = any(
+        atom.GetAtomicNum() == 0 and atom.HasProp("atomLabel") for atom in tagged.GetAtoms()
+    )
+    if mapped_smiles or has_star_label:
+        written = mol_to_cxsmiles(tagged) if has_star_label else can_smi(rdmol=tagged)[0]
+    else:
+        written = can_smi(rdmol=tagged)[0]
+    mapped = written if mapped_smiles else None
+    parsed = Chem.MolFromSmiles(written or "")
     if parsed is None:
         return [], mapped
 
@@ -404,8 +403,8 @@ def enumerate_metabolites(
     mode = forest_site_indexing()
     map_mode = forest_map_indexing()
     n_atoms = rdmol.GetNumAtoms()
-    star = ruleset_spec in _STAR_CONJUGATE_RULESETS or ruleset_spec.startswith("CJ.")
-    rs = load_ruleset(ruleset_spec)
+    star = is_star_conjugate(ruleset_spec)
+    rs = load_conjugate_ruleset(ruleset_spec)
     for (rule, site), mols in rs.metabolites(rdmol, unique=True):
         if not mols:
             continue
@@ -496,9 +495,15 @@ def _attach_from_enumeration(
     metabolites: list[Metabolite] = []
     seen: set[tuple[str, str, tuple[int, ...]]] = set()
 
+    head = head_for_model(result.model)
     for pathway, site, smiles, product in products:
-        pathway = _MODEL_PATHWAYS.get(result.model, pathway)
-        key = (pathway, smiles, tuple(site_rdkit_indices(site)))
+        if head is not None and head.pathway:
+            pathway = head.pathway
+        labeled = labeled_star_mol(product, head.label) if head is not None else product
+        out_smiles = mol_to_cxsmiles(labeled) if head is not None else smiles
+        if not out_smiles:
+            continue
+        key = (pathway, out_smiles.split()[0], tuple(site_rdkit_indices(site)))
         if key in seen:
             continue
         seen.add(key)
@@ -506,17 +511,17 @@ def _attach_from_enumeration(
         if min_score is not None and score < min_score:
             continue
         maps, mapped = metabolite_atom_maps(
-            product, mode=map_mode, mapped_smiles=mapped_smiles
+            labeled, mode=map_mode, mapped_smiles=mapped_smiles
         )
         metabolites.append(
             Metabolite(
-                smiles=smiles,
+                smiles=out_smiles,
                 atom=site_rdkit_indices(site),
                 map_idx=maps,
                 mapped_smiles=mapped,
                 pathway=pathway,
                 score=score,
-                rdkit=product if rdkit else None,
+                rdkit=labeled if rdkit else None,
             )
         )
 

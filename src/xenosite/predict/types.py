@@ -75,6 +75,9 @@ class Metabolite(BaseModel):
 
     When requested, ``mapped_smiles`` is the same structure with atom-map
     numbers embedded (e.g. ``[CH2:1]``) tracing atoms back to the parent.
+
+    Conjugation adducts use a dummy ``*`` with a CXSMILES ``atomLabel``
+    (``GlcA``, ``GSH``, ``Protein``) so depictions can name the conjugate.
     """
 
     smiles: str

@@ -7,6 +7,7 @@ from rdkit import Chem
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
+from xenosite.predict.conjugates import bare_smiles
 from xenosite.predict.features import _ob
 from xenosite.predict.forest import (
     ForestMapIndexing,
@@ -386,8 +387,12 @@ def test_ugt_metabolites_are_star_adducts():
     assert mets
     assert all("*" in m.smiles for m in mets)
     assert all("O=C(O)C1OC" not in m.smiles for m in mets)
-    phenol = [m for m in mets if m.smiles == "*Oc1ccccc1"]
+    phenol = [m for m in mets if bare_smiles(m.smiles) == "*Oc1ccccc1"]
     assert phenol
+    assert "GlcA" in phenol[0].smiles
+    parsed = Chem.MolFromSmiles(phenol[0].smiles)
+    dummy = next(a for a in parsed.GetAtoms() if a.GetAtomicNum() == 0)
+    assert dummy.GetProp("atomLabel") == "GlcA"
     assert phenol[0].pathway == "Glucuronidation"
     assert phenol[0].score == pytest.approx(0.81)
     assert phenol[0].atom == [0, 1]
@@ -423,12 +428,13 @@ def test_reactivity_gsh_and_protein_use_star_not_glutathione():
     gsh = mol.results[0].metabolite
     protein = mol.results[1].metabolite
     assert gsh and protein
-    assert {m.smiles for m in gsh} == {m.smiles for m in protein}
-    for mets, pathway, score in (
-        (gsh, "Glutathionation", 0.77),
-        (protein, "Protein", 0.55),
+    assert {bare_smiles(m.smiles) for m in gsh} == {bare_smiles(m.smiles) for m in protein}
+    for mets, pathway, score, label in (
+        (gsh, "Glutathionation", 0.77, "GSH"),
+        (protein, "Protein", 0.55, "Protein"),
     ):
         assert all("*" in m.smiles for m in mets)
+        assert all(label in m.smiles for m in mets)
         assert all("NC(" not in m.smiles and "NCC(=O)O" not in m.smiles for m in mets)
         assert all(m.pathway == pathway for m in mets)
         top = [m for m in mets if scored in (m.atom or [])]
