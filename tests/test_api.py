@@ -94,6 +94,61 @@ def test_predict_detailed_canonical_order():
     assert len(atom_scores) == mol.atoms.num
 
 
+@pytest.mark.parametrize(
+    ("canonicalize", "detailed"),
+    [
+        (True, True),
+        (True, False),
+        (False, True),
+        (False, False),
+    ],
+)
+def test_predict_presentation_flag_matrix(canonicalize, detailed):
+    if not onnx_weights_present("ugt"):
+        pytest.skip("no ugt ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    mol = predict(
+        "OCCCC",
+        model="ugt",
+        backend=be,
+        canonicalize=canonicalize,
+        detailed=detailed,
+    )
+    assert mol.smiles == ("CCCCO" if canonicalize else "OCCCC")
+    assert len(mol.results[0].atom) == mol.atoms.num
+    if detailed:
+        assert mol.atoms.z is not None
+        # Oxygen is last in canonical CCCCO, first in input OCCCC.
+        assert mol.atoms.z[-1 if canonicalize else 0] == 8
+        if canonicalize:
+            assert mol.atoms.reordered == [4, 3, 2, 1, 0]
+        else:
+            assert mol.atoms.reordered == [0, 1, 2, 3, 4]
+    else:
+        assert mol.atoms.z is None
+        assert mol.atoms.reordered is None
+        assert mol.bonds.order is None
+
+
+def test_predict_canonicalize_false_matches_canonical_scores():
+    """Input-order scores are a permutation of canonical-order scores."""
+    if not onnx_weights_present("ugt"):
+        pytest.skip("no ugt ONNX")
+    if not _ob.installed():
+        pytest.skip("OpenBabel not installed")
+    be = OnnxBackend(onnx_root())
+    can = predict("OCCCC", model="ugt", backend=be, canonicalize=True, detailed=True)
+    inp = predict("OCCCC", model="ugt", backend=be, canonicalize=False, detailed=True)
+    reordered = can.atoms.reordered
+    assert reordered == [4, 3, 2, 1, 0]
+    assert inp.smiles == "OCCCC"
+    for can_i, inp_i in enumerate(reordered):
+        assert inp.results[0].atom[inp_i] == pytest.approx(can.results[0].atom[can_i])
+        assert inp.atoms.z[inp_i] == can.atoms.z[can_i]
+
+
 def test_predict_default_omits_details():
     if not onnx_weights_present("ugt"):
         pytest.skip("no ugt ONNX")

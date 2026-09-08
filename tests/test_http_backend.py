@@ -197,6 +197,74 @@ def test_canonicalize_false_remaps_and_rdkit_warns():
     assert mol.rdkit is not None
 
 
+def test_http_canonicalize_false_still_requests_canonical_detailed():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _msgpack_response(_ugt_payload())
+
+    be = HttpBackend(ORIGIN, transport=httpx.MockTransport(handler), retry_max=1)
+    predict("OCCCC", model="ugt", backend=be, canonicalize=False, detailed=False)
+    assert seen
+    assert seen[0].url.params["smiles"] == "CCCCO"
+    assert seen[0].url.params["detailed"] == "true"
+
+
+def test_http_canonicalize_false_atom_score_parity():
+    """Same backend payload: input-order scores are a permutation of canonical."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _msgpack_response(_ugt_payload())
+
+    be = HttpBackend(ORIGIN, transport=httpx.MockTransport(handler), retry_max=1)
+    can = predict("OCCCC", model="ugt", backend=be, canonicalize=True, detailed=True)
+    inp = predict("OCCCC", model="ugt", backend=be, canonicalize=False, detailed=True)
+    reordered = can.atoms.reordered
+    assert reordered == [4, 3, 2, 1, 0]
+    for can_i, inp_i in enumerate(reordered):
+        assert inp.results[0].atom[inp_i] == pytest.approx(can.results[0].atom[can_i])
+        assert inp.atoms.z[inp_i] == can.atoms.z[can_i]
+
+
+def test_http_canonicalize_false_bond_score_parity():
+    """Bond scores stay list-aligned; endpoints remap with ``reordered``."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _msgpack_response(_epoxidation_payload())
+
+    be = HttpBackend(ORIGIN, transport=httpx.MockTransport(handler), retry_max=1)
+    can = predict(
+        "OCCCC", model="epoxidation", backend=be, canonicalize=True, detailed=True
+    )
+    inp = predict(
+        "OCCCC", model="epoxidation", backend=be, canonicalize=False, detailed=True
+    )
+    reordered = can.atoms.reordered
+    assert can.results[0].bond == pytest.approx(inp.results[0].bond)
+    for i, (a, b) in enumerate(can.bonds.idx):
+        assert set(inp.bonds.idx[i]) == {reordered[a], reordered[b]}
+
+
+def test_http_predict_many_canonicalize_false_parity():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _msgpack_response(_ugt_payload())
+
+    be = HttpBackend(ORIGIN, transport=httpx.MockTransport(handler), retry_max=1)
+    mols = predict_many(
+        ["OCCCC", "OCCCC"],
+        model="ugt",
+        backend=be,
+        canonicalize=False,
+        detailed=True,
+    )
+    assert len(mols) == 2
+    for mol in mols:
+        assert mol.smiles == "OCCCC"
+        assert mol.results[0].atom[0] == pytest.approx(0.99)
+        assert mol.atoms.z[0] == 8
+
+
 def test_noncanonical_molecule_with_results_errors():
     be = HttpBackend(ORIGIN, transport=httpx.MockTransport(lambda r: _msgpack_response(_epoxidation_payload())), retry_max=1)
     bad = Molecule.model_validate(_epoxidation_payload("OCCCC"))
