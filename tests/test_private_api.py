@@ -22,8 +22,9 @@ def test_supported_metabolite_models():
     assert "ugt" in supported_metabolite_models()
     assert "reactivity.gsh" in supported_metabolite_models()
     assert "reactivity.protein" in supported_metabolite_models()
+    assert "reactivity.dna" in supported_metabolite_models()
+    assert "reactivity.cyanide" in supported_metabolite_models()
     assert "reactivity" not in supported_metabolite_models()
-    assert "reactivity.cyanide" not in supported_metabolite_models()
 
 
 def test_metabolite_supported_isozyme_prefix():
@@ -31,7 +32,8 @@ def test_metabolite_supported_isozyme_prefix():
     assert metabolite_supported("ugt")
     assert metabolite_supported("reactivity.gsh")
     assert metabolite_supported("reactivity.protein")
-    assert not metabolite_supported("reactivity.cyanide")
+    assert metabolite_supported("reactivity.dna")
+    assert metabolite_supported("reactivity.cyanide")
 
 
 def test_add_metabolites_skips_unsupported_models():

@@ -7,7 +7,7 @@ from rdkit import Chem
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.conjugates import bare_smiles
+from xenosite.predict.conjugates import NO_THIOL_RULESET, bare_smiles
 from xenosite.predict.features import _ob
 from xenosite.predict.forest import (
     ForestMapIndexing,
@@ -47,6 +47,7 @@ PHENOL = "Oc1ccccc1"
 BENZENE = "c1ccccc1"
 ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 STYRENE_OXIDE = "c1ccccc1C1OC1"
+ETHANETHIOL = "CCS"
 
 
 def _forest_metabolite_keys(rdmol, ruleset: str) -> set[tuple[str, str, tuple[int, ...]]]:
@@ -442,6 +443,48 @@ def test_reactivity_gsh_and_protein_use_star_not_glutathione():
         assert all(float(m.score or 0.0) == pytest.approx(score) for m in top)
         assert all(0 in (m.map_idx or []) for m in mets)
     assert len(gsh) == _unique_forest_count(rdmol, "CJ.Glutathionation")
+
+
+def test_dna_and_cyanide_star_adducts_skip_thiol():
+    """DNA/CN reuse glutathionation electrophiles but drop thiol disulfide."""
+    rdmol, mol = parse_smiles(STYRENE_OXIDE)
+    n = mol.atoms.num
+    mol.results = [
+        MolAtomResult(model="reactivity.dna", model_version="0", mol=0.3, atom=[0.0] * n),
+        MolAtomResult(
+            model="reactivity.cyanide", model_version="0", mol=0.2, atom=[0.0] * n
+        ),
+    ]
+    attach_metabolites(mol, rdmol=rdmol)
+    dna = mol.results[0].metabolite
+    cyanide = mol.results[1].metabolite
+    assert dna and cyanide
+    assert {bare_smiles(m.smiles) for m in dna} == {bare_smiles(m.smiles) for m in cyanide}
+    assert all(m.pathway == "DNA" and "DNA" in m.smiles for m in dna)
+    assert all(m.pathway == "Cyanide" and "CN" in m.smiles for m in cyanide)
+    assert len(dna) == _unique_forest_count(rdmol, NO_THIOL_RULESET)
+    assert len(dna) == _unique_forest_count(rdmol, "CJ.Glutathionation")
+
+    thiol_rd, thiol_mol = parse_smiles(ETHANETHIOL)
+    thiol_mol.results = [
+        MolAtomResult(
+            model="reactivity.gsh",
+            model_version="0",
+            mol=0.5,
+            atom=[0.0] * thiol_mol.atoms.num,
+        ),
+        MolAtomResult(
+            model="reactivity.dna",
+            model_version="0",
+            mol=0.5,
+            atom=[0.0] * thiol_mol.atoms.num,
+        ),
+    ]
+    attach_metabolites(thiol_mol, rdmol=thiol_rd)
+    gsh_thiol = thiol_mol.results[0].metabolite
+    assert gsh_thiol
+    assert any(bare_smiles(m.smiles) == "*SCC" for m in gsh_thiol)
+    assert thiol_mol.results[1].metabolite is None
 
 
 def test_attach_metabolites_multiple_model_results():
