@@ -126,7 +126,7 @@ Live parity compares **ONNX vs the legacy test-API**, not vs production HTTP. Te
 | `ndealk` | `BondResult` (HLM slice) | Same ONNX as isozyme. Check `CCCC1CCCNC1C=O` for off-by-1. |
 | `isozyme` | ten `BondResult` (`isozyme.3a4`, … `isozyme.hlm`) | Production Flask uses **ndealk1** for `metabolism1`, not the MOPAC metabolism predictor. |
 | `phase1` | five `AtomBondResult` | TF `molecularNN` → ONNX (`site` + `mol`). Bond_and_LonePair descriptors + topology-group pooling. |
-| `bioactivation` | `MolAtomResult` + metabolites | **Pipeline last** (enumeration + other models), not a single ONNX. |
+| `bioactivation` | `MolAtomResult` + metabolites | Pipeline (forest `BA` + composite models + path/mol ONNX). Heads convert; full `from_onnx` not enabled yet. Golden via legacy-test-api. |
 
 ## Makefile (tools are not in the sdist)
 
@@ -140,6 +140,8 @@ make test                     # pytest -m "not live"  (no Docker)
 make test-live                # pytest -m live; fixture skips if Docker/image missing
 make py2-dump-image           # python:2.7-slim + numpy + Debian OpenBabel 2.4
 make dump-ob                  # OpenBabel feature dump via that image (no WashU)
+make changelog                # preview next CHANGELOG.md section (towncrier)
+make changelog-release        # fold changelog.d/ into CHANGELOG.md
 make legacy-test-api          # build/run derived test image
 make legacy-test-api-down
 ```
@@ -163,6 +165,8 @@ weights/                # local only — README + .gitignore committed
 tests/                  # unit + @pytest.mark.live
 docs/vendored-diffs.md  # NN/feature hashes, MOPAC/SmartCYP gate
 docs/legacy-vs-principled.md  # production defaults vs golden legacy modes
+CHANGELOG.md            # Keep a Changelog (compiled by towncrier)
+changelog.d/            # news fragments for the next release
 ```
 
 ## Development
@@ -171,6 +175,17 @@ docs/legacy-vs-principled.md  # production defaults vs golden legacy modes
 uv sync --group dev
 make test
 ```
+
+### Changelog (towncrier)
+
+User-facing notes live as fragments in `changelog.d/`, not in git subjects:
+
+```
+make changelog-create TYPE=added NAME=rdkit-mols MSG="Keep RDKit mols when rdkit=True."
+make changelog VERSION=0.3.3   # draft; does not write files
+```
+
+Pushing a tag `vX.Y.Z` compiles those fragments into `CHANGELOG.md`, commits that to the default branch when the tag is the branch tip, and opens a GitHub Release from that section. Bump `project.version` and tag; you do not need `make changelog-release` first. Local compile is still available as `make changelog-release`. Details: [`changelog.d/README.md`](changelog.d/README.md).
 
 ### Publishing to PyPI (trusted publishing)
 
@@ -184,7 +199,7 @@ No long-lived PyPI tokens. Releases use GitHub OIDC via `.github/workflows/publi
    - Workflow: `publish.yml`
    - Environment: `pypi`
 2. In GitHub → Settings → Environments, create `pypi` (add required reviewers if you want a human gate).
-3. Merge the workflow, then either push a tag `v0.2.0` or run **Publish** manually.
+3. Merge the workflow, bump `project.version`, commit, then either push a tag `v0.2.0` or run **Publish** manually. The tag compiles `changelog.d/` into `CHANGELOG.md` and opens a GitHub Release.
 4. The first successful publish creates the PyPI project; later releases reuse the same publisher.
 
 Do **not** commit `XENOSITE_ONNX_URL`, API keys, or weight hostnames. Keep those in local env / deployment secrets only.

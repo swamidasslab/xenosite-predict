@@ -25,4 +25,4 @@ make changelog-create TYPE=added NAME=slug MSG="Keep RDKit mols when rdkit=True.
 
 Types: `added` | `changed` | `fixed` | `removed` | `deprecated` | `security`. For a GitHub issue, `uv run towncrier create --no-edit -c "..." 123.fixed.md`.
 
-Skip fragments for internal-only tests, refactors, and tooling. Do not run `make changelog-release` except when cutting a version (after bumping `project.version`). Preview with `make changelog VERSION=X.Y.Z`.
+Skip fragments for internal-only tests, refactors, and tooling. Do not run `make changelog-release` except to compile locally; pushing a `v*` tag compiles `changelog.d/` into `CHANGELOG.md` and opens a GitHub Release. Preview with `make changelog VERSION=X.Y.Z`.

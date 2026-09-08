@@ -3,7 +3,9 @@
 
 PYTHON ?= uv run python
 PYTEST ?= uv run pytest
+TOWNCRIER ?= uv run towncrier
 CONVERT ?= uv run --group convert python
+VERSION ?= $(shell $(PYTHON) -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
 IMAGE ?= dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api
 LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
 LEGACY_REPLICAS ?= 24
@@ -14,7 +16,7 @@ ONNX_TARBALL ?= weights/xenosite_onnx_v0.tgz
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx download-onnx test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
 	capture-suite-onnx gather-golden drift-report drift-descriptors help \
-	regather-ob-dumps regather-golden-onnx
+	regather-ob-dumps regather-golden-onnx changelog changelog-create changelog-release
 
 help:
 	@echo "extract-weights     copy pickles/TSV/source from $(IMAGE) into weights/legacy/"
@@ -36,6 +38,9 @@ help:
 	@echo "drift-descriptors   cross-tab descriptor vs score drift for one model"
 	@echo "legacy-test-api     nginx LB + cache, scale API with LEGACY_REPLICAS=24"
 	@echo "legacy-test-api-down"
+	@echo "changelog           preview CHANGELOG.md from changelog.d/ (towncrier --draft)"
+	@echo "changelog-create    add a fragment: TYPE=added NAME=slug MSG='...'"
+	@echo "changelog-release    fold fragments into CHANGELOG.md locally (optional; tags do this)"
 
 extract-weights:
 	$(PYTHON) tools/extract_weights.py --image $(IMAGE) --tarball $(TARBALL) --out weights/legacy
@@ -124,3 +129,20 @@ regather-golden-onnx:
 	  --include-smoke \
 	  --models epoxidation,quinone,reactivity,ugt,ndealk,isozyme \
 	  $(if $(GATHER_MODEL),--models $(GATHER_MODEL),)
+
+# TYPE=added|changed|fixed|removed|deprecated|security
+# NAME=slug without an issue ticket; MSG='user-facing sentence.'
+# For a GitHub issue, use: uv run towncrier create --no-edit -c "..." 123.fixed.md
+TYPE ?= changed
+NAME ?= change
+MSG ?=
+
+changelog:
+	$(TOWNCRIER) build --draft --version $(VERSION)
+
+changelog-create:
+	@test -n "$(MSG)" || { echo "usage: make changelog-create TYPE=added NAME=slug MSG='...'" >&2; exit 1; }
+	$(TOWNCRIER) create --no-edit -c "$(MSG)" +$(NAME).$(TYPE).md
+
+changelog-release:
+	$(TOWNCRIER) build --yes --version $(VERSION)
