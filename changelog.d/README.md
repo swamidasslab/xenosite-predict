@@ -29,4 +29,4 @@ Internal-only work (tests, tooling, refactors with no API/score change) does not
 make changelog VERSION=0.3.3   # draft against a version; does not write files
 ```
 
-Pushing a tag `vX.Y.Z` compiles fragments into `CHANGELOG.md` (GitHub Action), commits that to the default branch when the tag can fast-forward it, and opens a GitHub Release from the new section. Bump `project.version` before tagging. `make changelog-release` is optional if you want to compile locally instead.
+Pushing a tag `vX.Y.Z` is the package version ([hatch-vcs](https://github.com/ofek/hatch-vcs)). The tag job then makes a new commit (not an amend) that compiles fragments into `CHANGELOG.md` and opens a GitHub Release. The tag is not moved. `make changelog-release` is optional if you want to compile locally instead.

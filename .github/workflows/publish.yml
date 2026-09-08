@@ -11,9 +11,13 @@
 #   3. GitHub → Settings → Environments → create `pypi`
 #      (optional but recommended: required reviewers)
 #   4. Merge this workflow, then push a tag vX.Y.Z (or Run workflow → publish).
-#      The tag job also compiles changelog.d/ into CHANGELOG.md via towncrier,
-#      commits that to the default branch when it can fast-forward, and opens
-#      a GitHub Release from the new section.
+#      Package version comes from the git tag (hatch-vcs), not pyproject.toml.
+#      Checkout uses fetch-depth: 0 so hatch-vcs can see tags.
+#      uv build runs on the tagged commit first (so the dist version matches
+#      the tag). Then towncrier compiles changelog.d/ into CHANGELOG.md as a
+#      new commit (not an amend) and fast-forwards the default branch when the
+#      tag is the tip. The tag is not moved (force-pushing it would re-run this
+#      workflow). A GitHub Release is opened from the new changelog section.
 #
 # Docs: https://docs.pypi.org/trusted-publishers/
 
@@ -31,8 +35,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # changelog commit on tags
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
       - name: Build sdist and wheel
         run: uv build
@@ -40,6 +48,36 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Version without v prefix
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Compile CHANGELOG.md from towncrier fragments
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          VERSION="${{ steps.ver.outputs.version }}"
+          if grep -Eq "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "CHANGELOG.md already has [${VERSION}]"
+          else
+            uvx towncrier build --yes --version "$VERSION"
+          fi
+          git add CHANGELOG.md changelog.d
+          if git diff --cached --quiet; then
+            echo "No changelog changes to commit"
+            exit 0
+          fi
+          git commit -m "Update CHANGELOG.md for ${GITHUB_REF_NAME}."
+          if ! git push origin "HEAD:refs/heads/${{ github.event.repository.default_branch }}"; then
+            echo "::warning::Could not fast-forward ${{ github.event.repository.default_branch }} with CHANGELOG.md. GitHub Release notes are still created."
+          fi
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: changelog
+          path: CHANGELOG.md
 
   publish:
     needs: build
@@ -66,38 +104,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: astral-sh/setup-uv@v5
       - name: Version without v prefix
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Compile CHANGELOG.md from towncrier fragments
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          VERSION="${{ steps.ver.outputs.version }}"
-          if grep -Eq "^## \[${VERSION}\]" CHANGELOG.md; then
-            echo "CHANGELOG.md already has [${VERSION}]"
-          else
-            uvx towncrier build --yes --version "$VERSION"
-          fi
-      - name: Commit CHANGELOG.md to default branch
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md changelog.d
-          if git diff --cached --quiet; then
-            echo "No changelog changes to commit"
-            exit 0
-          fi
-          git commit -m "Update CHANGELOG.md for ${GITHUB_REF_NAME}."
-          if ! git push origin "HEAD:refs/heads/${{ github.event.repository.default_branch }}"; then
-            echo "::warning::Could not fast-forward ${{ github.event.repository.default_branch }} with CHANGELOG.md. GitHub Release notes are still created."
-          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
       - name: Read changelog
         id: changelog
         uses: mindsers/changelog-reader-action@v2

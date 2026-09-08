@@ -1,6 +1,6 @@
 [project]
 name = "xenosite-predict"
-version = "0.3.2"
+dynamic = ["version"]
 description = "RDKit public API + internal OpenBabel 2.4 + ONNX predictors for XenoSite (xenosite.predict)"
 readme = "README.md"
 authors = [
@@ -19,8 +19,14 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/xenosite/predict/_version.py"
 
 [tool.hatch.build.targets.wheel]
 # Local/editable installs still build a wheel. Published artifacts are sdist-only.

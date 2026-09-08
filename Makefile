@@ -5,7 +5,7 @@ PYTHON ?= uv run python
 PYTEST ?= uv run pytest
 TOWNCRIER ?= uv run towncrier
 CONVERT ?= uv run --group convert python
-VERSION ?= $(shell $(PYTHON) -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+VERSION ?= $(patsubst v%,%,$(shell git describe --tags --abbrev=0))
 IMAGE ?= dockerreg01.accounts.ad.wustl.edu/swamidass/xenosite-legacy:api
 LEGACY_COMPOSE ?= tools/legacy-test-api/compose.yml
 LEGACY_REPLICAS ?= 24
@@ -15,7 +15,7 @@ ONNX_TARBALL ?= weights/xenosite_onnx_v0.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx download-onnx test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
-	capture-suite-onnx gather-golden drift-report drift-descriptors help \
+	capture-suite-onnx gather-golden gather-xenonet drift-report drift-descriptors help \
 	regather-ob-dumps regather-golden-onnx changelog changelog-create changelog-release
 
 help:
@@ -31,13 +31,15 @@ help:
 	@echo "py2-dump-image      build python:2.7-slim dump image (numpy + OpenBabel 2.4 + RDKit)"
 	@echo "dump-ob             fill descriptor suite incrementally (skip dumps already present)"
 	@echo "capture-suite-onnx  cache ONNX scores (CAPTURE_WORKERS=24 default; CAPTURE_MODEL/SMILES to filter)"
-	@echo "gather-golden        regather failing suite rows from legacy-test-api (GATHER_WORKERS=24)"
+	@echo "legacy-test-api     nginx LB + cache; scale API with LEGACY_REPLICAS=8 (use 8–24 for bioactivation gather)"
+	@echo "legacy-test-api-down"
+	@echo "gather-golden        regather failing suite rows from legacy-test-api (GATHER_WORKERS; pair with LEGACY_REPLICAS)"
+	@echo "gather-xenonet       capture small XenoNet graphs via POST /xenonet (needs legacy-test-api)"
+	@echo "  BIO gather example: make legacy-test-api LEGACY_REPLICAS=8 && uv run python tools/gather_golden_suite.py --models bioactivation --workers 8"
 	@echo "regather-ob-dumps    refresh quinone rows in ob_dumps from py3 legacy OMP port"
 	@echo "regather-golden-onnx refresh golden scores from ONNX + GOLDEN_PARAMETER"
 	@echo "drift-report        classify ONNX vs golden from cache (DRIFT_WORKERS=24 default)"
 	@echo "drift-descriptors   cross-tab descriptor vs score drift for one model"
-	@echo "legacy-test-api     nginx LB + cache, scale API with LEGACY_REPLICAS=24"
-	@echo "legacy-test-api-down"
 	@echo "changelog           preview CHANGELOG.md from changelog.d/ (towncrier --draft)"
 	@echo "changelog-create    add a fragment: TYPE=added NAME=slug MSG='...'"
 	@echo "changelog-release    fold fragments into CHANGELOG.md locally (optional; tags do this)"
@@ -105,6 +107,9 @@ gather-golden:
 	  --failing-only \
 	  --force \
 	  $(if $(GATHER_MODEL),--models $(GATHER_MODEL),)
+
+gather-xenonet:
+	$(PYTHON) tools/gather_xenonet.py
 
 drift-report:
 	-$(PYTHON) tools/report_suite_drift.py \
