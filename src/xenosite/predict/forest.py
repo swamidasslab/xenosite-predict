@@ -78,9 +78,9 @@ _INVALID_METABOLITE_WARNING = "Dropping RDKit-invalid metabolite"
 def _rule_metabolites(rs, rdmol, *, unique: bool = True):
     """Iterate ``RuleSet.metabolites``.
 
-    Forest 0.2.3 emits a :class:`UserWarning` for every RDKit-invalid fragment
-    ``clean()`` drops. That is expected (failed quinone/dealk sets); keep
-    default runs quiet. Unreleased forest logs the same at DEBUG.
+    Forest 0.2.3 emitted a :class:`UserWarning` for every RDKit-invalid fragment
+    ``clean()`` drops. 0.2.4 logs those at DEBUG. Keep a filter so mixed
+    installs stay quiet.
     """
     with warnings.catch_warnings():
         warnings.filterwarnings(
