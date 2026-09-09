@@ -16,6 +16,7 @@ Sites are normalized to 0-based RDKit on the parent; ``Metabolite.map_idx`` uses
 from __future__ import annotations
 
 import os
+import warnings
 from enum import Enum
 from functools import lru_cache
 from typing import Collection, Iterator, Optional
@@ -71,6 +72,23 @@ _ENV_SITE_INDEXING = "XENOSITE_FOREST_SITE_INDEXING"
 _ENV_MAP_INDEXING = "XENOSITE_FOREST_MAP_INDEXING"
 _REACT_ATOM_IDX = "react_atom_idx"
 _OLD_MAPNO = "old_mapno"
+_INVALID_METABOLITE_WARNING = "Dropping RDKit-invalid metabolite"
+
+
+def _rule_metabolites(rs, rdmol, *, unique: bool = True):
+    """Iterate ``RuleSet.metabolites``.
+
+    Forest 0.2.3 emits a :class:`UserWarning` for every RDKit-invalid fragment
+    ``clean()`` drops. That is expected (failed quinone/dealk sets); keep
+    default runs quiet. Unreleased forest logs the same at DEBUG.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=_INVALID_METABOLITE_WARNING,
+            category=UserWarning,
+        )
+        yield from rs.metabolites(rdmol, unique=unique)
 
 
 class ForestSiteIndexing(str, Enum):
@@ -156,7 +174,7 @@ def _probe_forest_site_indexing() -> ForestSiteIndexing:
     rs = load_conjugate_ruleset(_INDEX_PROBE_RULESET)
     saw_zero = False
     saw_one_based_high = False
-    for (_rule, site), _mols in rs.metabolites(mol, unique=True):
+    for (_rule, site), _mols in _rule_metabolites(rs, mol, unique=True):
         for idx in site:
             if idx == 0:
                 saw_zero = True
@@ -181,7 +199,7 @@ def _probe_forest_map_indexing() -> ForestMapIndexing:
         return ForestMapIndexing.RDKIT_ZERO
 
     rs = load_conjugate_ruleset(_INDEX_PROBE_RULESET)
-    for (_rule, _site), mols in rs.metabolites(mol, unique=True):
+    for (_rule, _site), mols in _rule_metabolites(rs, mol, unique=True):
         product = mols[-1]
         for atom in product.GetAtoms():
             if atom.GetAtomicNum() == 1:
@@ -425,7 +443,7 @@ def enumerate_metabolites(
     n_atoms = rdmol.GetNumAtoms()
     star = is_star_conjugate(ruleset_spec)
     rs = load_conjugate_ruleset(ruleset_spec)
-    for (rule, site), mols in rs.metabolites(rdmol, unique=True):
+    for (rule, site), mols in _rule_metabolites(rs, rdmol, unique=True):
         if not mols:
             continue
         rdkit_site = forest_site_to_rdkit(site, n_atoms, mode)

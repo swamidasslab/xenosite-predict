@@ -68,6 +68,7 @@ markers = [
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
+    "ignore:Dropping RDKit-invalid metabolite:UserWarning",
 ]
 
 [tool.coverage.run]
