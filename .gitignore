@@ -55,6 +55,9 @@ tests/fixtures/suite_onnx_cache.json
 # Local scratch / ad-hoc investigation scripts (see tools/archive/)
 tools/archive/
 
+# Local debug dumps (xenonet suite compare, ONNX vs py2 traces)
+artifacts/
+
 # Editor / session artifacts. Keep committed agent rules.
 .cursor/*
 !.cursor/rules/
