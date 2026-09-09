@@ -13,6 +13,7 @@ services:
       XENOSITE_LEGACY_DATA: /src
       PORT: "8099"
     volumes:
+      - ./server.py:/opt/legacy-test-api/server.py:ro
       - ../../../xenosite-legacy/src:/src:ro
       - ../../weights/legacy/sibling_libridass:/src/libridass:ro
       - ../../weights/legacy/tarball/libridass/epoxidation1/models:/src/libridass/epoxidation1/models:ro
@@ -21,11 +22,14 @@ services:
       - ../../weights/legacy/tarball/libridass/reactivity1/models:/src/libridass/reactivity1/models:ro
       - ../../weights/legacy/tarball/libridass/ugt1/models:/src/libridass/ugt1/models:ro
       - ../../weights/legacy/tarball/libridass/ndealk1/models:/src/libridass/ndealk1/models:ro
+      - ../../weights/legacy/tarball/libridass/phase1/models:/src/libridass/phase1/models:ro
+      - ../../weights/legacy/tarball/libridass/bioactivation1/data:/src/libridass/bioactivation1/data:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib2; urllib2.urlopen('http://127.0.0.1:8099/health')"]
+      test: ["CMD", "/opt/conda/bin/python", "-c", "import urllib2; urllib2.urlopen('http://127.0.0.1:8099/health')"]
       interval: 10s
       timeout: 5s
       retries: 30
+      start_period: 30s
 
   legacy-lb:
     image: nginx:alpine

@@ -63,6 +63,16 @@ def _stub_openopt():
 _stub_openopt()
 _stub_confargparse()
 
+# phase1 imports sklearn.metrics at module level (training metric only).
+_stub_module("sklearn")
+_stub_module("sklearn.metrics", roc_auc_score=lambda *a, **k: 0.0)
+
+# Import TF early so protobuf stays compatible with TF 1.15 when phase1/bioactivation load.
+try:
+    import tensorflow as tf  # noqa: F401
+except Exception:
+    pass
+
 try:
     from http.server import BaseHTTPRequestHandler, HTTPServer  # py3
 except ImportError:
@@ -116,6 +126,9 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) >= 2 and parts[0] == "moldesc":
                 _json(self, 200, moldesc(parts[1], payload.get("smiles")))
                 return
+            if len(parts) >= 1 and parts[0] == "xenonet":
+                _json(self, 200, xenonet(payload))
+                return
         except Exception as exc:
             _json(self, 500, {"error": str(exc)})
             return
@@ -156,6 +169,7 @@ def _load_predictor_impl(model):
 
 
 _LOADED_PREDICTORS = {}
+_XENONET_BAN = {}
 
 
 def _load_predictor(model):
@@ -278,6 +292,8 @@ def _head_model(P, model, head):
         return P.model
     if model in ("ndealk", "isozyme"):
         return P.bond_model
+    if model == "bioactivation":
+        return P.path_model if head == "path" else P.mol_model
     raise KeyError("no nn head %s/%s" % (model, head))
 
 
@@ -333,6 +349,150 @@ def features(model, smiles):
         return {"columns": list(df.columns), "rows": df.fillna(0).values.tolist(),
                 "index": list(df.index)}
     raise KeyError("no feature dump for %s" % model)
+
+
+def _ensure_stub(name, **attrs):
+    """Create a module stub and attach it on parent packages (for ``from P import C``)."""
+    if name in sys.modules:
+        mod = sys.modules[name]
+    else:
+        mod = types.ModuleType(name)
+        sys.modules[name] = mod
+    for key, val in attrs.items():
+        setattr(mod, key, val)
+    if "." in name:
+        parent_name, child = name.rsplit(".", 1)
+        parent = _ensure_stub(parent_name)
+        setattr(parent, child, mod)
+    return mod
+
+
+def _stub_xenonet_deps():
+    """xeno_net imports viz stacks the test image does not install."""
+    _ensure_stub(
+        "xenopict.xenopict",
+        MolSVG=object,
+        colored_svg=lambda *a, **k: None,
+        numbered_svg=lambda *a, **k: None,
+        scale_bar=lambda *a, **k: None,
+    )
+    _ensure_stub("PIL.Image")
+    _ensure_stub("PIL.ImageChops")
+    _ensure_stub("networkx.readwrite.json_graph", dumps=lambda *a, **k: "{}")
+    nx = _ensure_stub("networkx")
+    nx.DiGraph = type("DiGraph", (object,), {})
+    _ensure_stub("graphviz")
+    mpl = _ensure_stub("matplotlib")
+    mpl.use = lambda *a, **k: None
+    _ensure_stub("matplotlib.pyplot")
+    sns = _ensure_stub("seaborn")
+    sns.set = lambda *a, **k: None
+
+
+def _serialize_xenonet_graph(net):
+    nodes = []
+    for node in net.get_nodes(smiles_only=False):
+        nodes.append(
+            {
+                "id": node.node_id,
+                "smiles": node.smiles,
+                "metabolism_score": node.metabolism_score,
+            }
+        )
+    edges = []
+    for edge in net.get_edges():
+        site_path = edge.site_path
+        rule = ""
+        site = []
+        if site_path:
+            rule = site_path[0]
+            raw = site_path[1]
+            try:
+                site = sorted(int(x) for x in raw)
+            except (TypeError, ValueError):
+                site = sorted(str(x) for x in raw)
+        edges.append(
+            {
+                "parent": edge.parent.smiles,
+                "child": edge.child.smiles,
+                "weight": edge.weight,
+                "rule": rule,
+                "site": site,
+            }
+        )
+    edges.sort(key=lambda e: (e["parent"], e["child"], e["rule"], tuple(e["site"])))
+    nodes.sort(key=lambda n: n["id"])
+    return {
+        "root": net.metabolite,
+        "targets": list(net.targets) if net.targets else [],
+        "nodes": nodes,
+        "edges": edges,
+    }
+
+
+def xenonet(payload):
+    """Run BioActNetwork.generate_bioactivation_network (no viz)."""
+    from rdkit import Chem
+
+    smiles = _normalize_smiles(payload.get("smiles"))
+    depth_limit = int(payload.get("depth_limit") or 1)
+    beam_width = int(payload.get("beam_width") or 1000)
+    max_time = float(payload.get("max_time") or 5)
+    weighted = payload.get("weighted", True)
+    if weighted in ("0", "false", "False"):
+        weighted = False
+    targets = payload.get("targets") or []
+    if isinstance(targets, (str, bytes)):
+        targets = [targets]
+
+    _stub_xenonet_deps()
+    try:
+        from libridass.metabolite1.xeno_net import BioActNetwork
+    except Exception as exc:
+        import traceback
+        return {
+            "error": "xenonet unavailable: %s" % exc,
+            "traceback": traceback.format_exc(),
+            "nodes": [],
+            "edges": [],
+        }
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return {"error": "invalid smiles", "nodes": [], "edges": []}
+    target_mols = []
+    for t in targets:
+        tm = Chem.MolFromSmiles(_normalize_smiles(t))
+        if tm is not None:
+            target_mols.append(tm)
+    cache_key = (bool(weighted), tuple(Chem.MolToSmiles(m, canonical=True, isomericSmiles=False) for m in target_mols))
+    if cache_key not in _XENONET_BAN:
+        kwargs = {"weighted": bool(weighted)}
+        if target_mols:
+            kwargs["targets"] = target_mols
+        _XENONET_BAN[cache_key] = BioActNetwork(**kwargs)
+    ban = _XENONET_BAN[cache_key]
+    # evaluate_paths only creates a graph when _global_network is falsy; reuse
+    # would otherwise append the next molecule onto the previous search.
+    ban._global_network = None
+    try:
+        net = ban.generate_bioactivation_network(
+            mol, depth_limit=depth_limit, beam_width=beam_width, max_time=max_time
+        )
+    except Exception as exc:
+        import traceback
+        return {
+            "error": "xenonet run failed: %s" % exc,
+            "traceback": traceback.format_exc(),
+            "nodes": [],
+            "edges": [],
+            "smiles": smiles,
+        }
+    out = _serialize_xenonet_graph(net)
+    out["smiles"] = smiles
+    out["depth_limit"] = depth_limit
+    out["beam_width"] = beam_width
+    return out
 
 
 def main():

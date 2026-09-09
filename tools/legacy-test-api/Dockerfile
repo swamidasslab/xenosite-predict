@@ -23,11 +23,12 @@ RUN --mount=type=cache,target=/opt/conda/pkgs \
 # openopt unpickles epoxidation/quinone/… .model files (see xenosite-legacy/requirements.txt).
 RUN --mount=type=cache,target=/opt/conda/pkgs \
     micromamba install --name base --yes -c conda-forge setproctitle \
-    && /opt/conda/bin/pip install --no-cache-dir openopt \
+    && /opt/conda/bin/pip install --no-cache-dir openopt mako \
     && micromamba clean --all --yes
 
 ENV TF_CPP_MIN_LOG_LEVEL=1
 ENV KMP_AFFINITY=novverbose
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 ENV PORT=8099
 ENV PYTHONPATH=/src
 ENV XENOSITE_LEGACY_DATA=/src
