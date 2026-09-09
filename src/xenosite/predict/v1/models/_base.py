@@ -14,7 +14,7 @@ from xenosite.predict.types import Molecule as Mol
 
 class BaseRunner(ModelRunner):
     name: str = ""
-    version: str = "0"
+    version: str = "1"
     onnx_heads: tuple[str, ...] = ()
     blocked_reason: str | None = None
 

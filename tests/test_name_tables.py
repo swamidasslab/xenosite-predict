@@ -7,14 +7,16 @@ from pathlib import Path
 import pytest
 
 from xenosite.predict.features import load_names
-from xenosite.predict.v0_legacy.features.name_tables import TABLES
+from xenosite.predict.v1.features.name_tables import TABLES
 
 FEATURES_DIR = (
-    Path(__file__).resolve().parents[1] / "src/xenosite/predict/v0_legacy/features"
+    Path(__file__).resolve().parents[1] / "src/xenosite/predict/v1/features"
 )
 
 # Trained input widths (must stay aligned with ONNX graphs).
 _EXPECTED_LEN = {
+    ("bioactivation", "mol"): 20,
+    ("bioactivation", "path"): 20,
     ("epoxidation", "bond"): 379,
     ("epoxidation", "mol"): 35,
     ("ndealk", "bond"): 386,

@@ -139,5 +139,5 @@ class IsozymeRunner(NdealkFamily):
     isozyme_mode = True
 
 
-register_model("ndealk", "0", factory=lambda: NdealkRunner(), heads=("hlm",))
-register_model("isozyme", "0", factory=lambda: IsozymeRunner(), heads=ISOZYMES)
+register_model("ndealk", "1", factory=lambda: NdealkRunner(), heads=("hlm",))
+register_model("isozyme", "1", factory=lambda: IsozymeRunner(), heads=ISOZYMES)

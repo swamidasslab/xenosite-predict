@@ -4,7 +4,7 @@ import pytest
 
 from xenosite.predict import UnknownModel, list_models
 from xenosite.predict.backends import BackendNotConfigured, resolve_backend
-from xenosite.predict.registry import get_info, normalize_models, ensure_builtins
+from xenosite.predict.registry import get_info, load_runner, normalize_models, ensure_builtins
 
 
 def test_registry_registers_scoring_versions():
@@ -13,7 +13,11 @@ def test_registry_registers_scoring_versions():
     v1 = get_info("epoxidation", "1")
     assert v0.default is False
     assert v1.default is True
-    assert v0.factory is v1.factory
+    assert v0.factory is not v1.factory
+    from xenosite.predict.v1.legacy import LegacyRunner
+
+    assert isinstance(load_runner("epoxidation", "0"), LegacyRunner)
+    assert not isinstance(load_runner("epoxidation", "1"), LegacyRunner)
 
 
 def test_normalize_models_default_version():
@@ -56,7 +60,9 @@ def test_list_models_local_onnx():
         else:
             assert by["epoxidation"]["available"] is False
             assert "OpenBabel" in by["epoxidation"]["reason"]
-    assert by["bioactivation"]["available"] is False
+    ba = [r for r in rows if r["name"] == "bioactivation"]
+    assert ba
+    assert all(r["available"] is False for r in ba)
 
 
 def test_picker_http_url():

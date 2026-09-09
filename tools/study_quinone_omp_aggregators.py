@@ -66,7 +66,7 @@ def _patched_omp(
     aggregate: HitAgg | None = None,
 ) -> Iterator[None]:
     """Patch AtomTD OMP path selection and hit aggregation."""
-    from xenosite.predict.v0_legacy.features import atom as atom_mod
+    from xenosite.predict.v1.features import atom as atom_mod
 
     AtomTD = atom_mod.AtomTD
     orig_paths = AtomTD._paths_for_omp

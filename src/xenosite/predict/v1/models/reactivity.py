@@ -108,7 +108,7 @@ class ReactivityRunner(BaseRunner):
 
 register_model(
     "reactivity",
-    "0",
+    "1",
     factory=lambda: ReactivityRunner(),
     two_stage=True,
     heads=HEADS,

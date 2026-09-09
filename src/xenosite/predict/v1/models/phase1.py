@@ -186,7 +186,7 @@ class Phase1Runner(BaseRunner):
 
 register_model(
     "phase1",
-    "0",
+    "1",
     factory=lambda: Phase1Runner(),
     heads=PHASE1_HEADS,
     two_stage=True,

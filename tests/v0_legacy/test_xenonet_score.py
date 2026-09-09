@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from xenosite.predict.v0_legacy.xenonet.score import (
+from xenosite.predict.v1.xenonet.score import (
     Phase1SiteTable,
     edge_weight,
     get_prob_for_one_site,

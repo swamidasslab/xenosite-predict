@@ -37,7 +37,7 @@ _BLOCKED = (
 
 class BioactivationRunner(BaseRunner):
     name = "bioactivation"
-    version = "0"
+    version = "1"
     onnx_heads = ("mol", "path")
     blocked_reason = None  # HTTP/legacy allowed; ONNX raises until pipeline lands
 
@@ -87,7 +87,7 @@ class BioactivationRunner(BaseRunner):
 
 register_model(
     "bioactivation",
-    "0",
+    "1",
     factory=lambda: BioactivationRunner(),
     pipeline=True,
     heads=("mol", "path"),

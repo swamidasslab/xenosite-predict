@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from xenosite.predict.v0_legacy.xenonet.graph import XenoGraph
+from xenosite.predict.v1.xenonet.graph import XenoGraph
 
 
 def _site(rule: str, *atoms: int):

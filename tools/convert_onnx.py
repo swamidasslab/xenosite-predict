@@ -362,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--features-dir",
         type=Path,
-        default=Path("src/xenosite/predict/v0_legacy/features"),
+        default=Path("src/xenosite/predict/v1/features"),
         help="directory of name_tables.py (inlined ONNX column orders)",
     )
     args = p.parse_args(argv)

@@ -46,7 +46,7 @@ STYRENE_MOL_CSV = """\
 
 
 def _names(head: str) -> tuple[str, ...]:
-    from xenosite.predict.v0_legacy.features import load_names
+    from xenosite.predict.v1.features import load_names
 
     return load_names("bioactivation", head)
 

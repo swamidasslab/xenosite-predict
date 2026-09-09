@@ -7,7 +7,7 @@ import httpx
 
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.features import _ob
-from xenosite.predict.v0_legacy.xenonet import build_network
+from xenosite.predict.v1.xenonet import build_network
 
 from tests.support import PARITY_ATOL, onnx_root, onnx_weights_present
 

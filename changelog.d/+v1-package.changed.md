@@ -1,0 +1,1 @@
+Scoring version `"1"` lives in `xenosite.predict.v1`. Version `"0"` is a wrap of those runners with legacy mapping defaults. Importing `xenosite.predict.v0` is deprecated (warns). The unused RDKit-first stub is `xenosite.predict.v2`.

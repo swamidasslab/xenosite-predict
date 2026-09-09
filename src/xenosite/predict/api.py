@@ -220,6 +220,9 @@ def list_models(
             if not _ob.installed():
                 ok = False
                 reason = "OpenBabel is required for ONNX descriptors (uv add openbabel)"
+        if ok and bname == "onnx" and info.name == "bioactivation":
+            ok = False
+            reason = "bioactivation is a pipeline; ONNX heads are not a full predict path"
         if ok and bname == "http" and info.name == "bioactivation":
             ok = False
             reason = "bioactivation is not available on the HTTP backend"

@@ -174,7 +174,7 @@ def _worker_init(url: str, timeout: float, depth: int, beam: int, atol: float) -
 def _one(smiles: str) -> dict:
     import httpx
     from xenosite.predict.backends.onnx import OnnxBackend
-    from xenosite.predict.v0_legacy.xenonet import build_network
+    from xenosite.predict.v1.xenonet import build_network
     from xenosite.predict.weights import default_cache_dir
 
     rec: dict = {"smiles": smiles, "ok": False, "error": None}

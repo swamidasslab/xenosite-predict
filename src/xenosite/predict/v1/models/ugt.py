@@ -47,4 +47,4 @@ class UgtRunner(BaseRunner):
         append_atom(molecule, model=self.name, version=self.version, atom=atom_pred)
 
 
-register_model("ugt", "0", factory=lambda: UgtRunner(), heads=("atom",))
+register_model("ugt", "1", factory=lambda: UgtRunner(), heads=("atom",))

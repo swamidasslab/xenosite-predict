@@ -160,6 +160,9 @@ Public parse/canonicalize stays RDKit. Feature graphs call OpenBabel internally 
 
 ```
 src/xenosite/predict/   # user API (installed)
+  v1/                   # principled runners (scoring version "1")
+  v0/                   # deprecated wrap of v1 with legacy defaults (warns)
+  v2/                   # future RDKit-first / multitask (not implemented)
 tools/                  # extract, convert, legacy-test-api (not in the wheel)
 weights/                # local only — README + .gitignore committed
 tests/                  # unit + @pytest.mark.live

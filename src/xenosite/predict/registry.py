@@ -49,7 +49,7 @@ _REGISTRY: dict[Spec, ModelInfo] = {}
 
 def register_model(
     name: str,
-    version: str = "0",
+    version: str = "1",
     *,
     factory: Factory,
     default: bool = True,
@@ -60,30 +60,19 @@ def register_model(
 ) -> None:
     """Internal registration. Not a public plugin API yet.
 
-    Built-ins pass ``version="0"`` (weight generation). Scoring versions
-    ``"0"`` (legacy params) and ``"1"`` (updated params) share the factory;
-    ``default=True`` marks ``"1"`` as the ``models=["name"]`` default.
+    Built-ins register version ``"1"`` (principled / :mod:`xenosite.predict.v1`).
+    Version ``"0"`` is the legacy overlay from :func:`xenosite.predict.v1.legacy.register_v0_models`.
+    ``default=True`` marks the ``models=["name"]`` default (version ``"1"``).
     """
-    info_kw = dict(
+    _REGISTRY[(name, version)] = ModelInfo(
+        name=name,
+        version=version,
         factory=factory,
+        default=default,
         blocked_reason=blocked_reason,
         heads=heads,
         two_stage=two_stage,
         pipeline=pipeline,
-    )
-    if version == "0":
-        _REGISTRY[(name, "0")] = ModelInfo(
-            name=name, version="0", default=False, **info_kw
-        )
-        _REGISTRY[(name, "1")] = ModelInfo(
-            name=name, version="1", default=default, **info_kw
-        )
-        return
-    _REGISTRY[(name, version)] = ModelInfo(
-        name=name,
-        version=version,
-        default=default,
-        **info_kw,
     )
 
 

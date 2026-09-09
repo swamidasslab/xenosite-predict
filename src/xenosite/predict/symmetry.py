@@ -1,7 +1,7 @@
-"""Compatibility shim — legacy symmetry helpers live in ``v0_legacy.symmetry``."""
+"""Compatibility shim — legacy symmetry helpers live in ``v1.symmetry``."""
 
-from .v0_legacy.symmetry import *  # noqa: F403
-from .v0_legacy.symmetry import (
+from .v1.symmetry import *  # noqa: F403
+from .v1.symmetry import (
     BondNringsMode,
     SymmetryGroupMode,
     apply_atom_symmetry,

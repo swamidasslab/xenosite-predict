@@ -6,7 +6,7 @@ import warnings
 
 import pytest
 
-from xenosite.predict.v0_legacy.xenonet import _unvalidated
+from xenosite.predict.v1.xenonet import _unvalidated
 
 
 def test_warn_unvalidated_once(monkeypatch):

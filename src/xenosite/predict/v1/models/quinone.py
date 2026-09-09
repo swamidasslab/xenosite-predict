@@ -165,5 +165,5 @@ class QuinoneRunner(BaseRunner):
 
 
 register_model(
-    "quinone", "0", factory=lambda: QuinoneRunner(), two_stage=True, heads=("atom", "pair", "mol")
+    "quinone", "1", factory=lambda: QuinoneRunner(), two_stage=True, heads=("atom", "pair", "mol")
 )

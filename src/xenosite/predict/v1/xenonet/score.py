@@ -21,19 +21,19 @@ warn_unvalidated()
 import numpy as np
 
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.v0_legacy.features import (
+from xenosite.predict.v1.features import (
     load_names,
     matrix_from_rows,
     phase1_rows,
 )
-from xenosite.predict.v0_legacy.features.phase1_mol import phase1_site_column_names
-from xenosite.predict.v0_legacy.models.phase1 import (
+from xenosite.predict.v1.features.phase1_mol import phase1_site_column_names
+from xenosite.predict.v1.models.phase1 import (
     _LEGACY_HEADS,
     _hydrogen_ids,
     _topology_pool,
 )
-from xenosite.predict.v0_legacy.features.bond_lonepair import phase1_pymol
-from xenosite.predict.v0_legacy.symmetry import collapse_opposite_direction_rows
+from xenosite.predict.v1.features.bond_lonepair import phase1_pymol
+from xenosite.predict.v1.symmetry import collapse_opposite_direction_rows
 
 # Reaction rule name → phase1 Class column (XenoNet ``rxn_dict``).
 RXN_DICT: dict[str, str] = {

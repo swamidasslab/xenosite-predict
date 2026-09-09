@@ -10,12 +10,12 @@ from rdkit import Chem
 
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.features import _ob
-from xenosite.predict.v0_legacy.xenonet import build_network, site_table_for
-from xenosite.predict.v0_legacy.xenonet.score import (
+from xenosite.predict.v1.xenonet import build_network, site_table_for
+from xenosite.predict.v1.xenonet.score import (
     get_prob_for_one_site,
     phase1_site_strings,
 )
-from xenosite.predict.v0_legacy.xenonet.search import possible_metabolites
+from xenosite.predict.v1.xenonet.search import possible_metabolites
 
 from tests.support import PARITY_ATOL, onnx_root, onnx_weights_present
 

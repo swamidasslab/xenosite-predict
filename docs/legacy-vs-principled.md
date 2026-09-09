@@ -17,6 +17,8 @@ which models are affected.
 | `"0"` | `predict(smi, models=[("epoxidation", "0")])` | legacy site/OMP/symmetry/NRings | HTTP `/v0`, golden fixtures, legacy-test-api |
 
 Same ONNX weights in both cases. `Result.model_version` is `"0"` or `"1"` to match.
+
+Implementation: version `"1"` is `xenosite.predict.v1` (principled defaults). Version `"0"` wraps those runners (`xenosite.predict.v1.legacy.LegacyRunner`). Importing `xenosite.predict.v0` warns; `predict(..., models=[(name, "0")])` does not. The unused RDKit-first stub is `xenosite.predict.v2`.
 `_parameter` overlays individual flags (tests and ablations only).
 
 ```python

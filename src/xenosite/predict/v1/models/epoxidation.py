@@ -96,4 +96,4 @@ def _factory() -> EpoxidationRunner:
     return EpoxidationRunner()
 
 
-register_model("epoxidation", "0", factory=_factory, two_stage=True, heads=("bond", "mol"))
+register_model("epoxidation", "1", factory=_factory, two_stage=True, heads=("bond", "mol"))

@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.v0_legacy.features import load_names
+from xenosite.predict.v1.features import load_names
 
 from tests.support import ROOT, onnx_weights_present, onnx_root
 
