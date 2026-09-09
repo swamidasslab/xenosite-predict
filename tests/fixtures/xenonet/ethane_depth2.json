@@ -1,0 +1,133 @@
+{
+  "smiles": "CC",
+  "depth_limit": 2,
+  "edges": [
+    {
+      "site": [
+        0
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.22709354758262634,
+      "parent": "CC",
+      "child": "CCO"
+    },
+    {
+      "site": [
+        0,
+        2
+      ],
+      "rule": "Dehydrogenation",
+      "weight": 0.006145839011658438,
+      "parent": "CCO",
+      "child": "C=CO"
+    },
+    {
+      "site": [
+        0
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.0731637179851532,
+      "parent": "CCO",
+      "child": "CC(=O)O"
+    },
+    {
+      "site": [
+        0
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.0731637179851532,
+      "parent": "CCO",
+      "child": "CC(O)O"
+    },
+    {
+      "site": [
+        0,
+        1
+      ],
+      "rule": "Dehydrogenation",
+      "weight": 0.04651352340901482,
+      "parent": "CCO",
+      "child": "CC=O"
+    },
+    {
+      "site": [
+        0,
+        2
+      ],
+      "rule": "Dealkylation",
+      "weight": 0.02034863829612732,
+      "parent": "CCO",
+      "child": "O=CO"
+    },
+    {
+      "site": [
+        2
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.17205700278282166,
+      "parent": "CCO",
+      "child": "OCCO"
+    },
+    {
+      "site": [
+        0,
+        2
+      ],
+      "rule": "Dealkylation",
+      "weight": 0.02034863829612732,
+      "parent": "CCO",
+      "child": "OCO"
+    }
+  ],
+  "nodes": [
+    {
+      "smiles": "CC",
+      "metabolism_score": 1.0,
+      "id": 0
+    },
+    {
+      "smiles": "CCO",
+      "metabolism_score": 1.0,
+      "id": 1
+    },
+    {
+      "smiles": "CC=O",
+      "metabolism_score": 0.11296789638133456,
+      "id": 2
+    },
+    {
+      "smiles": "CC(O)O",
+      "metabolism_score": 0.17769351161684077,
+      "id": 3
+    },
+    {
+      "smiles": "OCO",
+      "metabolism_score": 0.0494209574777697,
+      "id": 4
+    },
+    {
+      "smiles": "OCCO",
+      "metabolism_score": 0.41787669988220466,
+      "id": 5
+    },
+    {
+      "smiles": "O=CO",
+      "metabolism_score": 0.0494209574777697,
+      "id": 6
+    },
+    {
+      "smiles": "CC(=O)O",
+      "metabolism_score": 0.17769351161684077,
+      "id": 7
+    },
+    {
+      "smiles": "C=CO",
+      "metabolism_score": 0.01492646554723985,
+      "id": 8
+    }
+  ],
+  "root": "CC",
+  "targets": [],
+  "beam_width": 20,
+  "source": "py2-xenonet"
+}

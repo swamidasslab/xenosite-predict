@@ -1,0 +1,60 @@
+{
+  "smiles": "C=C",
+  "depth_limit": 1,
+  "edges": [
+    {
+      "site": [
+        0,
+        1
+      ],
+      "rule": "Epoxidation",
+      "weight": 0.28201913833618164,
+      "parent": "C=C",
+      "child": "C1CO1"
+    },
+    {
+      "site": [
+        0
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.30446165800094604,
+      "parent": "C=C",
+      "child": "C=C=O"
+    },
+    {
+      "site": [
+        0
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.30446165800094604,
+      "parent": "C=C",
+      "child": "C=CO"
+    }
+  ],
+  "nodes": [
+    {
+      "smiles": "C=C",
+      "metabolism_score": 1.0,
+      "id": 0
+    },
+    {
+      "smiles": "C=C=O",
+      "metabolism_score": 0.34172987999224486,
+      "id": 1
+    },
+    {
+      "smiles": "C1CO1",
+      "metabolism_score": 0.31654024001551023,
+      "id": 2
+    },
+    {
+      "smiles": "C=CO",
+      "metabolism_score": 0.34172987999224486,
+      "id": 3
+    }
+  ],
+  "root": "C=C",
+  "targets": [],
+  "beam_width": 1000,
+  "source": "py2-xenonet"
+}

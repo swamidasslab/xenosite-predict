@@ -1,0 +1,33 @@
+{
+  "smiles": "CC",
+  "depth_limit": 1,
+  "edges": [
+    {
+      "site": [
+        0
+      ],
+      "rule": "Hydroxylation",
+      "weight": 0.22709354758262634,
+      "parent": "CC",
+      "child": "CCO"
+    }
+  ],
+  "nodes": [
+    {
+      "smiles": "CC",
+      "metabolism_score": 1.0,
+      "id": 0
+    },
+    {
+      "smiles": "CCO",
+      "metabolism_score": 1.0,
+      "id": 1
+    }
+  ],
+  "root": "CC",
+  "targets": [
+    "CCO"
+  ],
+  "beam_width": 1000,
+  "source": "py2-xenonet"
+}
