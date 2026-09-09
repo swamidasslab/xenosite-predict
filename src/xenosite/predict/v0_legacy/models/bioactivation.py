@@ -1,7 +1,21 @@
-"""Bioactivation last: metabolite enumeration pipeline, not a single ONNX.
+"""Bioactivation: forest enumeration + composite models + path/mol ONNX heads.
 
-Calls other models (phase1/APMP, reactivity, …) then path/mol heads.
-Golden fixtures do not exist in xenosite-api today; add them here when gathered.
+Pipeline (not yet wired in ``from_onnx``):
+  forest ``BA`` / ``BioactivationPathways`` → formation scores from
+  epoxidation / quinone / phase1 + reactivity deltas → path head → mol head.
+
+Enumeration parity is owned by ``xenosite.forest`` (``ruleset_for_model`` maps
+``bioactivation`` → ``BA``). Legacy PBS pathway labels ``NitrogenReduction`` /
+``SulfurOxidation`` alias to forest ``NitroaromaticReduction`` /
+``ThiopheneSulfurOxidation``.
+
+Trained head inputs (TSV order, 20 features each):
+  path: MolDesc_* (14) + Score__Formation + GSH/Protein topological
+        bioactivation & reactivity-delta (4)
+  mol:  MolDesc_* (14) + PBS_1__logit … PBS_5__logit
+
+Legacy golden rows are gathered via ``legacy-test-api``; ONNX predict stays
+blocked until the pipeline runner lands (heads may still exist for replay).
 """
 
 from __future__ import annotations
@@ -17,7 +31,7 @@ from ._base import BaseRunner
 
 _BLOCKED = (
     "bioactivation is a metabolite-enumeration pipeline (not one ONNX). "
-    "Port remaining models first; ONNX mol/path heads are not sufficient alone."
+    "Path/mol heads convert separately; wire forest + composite models before enabling."
 )
 
 
@@ -26,6 +40,12 @@ class BioactivationRunner(BaseRunner):
     version = "0"
     onnx_heads = ("mol", "path")
     blocked_reason = None  # HTTP/legacy allowed; ONNX raises until pipeline lands
+
+    def available(self, backend) -> bool:
+        # Heads may be on disk for replay tests; full predict needs the pipeline.
+        if getattr(backend, "name", None) == "onnx" or isinstance(backend, OnnxBackend):
+            return False
+        return super().available(backend)
 
     def from_onnx(self, molecule: Molecule, backend: OnnxBackend) -> None:
         raise ModelNotAvailable(_BLOCKED)

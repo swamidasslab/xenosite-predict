@@ -22,11 +22,10 @@ class BaseRunner(ModelRunner):
         if self.blocked_reason:
             return False
         if getattr(backend, "name", None) == "onnx":
-            if self.name not in ("bioactivation",):
-                from ..features import _ob
+            from ..features import _ob
 
-                if not _ob.installed():
-                    return False
+            if not _ob.installed():
+                return False
             key = "ndealk" if self.name in ("ndealk", "isozyme") else self.name
             return all(backend.has_head(key, h) for h in self.onnx_heads)
         specs = set(backend.available_models())
