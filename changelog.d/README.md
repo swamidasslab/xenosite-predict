@@ -26,7 +26,8 @@ Internal-only work (tests, tooling, refactors with no API/score change) does not
 ## Preview and release
 
 ```
-make changelog VERSION=0.3.3   # draft against a version; does not write files
+make changelog VERSION=0.3.3          # draft; does not write files
+make changelog-release VERSION=0.3.3  # writes CHANGELOG.md, removes fragments
 ```
 
-Pushing a tag `vX.Y.Z` is the package version ([hatch-vcs](https://github.com/ofek/hatch-vcs)). The tag job then makes a new commit (not an amend) that compiles fragments into `CHANGELOG.md` and opens a GitHub Release. The tag is not moved. `make changelog-release` is optional if you want to compile locally instead.
+Compile, commit `CHANGELOG.md` and the deleted fragments, **then** tag `vX.Y.Z` and push. The tag is the package version ([hatch-vcs](https://github.com/ofek/hatch-vcs)). Full steps: [`docs/release.md`](../docs/release.md).

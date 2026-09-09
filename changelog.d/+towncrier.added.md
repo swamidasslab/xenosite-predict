@@ -1,1 +1,1 @@
-Keep a Changelog with [towncrier](https://towncrier.readthedocs.io/). Package version comes from git tags ([hatch-vcs](https://github.com/ofek/hatch-vcs)); pushing a `v*` tag also compiles `changelog.d/` into `CHANGELOG.md` and opens a GitHub Release.
+Keep a Changelog with [towncrier](https://towncrier.readthedocs.io/). Package version comes from git tags ([hatch-vcs](https://github.com/ofek/hatch-vcs)). Compile `CHANGELOG.md`, commit, then tag `v*` (see `docs/release.md`).

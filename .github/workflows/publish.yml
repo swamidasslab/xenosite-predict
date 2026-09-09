@@ -10,14 +10,13 @@
 #        Environment:       pypi
 #   3. GitHub → Settings → Environments → create `pypi`
 #      (optional but recommended: required reviewers)
-#   4. Merge this workflow, then push a tag vX.Y.Z (or Run workflow → publish).
+#   4. Compile CHANGELOG.md, commit, tag vX.Y.Z, push (see docs/release.md).
 #      Package version comes from the git tag (hatch-vcs), not pyproject.toml.
 #      Checkout uses fetch-depth: 0 so hatch-vcs can see tags.
-#      uv build runs on the tagged commit first (so the dist version matches
-#      the tag). Then towncrier compiles changelog.d/ into CHANGELOG.md as a
-#      new commit (not an amend) and fast-forwards the default branch when the
-#      tag is the tip. The tag is not moved (force-pushing it would re-run this
-#      workflow). A GitHub Release is opened from the new changelog section.
+#      uv build runs on the tagged commit (dist version matches the tag).
+#      If CHANGELOG.md already has that version, towncrier is skipped.
+#      If not, fragments are compiled as a new commit on the default branch
+#      (not an amend; the tag is not moved). GitHub Release uses that section.
 #
 # Docs: https://docs.pypi.org/trusted-publishers/
 

@@ -165,6 +165,7 @@ weights/                # local only — README + .gitignore committed
 tests/                  # unit + @pytest.mark.live
 docs/vendored-diffs.md  # NN/feature hashes, MOPAC/SmartCYP gate
 docs/legacy-vs-principled.md  # production defaults vs golden legacy modes
+docs/release.md               # cut a version: towncrier, tag, PyPI
 CHANGELOG.md            # Keep a Changelog (compiled by towncrier)
 changelog.d/            # news fragments for the next release
 ```
@@ -185,22 +186,11 @@ make changelog-create TYPE=added NAME=rdkit-mols MSG="Keep RDKit mols when rdkit
 make changelog VERSION=0.3.3   # draft; does not write files
 ```
 
-Pushing a tag `vX.Y.Z` is the version: [hatch-vcs](https://github.com/ofek/hatch-vcs) reads it at build time (`uv version --short`). The tag job builds the dist **on the tagged commit** (so the package version matches the tag), then makes a **new** commit (does not amend) that compiles `changelog.d/` into `CHANGELOG.md` and fast-forwards the default branch when the tag is the tip. The tag is not moved (force-pushing it would re-run the workflow). `make changelog-release` is still available to compile locally. Details: [`changelog.d/README.md`](changelog.d/README.md).
+How to cut a release (compile `CHANGELOG.md`, commit, **then** tag): [`docs/release.md`](docs/release.md). Fragments: [`changelog.d/README.md`](changelog.d/README.md).
 
 ### Publishing to PyPI (trusted publishing)
 
-No long-lived PyPI tokens. Releases use GitHub OIDC via `.github/workflows/publish.yml`.
-
-1. On PyPI, add a **pending** trusted publisher (project not published yet) at
-   [pypi.org/manage/account/publishing](https://pypi.org/manage/account/publishing/):
-   - Project: `xenosite-predict`
-   - Owner: `swamidasslab`
-   - Repo: `xenosite-predict`
-   - Workflow: `publish.yml`
-   - Environment: `pypi`
-2. In GitHub → Settings → Environments, create `pypi` (add required reviewers if you want a human gate).
-3. Merge the workflow, then either push a tag `v0.2.0` or run **Publish** manually. A `v*` tag is the package version (hatch-vcs); the job also compiles `CHANGELOG.md` and opens a GitHub Release.
-4. The first successful publish creates the PyPI project; later releases reuse the same publisher.
+Releases use GitHub OIDC (`.github/workflows/publish.yml`). The `v*` tag **is** the package version ([hatch-vcs](https://github.com/ofek/hatch-vcs)). One-time publisher setup and the tag push steps are in [`docs/release.md`](docs/release.md).
 
 Do **not** commit `XENOSITE_ONNX_URL`, API keys, or weight hostnames. Keep those in local env / deployment secrets only.
 
