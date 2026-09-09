@@ -76,6 +76,14 @@ def test_possible_metabolites_sites_are_rdkit_zero():
         assert phase1_site_strings("Hydroxylation", site)
 
 
+def test_possible_metabolites_diphenhydramine_does_not_crash():
+    mol = Chem.MolFromSmiles("CN(C)CCOC(c1ccccc1)c1ccccc1")
+    rows = list(possible_metabolites(mol))
+    assert rows
+    rules = {rule for (rule, _site), _prod in rows}
+    assert "Hydroxylation" in rules or "Dealkylation" in rules
+
+
 def test_depth_two_has_likelihoods():
     be = _backend()
     g = build_network(ETHANE, depth_limit=2, beam_width=20, backend=be)

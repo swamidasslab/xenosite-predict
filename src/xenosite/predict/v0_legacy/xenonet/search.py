@@ -16,10 +16,9 @@ from ._unvalidated import warn_unvalidated
 warn_unvalidated()
 
 from rdkit import Chem
-from xenosite.forest import PhaseOneRS
-from xenosite.forest.base import can_smi
-from xenosite.forest.utils import clean
 from xenosite.predict.forest import forest_site_indexing, forest_site_to_rdkit
+from xenosite.predict.forest_rdkit import can_smi, clean, mol_to_smiles
+from xenosite.forest import PhaseOneRS
 
 from .graph import XenoGraph
 from .score import (
@@ -34,12 +33,12 @@ from .score import (
 def canonize(mol: Chem.Mol) -> str:
     smis = can_smi(rdmol=mol)
     if not smis:
-        return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=False)
+        return mol_to_smiles(mol)
     return smis[0]
 
 
 def _rdkit_smi(mol: Chem.Mol) -> str:
-    return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=False)
+    return mol_to_smiles(mol)
 
 
 def min_heavy_atoms(start: Chem.Mol, targets: list[str]) -> int:

@@ -21,7 +21,7 @@ from functools import lru_cache
 from typing import Collection, Iterator, Optional
 
 from rdkit import Chem
-from xenosite.forest.base import can_smi
+from xenosite.predict.forest_rdkit import can_smi
 
 from .conjugates import (
     HEADS as _CONJUGATE_HEADS,

@@ -21,9 +21,10 @@ from typing import Optional
 
 from rdkit import Chem
 from xenosite.forest import load_ruleset
-from xenosite.forest.base import can_smi
 from xenosite.forest.rules import Glutathionation
 from xenosite.forest.rulesets import RuleSet
+
+from .forest_rdkit import can_smi
 
 NO_THIOL_RULESET = "GlutathionationNoThiol"
 
