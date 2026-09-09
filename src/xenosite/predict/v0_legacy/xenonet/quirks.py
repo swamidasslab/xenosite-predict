@@ -31,10 +31,6 @@ Deliberate v0 deviations (tests / determinism)
 - ``max_time`` is not a golden cutoff (partial graphs are not reproducible).
 - Quinone-weighted edges, conjugation, biomolecule reactivity, and the
   bioactivation PBS/MBS pipeline are not in this engine.
-- RDKit 2026 valence caches: forest still assumes lazy implicit-H on
-  ``RunReactants`` / ``MolToSmiles``. Until forest does this itself, xenonet
-  uses :mod:`xenosite.predict.forest_rdkit` (same adapter pattern as
-  conjugation).
 """
 
 from __future__ import annotations

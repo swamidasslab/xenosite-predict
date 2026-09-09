@@ -21,7 +21,8 @@ from functools import lru_cache
 from typing import Collection, Iterator, Optional
 
 from rdkit import Chem
-from xenosite.predict.forest_rdkit import can_smi
+from xenosite.forest.base import can_smi
+from xenosite.forest.utils import refresh_mol
 
 from .conjugates import (
     HEADS as _CONJUGATE_HEADS,
@@ -271,6 +272,9 @@ def metabolite_atom_maps(
     ``map_idx`` is always computed (1-based parent atom numbers per heavy atom in
     canonical ``smiles`` order; 0 = new atom). ``mapped_smiles`` is included only
     when requested — SMILES with ``:N`` map numbers tracing to the parent.
+
+    Forest 0.2.3 ``can_smi`` always unmaps, so mapped output is written with
+    ``MolToSmiles`` / CXSMILES after filling valence caches.
     """
     if mode is None:
         mode = forest_map_indexing()
@@ -286,10 +290,14 @@ def metabolite_atom_maps(
     has_star_label = any(
         atom.GetAtomicNum() == 0 and atom.HasProp("atomLabel") for atom in tagged.GetAtoms()
     )
-    if mapped_smiles or has_star_label:
-        written = mol_to_cxsmiles(tagged) if has_star_label else can_smi(rdmol=tagged)[0]
+    refresh_mol(tagged)
+    if has_star_label:
+        written = mol_to_cxsmiles(tagged)
     else:
-        written = can_smi(rdmol=tagged)[0]
+        try:
+            written = Chem.MolToSmiles(tagged, canonical=True, isomericSmiles=False)
+        except Exception:
+            written = None
     mapped = written if mapped_smiles else None
     parsed = Chem.MolFromSmiles(written or "")
     if parsed is None:

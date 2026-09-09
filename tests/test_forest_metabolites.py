@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from rdkit import Chem
+from xenosite.forest.base import can_smi
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
@@ -152,7 +153,7 @@ def test_attach_metabolites_rdkit_passthrough():
     assert mol.rdkit is rdmol
     met = mol.results[0].metabolite[0]
     assert met.rdkit is not None
-    assert Chem.MolToSmiles(met.rdkit, isomericSmiles=False) == met.smiles
+    assert can_smi(rdmol=Chem.Mol(met.rdkit))[0] == met.smiles.split()[0]
     assert "rdkit" not in met.model_dump()
     assert "rdkit" not in mol.model_dump()
 
@@ -619,7 +620,7 @@ def test_forest_site_matches_rdkit_mol():
 
 
 def test_cc_stable_oxygenation_probe_is_rdkit_zero():
-    """Ethane + SO: hydroxylation site index 0 ⇒ forest uses RDKit 0-based (v0.1.0)."""
+    """Ethane + SO: hydroxylation site index 0 ⇒ forest uses RDKit 0-based."""
     import xenosite.forest as xf
 
     forest_site_indexing_for_version.cache_clear()
