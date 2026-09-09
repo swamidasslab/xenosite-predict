@@ -15,7 +15,7 @@ This host script:
 
 Do not fake ONNX files when dump/convert fails. Phase1 TF1 molecularNN pickles
 convert on the host (no TensorFlow): ``tools/convert_phase1.py``. Bioactivation
-is a pipeline, not a single graph.
+path/mol heads convert here; the metabolite pipeline is separate.
 """
 
 from __future__ import annotations
@@ -75,6 +75,18 @@ MODELS = {
         "legacy": "ndealk1",
         "heads": {"bond": "models/BOND.model"},
         "tsv": {},
+    },
+    "bioactivation": {
+        "legacy": "bioactivation1",
+        "heads": {
+            "path": "code/path.pyp",
+            "mol": "code/mol.pyp",
+        },
+        "tsv": {
+            "path": "data/path.tsv",
+            "mol": "data/mol.tsv",
+        },
+        "two_stage": True,
     },
 }
 
@@ -361,12 +373,6 @@ def main(argv: list[str] | None = None) -> int:
     if str(tools_dir) not in sys.path:
         sys.path.insert(0, str(tools_dir))
     for name in wanted:
-        if name == "bioactivation":
-            print(
-                "bioactivation: metabolite pipeline — not a single ONNX graph.",
-                file=sys.stderr,
-            )
-            continue
         if name == "phase1":
             from convert_phase1 import convert as convert_phase1
 

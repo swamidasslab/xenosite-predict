@@ -85,7 +85,16 @@ Epoxidation, quinone, and reactivity **mol** heads take Top-N **site** scores as
 
 ## Phase1 / bioactivation
 
-Phase1 is TensorFlow `molecularNN`. Bioactivation enumerates metabolites then scores paths. Neither is a drop-in numpy-NN export. ONNX convert **stops and documents** rather than adding TF to the installed package. Bioactivation ONNX mol/path heads without metabolite generation will not match; port last.
+Phase1 is TensorFlow `molecularNN` (host convert to ONNX; no TF at runtime).
+
+Bioactivation is a **pipeline** (forest `BA` / `BioactivationPathways` for enumeration + already-ported `epoxidation` / `quinone` / `reactivity` / `phase1` for formation and reactivity features), not one graph. The **path** and **mol** scoring heads are ordinary numpy NNs and convert like the other models:
+
+| Head | Pickle | I | H | O | Trained columns (TSV order) |
+|---|---|---|---|---|---|
+| path | `code/path.pyp` | 20 | 10 | 1 | 14 `MolDesc__*` + `Score__Formation` + GSH/Protein topological bioactivation & reactivity-delta (4) |
+| mol | `code/mol.pyp` | 20 | 10 | 1 | 14 `MolDesc__*` + `PBS_1__logit` … `PBS_5__logit` |
+
+Doctest path matrices are wider than the trained TSV; only the TSV columns feed ONNX. Forest rule names: `Epoxidation` ↔ `SO.Epoxidation`, `QuinoneFormation` ↔ `QF`, `NitroaromaticReduction` / `NitrogenReduction`, `ThiopheneSulfurOxidation` / `SulfurOxidation`. Full `from_onnx` pipeline is separate from head conversion; ONNX remains blocked at the runner until that lands.
 
 ## Weights
 
@@ -96,7 +105,7 @@ Feature **names/order** live in ``name_tables.py`` after `make convert-onnx` rea
 - WashU registry requires `docker login dockerreg01.accounts.ad.wustl.edu` (DNS works; no basic auth in this environment).
 - Fallback tarball contains pickles. Conversion uses a public `python:2.7-slim` (linux/amd64) dump image plus sibling `NN/` sources (OpenOpt stubbed). **Not** the WashU image.
 - Numpy-NN heads converted and random-vector parity vs dumped py2 `model.output` holds at atol `1e-4` (typically `~1e-7` float32): epoxidation bond/mol, quinone atom/pair/mol, reactivity atom (AbutLayer) / mol, ugt atom, ndealk bond (10 isozyme heads).
-- **Phase1 / bioactivation:** Phase1 TF1 pickles convert on the host to `weights/onnx/v0/phase1/{site,mol}.onnx` (windowed MLP; no TensorFlow at runtime). Bioactivation is still a metabolite pipeline, not one graph. HTTP/legacy backends still apply.
+- **Phase1 / bioactivation:** Phase1 TF1 pickles convert on the host to `weights/onnx/v0/phase1/{site,mol}.onnx` (windowed MLP; no TensorFlow at runtime). Bioactivation **path/mol** numpy-NN heads convert via `make convert-onnx MODEL=bioactivation` to `weights/onnx/v0/bioactivation/{path,mol}.onnx`; the metabolite pipeline (forest + composite models) is separate. HTTP still has no bioactivation route.
 - Feature-name tables are inlined in `name_tables.py` (from TSV headers). N-dealk has no training TSV in the tarball; the aspirin OpenBabel dump supplied 386 ndealk bond columns (`Heuristic` + `BondDesc`).
 - Host OpenBabel vs dump tests use `xenosite-predict-py2:dump` (Debian `python-openbabel` 2.4.1 and `python-rdkit` from archive.debian.org + sibling `xenosite-legacy/src`). Not the WashU API image and not the micromamba test-API. `make dump-ob` writes `tests/fixtures/ob_dumps.json` (gitignored) and `ob_dumps.json.gz` (committed via Git LFS). Compare rows by **atom identity** in the dump index (`1.5.10` = mol.atom1.atom2, 1-based), not OpenBabel bond-iterator order. Use **rtol=0**. Default atol is `1e-4`. Keep pybel's read-time Gasteiger charges; calling `OBChargeModel` `gasteiger` on 3.2 equalizes nitro oxygens and misses the dump by ~0.45.
 - BondTD `NRings` counts **DFS back-edge cycles** (legacy `UndirectedGraph.cycles`), not OpenBabel SSSR. SSSR is still used for `MolGraph.cycles()`, AtomTD/UGT ring sizes, and quinone aromatic rings. Fusion atoms sit in extra perimeter cycles the dump counted; SSSR dropped them.
