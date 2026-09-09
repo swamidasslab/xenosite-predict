@@ -50,11 +50,18 @@ _MODEL_RULESETS: dict[str, str] = {
     "epoxidation": "SO.Epoxidation",
     "ndealk": "UO.Dealkylation",
     "quinone": "QF.QuinoneFormation",
+    "bioactivation": "BA",
     "phase1.stable_oxygenation": "SO",
     "phase1.unstable_oxygenation": "UO",
     "phase1.dehydrogenation": "DH",
     "phase1.reduction": "RD",
     "phase1.hydrolysis": "HD",
+}
+
+# Legacy bioactivation PBS pathway labels → forest ``pathway_name`` (BA ruleset).
+_LEGACY_BIOACTIVATION_PATHWAY: dict[str, str] = {
+    "NitrogenReduction": "NitroaromaticReduction",
+    "SulfurOxidation": "ThiopheneSulfurOxidation",
 }
 
 _INDEX_PROBE_SMILES = "CC"
@@ -104,6 +111,11 @@ def supported_metabolite_models() -> frozenset[str]:
 def pathway_name(rule: str) -> str:
     """Normalize forest rule labels (``Hydroxylation_Smarts...`` → ``Hydroxylation``)."""
     return rule.split("_", 1)[0]
+
+
+def bioactivation_pathway_name(pathway: str) -> str:
+    """Map legacy bioactivation PBS pathway labels onto forest ``BA`` names."""
+    return _LEGACY_BIOACTIVATION_PATHWAY.get(pathway, pathway)
 
 
 def site_rdkit_indices(site: frozenset[int]) -> list[int]:
