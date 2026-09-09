@@ -15,7 +15,7 @@ ONNX_TARBALL ?= weights/xenosite_onnx_v0.tgz
 
 .PHONY: extract-weights convert-onnx convert-onnx-$(MODEL) pack-onnx extract-onnx download-onnx test test-golden test-live \
 	legacy-test-api legacy-test-api-down py2-dump-image dump-ob dump-ob dump-ob-features \
-	capture-suite-onnx gather-golden gather-xenonet drift-report drift-descriptors help \
+	capture-suite-onnx gather-golden gather-xenonet compare-xenonet drift-report drift-descriptors help \
 	regather-ob-dumps regather-golden-onnx changelog changelog-create changelog-release
 
 help:
@@ -35,6 +35,7 @@ help:
 	@echo "legacy-test-api-down"
 	@echo "gather-golden        regather failing suite rows from legacy-test-api (GATHER_WORKERS; pair with LEGACY_REPLICAS)"
 	@echo "gather-xenonet       capture small XenoNet graphs via POST /xenonet (needs legacy-test-api)"
+	@echo "compare-xenonet      ONNX vs py2 XenoNet on 327 descriptor SMILES (GATHER_WORKERS; pair with LEGACY_REPLICAS)"
 	@echo "  BIO gather example: make legacy-test-api LEGACY_REPLICAS=8 && uv run python tools/gather_golden_suite.py --models bioactivation --workers 8"
 	@echo "regather-ob-dumps    refresh quinone rows in ob_dumps from py3 legacy OMP port"
 	@echo "regather-golden-onnx refresh golden scores from ONNX + GOLDEN_PARAMETER"
@@ -42,7 +43,7 @@ help:
 	@echo "drift-descriptors   cross-tab descriptor vs score drift for one model"
 	@echo "changelog           preview CHANGELOG.md from changelog.d/ (towncrier --draft)"
 	@echo "changelog-create    add a fragment: TYPE=added NAME=slug MSG='...'"
-	@echo "changelog-release    fold fragments into CHANGELOG.md locally (optional; tags do this)"
+	@echo "changelog-release    fold fragments into CHANGELOG.md (CI does this on v* tags; docs/release.md)"
 
 extract-weights:
 	$(PYTHON) tools/extract_weights.py --image $(IMAGE) --tarball $(TARBALL) --out weights/legacy
@@ -110,6 +111,9 @@ gather-golden:
 
 gather-xenonet:
 	$(PYTHON) tools/gather_xenonet.py
+
+compare-xenonet:
+	$(PYTHON) tools/compare_xenonet_suite.py --workers $(or $(XENONET_WORKERS),8)
 
 drift-report:
 	-$(PYTHON) tools/report_suite_drift.py \
