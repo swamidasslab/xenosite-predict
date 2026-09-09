@@ -10,6 +10,30 @@ release; fragments live in [`changelog.d/`](changelog.d/).
 
 <!-- towncrier release notes start -->
 
+## [0.4.0](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.0) - 2026-09-09
+
+### Added
+
+- Attach DNA and cyanide star adducts from a no-thiol glutathionation ruleset.
+- Keep a Changelog with [towncrier](https://towncrier.readthedocs.io/). Package version comes from git tags ([hatch-vcs](https://github.com/ofek/hatch-vcs)); pushing `v*` compiles `changelog.d/` into `CHANGELOG.md` on CI.
+- Label conjugation dummy atoms in CXSMILES.
+
+### Changed
+
+- Always score on canonical detailed topology; `canonicalize` and `detailed` only change what is returned. Add reorder/strip helpers for presentation atom order.
+- Default ONNX to many worker processes × one ORT intra-op thread (`workers=min(cpu_count, 32)`, `XENOSITE_ORT_INTRA_OP=1`).
+- Make the HTTP backend async with msgpack responses, per-origin concurrency, backoff on 429/503/timeouts, and optional Bearer auth (`XENOSITE_API_KEY`).
+- OpenBabel stays a required install; bindings load only when a v0/v1 ONNX predictor runs.
+- Quiet Forest 0.2.3 warnings when dropping RDKit-invalid metabolite fragments.
+- Require xenosite-forest 0.2.3 (RDKit 2026 valence caches and DNA/CN conjugation).
+- Require xenosite-forest 0.2.4 (invalid metabolites logged at DEBUG, not UserWarning).
+- Scoring version `"1"` lives in `xenosite.predict.v1`. Version `"0"` is a wrap of those runners with legacy mapping defaults. Importing `xenosite.predict.v0` is deprecated (warns). Importing `xenosite.predict.v2` raises `NotImplementedError` (RDKit-first / multitask, not implemented).
+
+### Fixed
+
+- Reuse a single HTTP client across `predict_many` instead of opening a new event loop per molecule.
+
+
 ## [0.3.2](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.3.2) - 2026-09-04
 
 ### Added
