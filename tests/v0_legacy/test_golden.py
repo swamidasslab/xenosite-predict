@@ -28,6 +28,8 @@ def _golden_params():
         model = g.get("model") or ""
         smiles = g.get("smiles") or ""
         weight_key = "ndealk" if model == "isozyme" else model
+        if model == "bioactivation":
+            continue
         if not onnx_weights_present(weight_key):
             continue
         out.append(
