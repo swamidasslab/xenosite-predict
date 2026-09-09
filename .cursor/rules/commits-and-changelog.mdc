@@ -25,4 +25,4 @@ make changelog-create TYPE=added NAME=slug MSG="Keep RDKit mols when rdkit=True.
 
 Types: `added` | `changed` | `fixed` | `removed` | `deprecated` | `security`. For a GitHub issue, `uv run towncrier create --no-edit -c "..." 123.fixed.md`.
 
-Skip fragments for internal-only tests, refactors, and tooling. Package version comes from git tags (hatch-vcs), not `pyproject.toml`. To cut a release: compile with `make changelog-release VERSION=X.Y.Z`, commit, **then** tag `vX.Y.Z` (see `docs/release.md`). Do not run `changelog-release` except when cutting a version. Preview with `make changelog VERSION=X.Y.Z`.
+Skip fragments for internal-only tests, refactors, and tooling. Package version comes from git tags (hatch-vcs), not `pyproject.toml`. Do not run `towncrier build` locally; pushing `v*` compiles `CHANGELOG.md` on CI (see `docs/release.md`). Preview with `make changelog VERSION=X.Y.Z`.

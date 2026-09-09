@@ -186,7 +186,7 @@ make changelog-create TYPE=added NAME=rdkit-mols MSG="Keep RDKit mols when rdkit
 make changelog VERSION=0.3.3   # draft; does not write files
 ```
 
-How to cut a release (compile `CHANGELOG.md`, commit, **then** tag): [`docs/release.md`](docs/release.md). Fragments: [`changelog.d/README.md`](changelog.d/README.md).
+How to cut a release (tag `vX.Y.Z`; CI compiles `CHANGELOG.md`): [`docs/release.md`](docs/release.md). Fragments: [`changelog.d/README.md`](changelog.d/README.md).
 
 ### Publishing to PyPI (trusted publishing)
 

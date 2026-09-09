@@ -1,6 +1,6 @@
 # Release
 
-Package version comes from git tags ([hatch-vcs](https://github.com/ofek/hatch-vcs)), not `pyproject.toml`. Compile the changelog onto the commit you tag so `git checkout vX.Y.Z` has that version’s notes.
+Package version comes from git tags ([hatch-vcs](https://github.com/ofek/hatch-vcs)), not `pyproject.toml`. You do **not** bump a version field, and you do **not** run `towncrier build` locally. Fragments stay in `changelog.d/` until the tag job compiles them.
 
 ## During development
 
@@ -8,32 +8,30 @@ User-facing API, scoring, defaults, errors, or install/publish changes need a to
 
 ```
 make changelog-create TYPE=added NAME=slug MSG="Keep RDKit mols when rdkit=True."
+make changelog VERSION=0.3.3   # optional draft; does not write files
 ```
 
-Skip fragments for internal-only tests, refactors, and tooling. Preview with `make changelog VERSION=X.Y.Z` (does not write files).
+Skip fragments for internal-only tests, refactors, and tooling. Do not run `uv run towncrier build` (without `--draft`): hatch-vcs will invent a `.devN+g…` version and write that into `CHANGELOG.md`.
 
 ## Cut a release
 
-On `main`, with a clean tree:
+On `main`, with fragments committed:
 
 ```
-make changelog VERSION=0.3.3          # preview
-make changelog-release VERSION=0.3.3  # writes CHANGELOG.md, git-rms fragments
-git add CHANGELOG.md changelog.d
-git commit -m "Update CHANGELOG.md for 0.3.3."
 git tag v0.3.3
-git push origin main v0.3.3
+git push origin v0.3.3
 ```
-
-Do not bump a version field. Do not amend the tagged commit. Do not force-push the tag (that re-runs publish).
 
 Pushing `v*` runs `.github/workflows/publish.yml`:
 
 1. `uv build` on the **tagged** commit (hatch-vcs → sdist/wheel version `X.Y.Z`)
 2. Trusted publish to PyPI
-3. GitHub Release from that version’s `CHANGELOG.md` section
+3. `towncrier build --version X.Y.Z` → `CHANGELOG.md`, consume fragments, **new** commit on the default branch (not an amend; the tag is not moved)
+4. GitHub Release from that section
 
-If `CHANGELOG.md` already has `## [X.Y.Z]`, the job does not compile again. If you tagged without compiling, it compiles fragments as a **new** commit on the default branch (the tag itself stays unchanged). Prefer compiling before the tag so the notes live on `vX.Y.Z`.
+Do not force-push the tag (that re-runs publish). If `CHANGELOG.md` already has `## [X.Y.Z]`, towncrier is skipped.
+
+`make changelog-release VERSION=X.Y.Z` is only for a local dry-run you intend to discard, or for recovering if CI could not fast-forward `main`.
 
 ## One-time PyPI trusted publishing
 
