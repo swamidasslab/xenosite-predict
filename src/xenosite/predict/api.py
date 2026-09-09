@@ -215,9 +215,9 @@ def list_models(
         ok = spec in available and not info.blocked_reason
         reason = info.blocked_reason or ("" if ok else (default_reason or "not on this backend"))
         if ok and bname == "onnx" and info.name not in ("bioactivation",):
-            from .features import _ob
+            from xenosite.predict.v1.features._ob import installed as openbabel_installed
 
-            if not _ob.installed():
+            if not openbabel_installed():
                 ok = False
                 reason = "OpenBabel is required for ONNX descriptors (uv add openbabel)"
         if ok and bname == "onnx" and info.name == "bioactivation":

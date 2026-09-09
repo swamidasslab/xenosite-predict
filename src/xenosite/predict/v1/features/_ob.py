@@ -1,6 +1,10 @@
 """Internal OpenBabel access. Not part of the public ``xenosite.predict`` API.
 
-Importing this module does not load OpenBabel. Bindings load on first use.
+OpenBabel remains a required install until a scoring version does not need it.
+Importing this module — or ``xenosite.predict`` / ``v1`` / ``v2`` — does not
+load the bindings. They load on first v0/v1 ONNX descriptor use (``load()``),
+not on ``list_models`` or HTTP predict.
+
 PyPI ships OpenBabel **3.2.x** wheels (``uv add openbabel``). The dump oracle
 is Debian OpenBabel **2.4.1**; ``GetHyb()`` is wrapped to that 2.4 behavior
 (halogens 0, aromatic sulfur 3). Dump-vs-feature tests catch remaining 3.x drift.

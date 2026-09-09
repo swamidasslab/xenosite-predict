@@ -389,7 +389,11 @@ def test_molgraph_all_shortest_paths_can_exceed_single_path():
 
 
 def test_import_does_not_require_openbabel():
-    """Package import must succeed on hosts without OpenBabel and must not bind it."""
+    """Package import must succeed on hosts without OpenBabel and must not bind it.
+
+    Broader isolation (v1/v2, list_models, HTTP vs ONNX) is in
+    ``tests/test_openbabel_lazy.py``.
+    """
     import os
     import subprocess
     import sys
@@ -402,6 +406,7 @@ def test_import_does_not_require_openbabel():
         "import xenosite.predict as xp\n"
         "assert callable(xp.predict)\n"
         "assert _ob._CACHE is None\n"
+        "assert 'openbabel' not in __import__('sys').modules\n"
     )
     env = dict(os.environ)
     env["PYTHONPATH"] = str(ROOT / "src") + os.pathsep + env.get("PYTHONPATH", "")

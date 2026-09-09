@@ -22,9 +22,9 @@ class BaseRunner(ModelRunner):
         if self.blocked_reason:
             return False
         if getattr(backend, "name", None) == "onnx":
-            from ..features import _ob
+            from xenosite.predict.v1.features._ob import installed as openbabel_installed
 
-            if not _ob.installed():
+            if not openbabel_installed():
                 return False
             key = "ndealk" if self.name in ("ndealk", "isozyme") else self.name
             return all(backend.has_head(key, h) for h in self.onnx_heads)
