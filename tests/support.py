@@ -155,6 +155,16 @@ def serialize_molecule_results(mol) -> list[dict]:
             val = getattr(r, key, None)
             if val is not None:
                 rec[key] = _jsonish(val)
+        mets = getattr(r, "metabolite", None)
+        if mets:
+            rec["metabolite"] = [
+                {
+                    k: _jsonish(getattr(m, k))
+                    for k in ("smiles", "atom", "pathway", "score")
+                    if getattr(m, k, None) is not None
+                }
+                for m in mets
+            ]
         out.append(rec)
     return out
 

@@ -14489,5 +14489,126 @@
         "pair_idx": null
       }
     ]
+  },
+  {
+    "smiles": "C=Cc1ccccc1",
+    "name": "styrene",
+    "model": "bioactivation",
+    "results": [
+      {
+        "model": "bioactivation",
+        "model_version": "1",
+        "mol": 0.8470294131407049,
+        "atom": [
+          0.7068366293250241,
+          0.7068366293250241,
+          0.007055768415324071,
+          0.29664341632646574,
+          0.251325076710454,
+          0.20562103636752838,
+          0.2537059054313062,
+          0.007055768415324071
+        ],
+        "metabolite": [
+          {
+            "smiles": "C1=CC=C(C2CO2)C=C1",
+            "atom": [
+              0.0,
+              1.0
+            ],
+            "pathway": "Epoxidation",
+            "score": 0.7068366293250241
+          },
+          {
+            "smiles": "/C=C\\C1=CC2OC2C=C1",
+            "atom": [
+              5.0,
+              6.0
+            ],
+            "pathway": "Epoxidation",
+            "score": 0.19421150327960546
+          },
+          {
+            "smiles": "/C=C\\C1=CC=CC2OC12",
+            "atom": [
+              3.0,
+              4.0
+            ],
+            "pathway": "Epoxidation",
+            "score": 0.1420248158398969
+          },
+          {
+            "smiles": "/C=C\\C1=CC=CC(=O)C1=O",
+            "atom": [
+              3.0,
+              4.0
+            ],
+            "pathway": "QuinoneFormation",
+            "score": 0.11486016045783012
+          },
+          {
+            "smiles": "/C=C\\C1=CC(=O)C=CC1=O",
+            "atom": [
+              3.0,
+              6.0
+            ],
+            "pathway": "QuinoneFormation",
+            "score": 0.07383376952369819
+          },
+          {
+            "smiles": "/C=C\\C1=CC(=O)C(=O)C=C1",
+            "atom": [
+              4.0,
+              5.0
+            ],
+            "pathway": "QuinoneFormation",
+            "score": 0.014159463847350043
+          },
+          {
+            "smiles": "/C=C\\C12C=CC=CC1O2",
+            "atom": [
+              7.0,
+              2.0
+            ],
+            "pathway": "Epoxidation",
+            "score": 0.0070557684153240464
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "smiles": "C#CC(O)(C=CCl)CC",
+    "name": "ethchlorvynol",
+    "model": "bioactivation",
+    "results": [
+      {
+        "model": "bioactivation",
+        "model_version": "1",
+        "mol": 0.8657877934659785,
+        "atom": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.6880902856949891,
+          0.6880902856949891,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metabolite": [
+          {
+            "smiles": "C#CC(O)(CC)C1OC1Cl",
+            "atom": [
+              4.0,
+              5.0
+            ],
+            "pathway": "Epoxidation",
+            "score": 0.6880902856949891
+          }
+        ]
+      }
+    ]
   }
 ]

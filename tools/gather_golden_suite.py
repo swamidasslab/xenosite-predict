@@ -62,6 +62,8 @@ def _gather_one(task: tuple[str, str]) -> dict:
     from xenosite.predict import predict
     from xenosite.predict.backends.legacy import LegacyTestBackend
 
+    # Bioactivation loads phase1/TF + several nets; allow a long first request.
+    timeout = 600.0 if model == "bioactivation" else 120.0
     rec: dict = {
         "smiles": smiles,
         "name": _name_for(smiles),
@@ -70,7 +72,11 @@ def _gather_one(task: tuple[str, str]) -> dict:
         "results": [],
     }
     try:
-        mol = predict(smiles, models=[model], backend=LegacyTestBackend(_LEGACY_URL))
+        mol = predict(
+            smiles,
+            models=[model],
+            backend=LegacyTestBackend(_LEGACY_URL, timeout=timeout),
+        )
         rec["smiles"] = mol.smiles
         rec["results"] = serialize_molecule_results(mol)
     except Exception as exc:
@@ -85,7 +91,7 @@ def _failing_smiles(models: list[str] | None = None) -> list[str]:
     golden = load_golden_suite(merge_smoke=True)
     cache = load_cache(DEFAULT_CACHE)
     suite_models = list(model_set) if model_set else [
-        m for m in SUITE_MODELS if m not in ("phase1", "bioactivation")
+        m for m in SUITE_MODELS if m not in ("phase1",)
     ]
     report = analyze_suite(golden, cache, models=suite_models, workers=default_workers())
     if model_set:
@@ -224,7 +230,10 @@ def main(argv: list[str] | None = None) -> int:
             if rec.get("error"):
                 print(f"ERROR {errors[-1]}", file=sys.stderr, flush=True)
     else:
+        # Apply + flush inside on_result so a killed run keeps completed rows
+        # (map_progress only returns after all futures finish).
         def _on_gather(rec: dict, bar) -> None:
+            _apply(rec)
             if rec.get("error"):
                 bar.write(f"ERR {rec['model']} {rec['name'][:32]}: {rec['error'][:60]}")
 
@@ -233,15 +242,14 @@ def main(argv: list[str] | None = None) -> int:
             initializer=_worker_init,
             initargs=(args.url, names),
         ) as pool:
-            for rec in map_progress(
+            map_progress(
                 _gather_one,
                 pending,
                 pool=pool,
                 desc=f"gather golden ({workers}w, {len(pending)} pairs)",
                 unit="pair",
                 on_result=_on_gather,
-            ):
-                _apply(rec)
+            )
 
     _save_out(args.out, rows)
 
