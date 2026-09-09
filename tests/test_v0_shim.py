@@ -6,6 +6,8 @@ import importlib
 import sys
 import warnings
 
+import pytest
+
 from xenosite.predict.registry import ensure_builtins, load_runner, registered
 from xenosite.predict.v1.legacy import LegacyRunner
 
@@ -44,3 +46,9 @@ def test_version_0_runner_is_legacy_wrap():
     assert ("epoxidation", "1") in names
     assert load_runner("epoxidation", "1").version == "1"
     assert not isinstance(load_runner("epoxidation", "1"), LegacyRunner)
+
+
+def test_v2_import_raises_not_implemented():
+    sys.modules.pop("xenosite.predict.v2", None)
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        importlib.import_module("xenosite.predict.v2")

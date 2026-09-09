@@ -18,7 +18,8 @@ which models are affected.
 
 Same ONNX weights in both cases. `Result.model_version` is `"0"` or `"1"` to match.
 
-Implementation: version `"1"` is `xenosite.predict.v1` (principled defaults). Version `"0"` wraps those runners (`xenosite.predict.v1.legacy.LegacyRunner`). Importing `xenosite.predict.v0` warns; `predict(..., models=[(name, "0")])` does not. The unused RDKit-first stub is `xenosite.predict.v2`.
+Implementation: version `"1"` is `xenosite.predict.v1` (principled defaults). Version `"0"` wraps those runners (`xenosite.predict.v1.legacy.LegacyRunner`). Importing `xenosite.predict.v0` warns; `predict(..., models=[(name, "0")])` does not. Importing `xenosite.predict.v2` raises `NotImplementedError` (RDKit-first / multitask, not implemented).
+
 `_parameter` overlays individual flags (tests and ablations only).
 
 ```python
