@@ -58,7 +58,7 @@ ensure_builtins()
 assert not openbabel_loaded()
 xp.list_models(env={})
 assert not openbabel_loaded()
-from xenosite.predict.features import _ob
+from xenosite.predict.v1.features import _ob
 assert _ob._CACHE is None
 assert not openbabel_loaded()
 """
@@ -98,7 +98,7 @@ be = HttpBackend(
 assert not openbabel_loaded()
 predict("CCO", model="epoxidation", backend=be)
 assert not openbabel_loaded()
-from xenosite.predict.features import _ob
+from xenosite.predict.v1.features import _ob
 assert _ob._CACHE is None
 """
     proc = _run(code)
@@ -115,7 +115,7 @@ from xenosite.predict.backends.onnx import OnnxBackend
 assert not openbabel_loaded()
 list_models(backend=OnnxBackend(onnx_root()))
 assert not openbabel_loaded()
-from xenosite.predict.features import _ob
+from xenosite.predict.v1.features import _ob
 assert _ob._CACHE is None
 """
     proc = _run(code)
@@ -132,7 +132,7 @@ from xenosite.predict.backends.onnx import OnnxBackend
 assert not openbabel_loaded()
 predict("CCO", model="epoxidation", backend=OnnxBackend(onnx_root()))
 assert openbabel_loaded()
-from xenosite.predict.features import _ob
+from xenosite.predict.v1.features import _ob
 assert _ob._CACHE is not None
 """
     proc = _run(code)
