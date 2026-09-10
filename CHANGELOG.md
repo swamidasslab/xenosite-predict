@@ -10,6 +10,14 @@ release; fragments live in [`changelog.d/`](changelog.d/).
 
 <!-- towncrier release notes start -->
 
+## [0.4.1](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.1) - 2026-09-10
+
+### Changed
+
+- Require xenosite-forest 0.2.5 or newer.
+- Require xenosite-forest 0.2.6 and enumerate expanded Glutathionation electrophiles on GSH/protein/DNA/cyanide heads.
+
+
 ## [0.4.0](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.0) - 2026-09-09
 
 ### Added
