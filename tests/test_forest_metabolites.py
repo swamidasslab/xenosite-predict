@@ -8,7 +8,7 @@ from xenosite.forest.base import can_smi
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
-from xenosite.predict.conjugates import NO_THIOL_RULESET, bare_smiles
+from xenosite.predict.conjugates import HEADS, NO_THIOL_RULESET, bare_smiles
 from xenosite.predict.features import _ob
 from xenosite.predict.forest import (
     ForestMapIndexing,
@@ -397,7 +397,7 @@ def test_ugt_metabolites_are_star_adducts():
     assert dummy.GetProp("atomLabel") == "GlcA"
     assert phenol[0].pathway == "Glucuronidation"
     assert phenol[0].score == pytest.approx(0.81)
-    assert phenol[0].atom == [0, 1]
+    assert phenol[0].atom == [0]
     assert 0 in phenol[0].map_idx
     assert len(mets) == _unique_forest_count(rdmol, "CJ.Glucuronidation")
 
@@ -486,6 +486,84 @@ def test_dna_and_cyanide_star_adducts_skip_thiol():
     assert gsh_thiol
     assert any(bare_smiles(m.smiles) == "*SCC" for m in gsh_thiol)
     assert thiol_mol.results[1].metabolite is None
+
+
+def _attach_one(model: str, smiles: str):
+    rdmol, mol = parse_smiles(smiles)
+    n = mol.atoms.num
+    if model == "ugt":
+        mol.results = [AtomResult(model=model, model_version="0", atom=[0.0] * n)]
+    else:
+        mol.results = [
+            MolAtomResult(model=model, model_version="0", mol=0.5, atom=[0.0] * n)
+        ]
+    attach_metabolites(mol, rdmol=rdmol)
+    return rdmol, mol
+
+
+# One probe per forest conjugation SMARTS (UGT 2; Glutathionation 9 classes).
+_UGT_SMARTS = (
+    ("acid", "c1ccccc1C(=O)O"),
+    ("phenol", PHENOL),
+)
+_GSH_SMARTS = (
+    ("epoxide", STYRENE_OXIDE),
+    ("chloride", "ClCc1ccccc1"),
+    ("bromide", "BrCc1ccccc1"),
+    ("iodide", "ICc1ccccc1"),
+    ("fluoride", "FCc1ccccc1"),
+    ("thiol", ETHANETHIOL),
+    ("alkene", "C=CC"),
+    ("michael", "O=C1C=CC(=O)C=C1"),
+    ("aldehyde", "CC=O"),
+    ("aziridine", "C1CN1c1ccccc1"),
+    ("sulfonate", "COS(=O)(=O)C"),
+    ("isocyanate", "O=C=Nc1ccccc1"),
+    ("isothiocyanate", "S=C=Nc1ccccc1"),
+)
+
+
+def _conjugate_head_cases() -> list[tuple[str, str, str, bool]]:
+    cases: list[tuple[str, str, str, bool]] = []
+    for smarts, smi in _UGT_SMARTS:
+        cases.append(("ugt", smarts, smi, True))
+    for model in ("reactivity.gsh", "reactivity.protein"):
+        for smarts, smi in _GSH_SMARTS:
+            cases.append((model, smarts, smi, True))
+    for model in ("reactivity.dna", "reactivity.cyanide"):
+        for smarts, smi in _GSH_SMARTS:
+            cases.append((model, smarts, smi, smarts != "thiol"))
+    return cases
+
+
+_CONJUGATE_HEAD_CASES = _conjugate_head_cases()
+
+
+def test_conjugate_head_cases_cover_all_heads():
+    assert {m for m, _s, _smi, _e in _CONJUGATE_HEAD_CASES} == set(HEADS)
+
+
+@pytest.mark.parametrize(
+    "model, smarts, smiles, expect",
+    _CONJUGATE_HEAD_CASES,
+    ids=[f"{m}:{smarts}" for m, smarts, _smi, _e in _CONJUGATE_HEAD_CASES],
+)
+def test_forest_electrophiles_via_all_conjugate_heads(model, smarts, smiles, expect):
+    """Each predict conjugation head enumerates every forest 0.2.6 SMARTS it owns."""
+    head = HEADS[model]
+    rdmol, mol = _attach_one(model, smiles)
+    mets = mol.results[0].metabolite
+    forest_n = _unique_forest_count(rdmol, head.ruleset)
+    if expect:
+        assert mets, f"{model}/{smarts} produced no metabolites for {smiles}"
+        assert all("*" in m.smiles for m in mets)
+        assert all(head.label in m.smiles for m in mets)
+        if head.pathway:
+            assert all(m.pathway == head.pathway for m in mets)
+        assert len(mets) == forest_n
+    else:
+        assert mets is None
+        assert forest_n == 0
 
 
 def test_attach_metabolites_multiple_model_results():

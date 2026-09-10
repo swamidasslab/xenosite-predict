@@ -1,9 +1,11 @@
 """Conjugation heads: map predict models onto forest Phase II rulesets.
 
-Forest 0.2.3+ ships Glucuronidation, Glutathionation, and
+Forest 0.2.6+ ships Glucuronidation, Glutathionation, and
 ``GlutathionationNoThiol``. UGT and GSH/protein use the built-in rulesets.
-DNA and cyanide use ``GlutathionationNoThiol`` (epoxide, C-Cl, terminal
-alkene; no thiol disulfide).
+Glutathionation covers epoxide, C–halogen (F/Cl/Br/I), thiol, terminal
+alkene, Michael acceptors, aldehydes, aziridines, sulfonate esters, and
+isocyanates. DNA and cyanide use ``GlutathionationNoThiol`` (same set
+without thiol disulfide).
 
 Dummy ``*`` atoms are written as **CXSMILES** on ``Metabolite.smiles`` (the
 field is still named ``smiles``). The CX ``atomLabel`` is ``GlcA`` / ``GSH`` /
