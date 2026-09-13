@@ -3,6 +3,9 @@
 Production Flask wires ``metabolism1`` to ``ndealk1.PyMolPredictor``. The unused
 ``metabolism1.predictor.PyMolPredictor`` path uses MOPAC+SmartCYP and is **not**
 this model. See docs/vendored-diffs.md.
+
+Bond scores on sites without nitrogen are forced to 0. Molecules with no nitrogen
+short-circuit to an all-zero bond vector (no ONNX / legacy call).
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ _OUT_TO_API = {
     "3A4": "3a4",
     "HLM": "hlm",
 }
+_ATOMIC_NUM_NITROGEN = 7
 
 
 class NdealkFamily(BaseRunner):
@@ -46,6 +50,9 @@ class NdealkFamily(BaseRunner):
             raise WeightsNotFound(
                 "ndealk/isozyme ONNX missing bond. Run make convert-onnx MODEL=ndealk"
             )
+        if not self._molecule_has_nitrogen(molecule):
+            self._append_zero_bonds(molecule)
+            return
         mol = self.rdkit_mol(molecule)
         rows = ndealk_bond_rows(
             mol,
@@ -66,6 +73,9 @@ class NdealkFamily(BaseRunner):
 
     def from_legacy(self, molecule: Molecule, native: Any) -> None:
         # native: {isozyme: {frozenset or "i-j": score}}
+        if not self._molecule_has_nitrogen(molecule):
+            self._append_zero_bonds(molecule)
+            return
         if self.isozyme_mode:
             for out in ISOZYMES:
                 site = native.get(out) or native.get(out.upper()) or {}
@@ -73,6 +83,20 @@ class NdealkFamily(BaseRunner):
         else:
             site = native.get("hlm") or native.get("HLM") or native.get("site") or {}
             self._append_bond_map(molecule, "ndealk", site)
+
+    def _molecule_has_nitrogen(self, molecule: Molecule) -> bool:
+        mol = self.rdkit_mol(molecule)
+        return any(atom.GetAtomicNum() == _ATOMIC_NUM_NITROGEN for atom in mol.GetAtoms())
+
+    def _append_zero_bonds(self, molecule: Molecule) -> None:
+        zeros = [0.0] * len(molecule.bonds.idx)
+        if self.isozyme_mode:
+            for api_name in ISOZYMES:
+                append_bond(
+                    molecule, model=f"isozyme.{api_name}", version=self.version, bond=zeros
+                )
+        else:
+            append_bond(molecule, model="ndealk", version=self.version, bond=zeros)
 
     def _ndealk_site_mode(self, molecule: Molecule) -> str:
         mode = molecule._parameter.get("ndealk_site_mode", "principled")
@@ -111,6 +135,17 @@ class NdealkFamily(BaseRunner):
             site = self._site_from_row_scores(molecule, rows, pred, names)
             self._append_bond_map(molecule, "ndealk", site)
 
+    def _zero_non_nitrogen_bonds(self, molecule: Molecule, bond_pred: list[float]) -> list[float]:
+        rdmol = self.rdkit_mol(molecule)
+        out: list[float] = []
+        for score, (a, b) in zip(bond_pred, molecule.bonds.idx):
+            has_n = (
+                rdmol.GetAtomWithIdx(int(a)).GetAtomicNum() == _ATOMIC_NUM_NITROGEN
+                or rdmol.GetAtomWithIdx(int(b)).GetAtomicNum() == _ATOMIC_NUM_NITROGEN
+            )
+            out.append(float(score) if has_n else 0.0)
+        return out
+
     def _append_bond_map(self, molecule: Molecule, model: str, site: dict) -> None:
         current = []
         pred = []
@@ -126,6 +161,7 @@ class NdealkFamily(BaseRunner):
         bond_pred = reorder_by_bond(pred, current, molecule.bonds.idx, fill=0.0)
         if self._ndealk_site_mode(molecule) == "principled":
             bond_pred = self.symmetrize_bond_scores(molecule, bond_pred)
+        bond_pred = self._zero_non_nitrogen_bonds(molecule, bond_pred)
         append_bond(molecule, model=model, version=self.version, bond=bond_pred)
 
 

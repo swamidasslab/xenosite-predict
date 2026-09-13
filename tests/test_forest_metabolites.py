@@ -254,7 +254,7 @@ def test_attach_metabolites_bond_result():
     attach_metabolites(mol, rdmol=rdmol)
     mets = mol.results[0].metabolite
     assert mets
-    assert len(mets) == _unique_forest_count(rdmol, "UO.Dealkylation")
+    assert len(mets) == _unique_forest_count(rdmol, "ND")
     _assert_sorted_by_score_desc(mets)
     scored = [m for m in mets if m.atom == [0, 1]]
     assert scored

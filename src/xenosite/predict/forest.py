@@ -50,7 +50,7 @@ from .types import (
 # Conjugation heads live in :mod:`xenosite.predict.conjugates`.
 _MODEL_RULESETS: dict[str, str] = {
     "epoxidation": "SO.Epoxidation",
-    "ndealk": "UO.Dealkylation",
+    "ndealk": "ND",
     "quinone": "QF.QuinoneFormation",
     "bioactivation": "BA",
     "phase1.stable_oxygenation": "SO",
@@ -113,7 +113,7 @@ def ruleset_for_model(model: str) -> Optional[str]:
     if model in _MODEL_RULESETS:
         return _MODEL_RULESETS[model]
     if model.startswith("isozyme."):
-        return "UO.Dealkylation"
+        return "ND"
     return None
 
 
