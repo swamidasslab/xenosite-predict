@@ -437,17 +437,27 @@ def enumerate_metabolites(
     Cleavage rules (hydrolysis, dealkylation, …) return one mol per fragment; each
     fragment is yielded as its own metabolite (same pathway and site).
     Conjugation rulesets replace the added group with a dummy ``*``.
+
+    Rows are collapsed with the XenoSite UI identity key (pathway + product SMILES +
+    sorted topological ranks of the site). Rank the reactant **before** forest runs,
+    because metabolize kekulizes/tags the mol in place and that breaks ranking.
     """
     mode = forest_site_indexing()
     map_mode = forest_map_indexing()
     n_atoms = rdmol.GetNumAtoms()
     star = is_star_conjugate(ruleset_spec)
+    # Snapshot topology before forest mutates ``rdmol`` (kekulize + atom maps).
+    topo_ranks = list(
+        Chem.CanonicalRankAtoms(rdmol, includeChirality=False, breakTies=False)
+    )
+    seen: set[tuple[str, str, tuple[int, ...]]] = set()
     rs = load_conjugate_ruleset(ruleset_spec)
     for (rule, site), mols in _rule_metabolites(rs, rdmol, unique=True):
         if not mols:
             continue
         rdkit_site = forest_site_to_rdkit(site, n_atoms, mode)
         pathway = pathway_name(rule)
+        rank_key = tuple(sorted(topo_ranks[i] for i in rdkit_site))
         for product in mols:
             if product is None or product.GetNumAtoms() == 0:
                 continue
@@ -456,6 +466,10 @@ def enumerate_metabolites(
             smiles = can_smi(rdmol=product)
             if not smiles:
                 continue
+            identity = (pathway, smiles[0], rank_key)
+            if identity in seen:
+                continue
+            seen.add(identity)
             yield pathway, rdkit_site, smiles[0], product
 
 

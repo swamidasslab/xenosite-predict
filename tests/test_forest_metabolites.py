@@ -284,8 +284,8 @@ def test_attach_metabolites_mol_atom_pair_result():
         )
 
 
-def test_topologically_equivalent_soms_both_emitted():
-    """RDKit-symmetric sites with the same product SMILES stay separate rows."""
+def test_topologically_equivalent_soms_collapsed():
+    """UI/forest topo identity: one row per pathway + product + topo ranks."""
     from tests.v0_legacy.rdkit_equiv import bond_symmetry_groups
 
     rdmol, mol = parse_smiles(BENZENE)
@@ -307,10 +307,9 @@ def test_topologically_equivalent_soms_both_emitted():
         for m in mol.results[0].metabolite or []
         if m.pathway == "Epoxidation" and m.smiles == "C1=CC2OC2C=C1"
     ]
-    assert len(epox) == 2
-    sites = {tuple(m.atom or []) for m in epox}
-    assert sites == {(0, 1), (0, 5)}
-    assert all(m.map_idx for m in epox)
+    assert len(epox) == 1
+    assert epox[0].atom in ([0, 1], [0, 5])
+    assert epox[0].map_idx
 
     forest_keys = _forest_metabolite_keys(rdmol, "SO.Epoxidation")
     attached_keys = _attached_metabolite_keys(mol.results[0].metabolite)
@@ -319,15 +318,15 @@ def test_topologically_equivalent_soms_both_emitted():
 
 
 def test_exact_duplicate_forest_hits_deduped():
-    """Identical pathway + site + product from multiple forest rules → one row."""
+    """Identical pathway + product + topo site from multiple forest rules → one row."""
     rdmol, mol = parse_smiles(PROPANE)
     raw_cc = [
         (pathway, tuple(site_rdkit_indices(site)), smiles)
         for pathway, site, smiles, _ in enumerate_metabolites(rdmol, "UO")
         if smiles == "CC"
     ]
-    assert len(raw_cc) == 2
-    assert raw_cc[0][1] == raw_cc[1][1] == (0, 1)
+    assert len(raw_cc) == 1
+    assert raw_cc[0][1] == (0, 1)
 
     mol.results = [
         AtomBondResult(
