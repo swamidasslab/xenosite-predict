@@ -10,6 +10,17 @@ release; fragments live in [`changelog.d/`](changelog.d/).
 
 <!-- towncrier release notes start -->
 
+## [0.4.2](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.2) - 2026-09-14
+
+### Changed
+
+- Require xenosite-forest 0.2.8; collapse enumerate metabolites by UI topo identity (pathway + product + ranks).
+
+### Fixed
+
+- Limit ndealk/isozyme metabolites and bond scores to nitrogen-containing sites; map to forest ND.
+
+
 ## [0.4.1](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.1) - 2026-09-10
 
 ### Changed
