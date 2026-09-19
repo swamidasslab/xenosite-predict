@@ -3,14 +3,17 @@
 Site-of-metabolism *scores* come from :func:`predict`; structure enumeration is
 delegated to `Metabolic Forest <https://github.com/swamidasslab/xenosite-forest>`_.
 
-``xenosite.forest`` is still v0. Two indexing conventions are detected separately:
+``xenosite.forest`` 0.6.0+ reports Phase I sites as 0-based atom indexes
+(the same scale as ``GetIdx()`` / ``RuleSet.metabolites``). The old ``1.h`` /
+``2.3`` ``phase1=True`` labels are gone. Two indexing conventions are still
+detected separately so mixed installs keep working:
 
 - **Site frozensets** (:func:`forest_site_indexing`) — probe ``CC`` + ``SO``.
 - **AtomTracker parent maps** (:func:`forest_map_indexing`) — probe ``CC`` +
   ``SO`` product ``react_atom_idx`` vs ``old_mapno``.
 
 Sites are normalized to 0-based RDKit on the parent; ``Metabolite.map_idx`` uses
-1-based parent atom numbers (0 = new atom), per forest AtomTracker conventions.
+1-based parent atom numbers (0 = new atom). Map numbers cannot be 0-based.
 """
 
 from __future__ import annotations
@@ -144,18 +147,18 @@ def site_rdkit_indices(site: frozenset[int]) -> list[int]:
 
 def _site_indexing_from_env() -> Optional[ForestSiteIndexing]:
     raw = os.environ.get(_ENV_SITE_INDEXING, "").strip().lower()
-    if raw in ("rdkit_zero", "rdkit", "0", "zero"):
+    if raw in ("rdkit_zero", "rdkit", "0", "zero", "phase1"):
         return ForestSiteIndexing.RDKIT_ZERO
-    if raw in ("atom_number_one", "one", "1", "phase1"):
+    if raw in ("atom_number_one", "one", "1"):
         return ForestSiteIndexing.ATOM_NUMBER_ONE
     return None
 
 
 def _map_indexing_from_env() -> Optional[ForestMapIndexing]:
     raw = os.environ.get(_ENV_MAP_INDEXING, "").strip().lower()
-    if raw in ("rdkit_zero", "rdkit", "0", "zero"):
+    if raw in ("rdkit_zero", "rdkit", "0", "zero", "phase1"):
         return ForestMapIndexing.RDKIT_ZERO
-    if raw in ("atom_number_one", "one", "1", "phase1"):
+    if raw in ("atom_number_one", "one", "1"):
         return ForestMapIndexing.ATOM_NUMBER_ONE
     return None
 
