@@ -10,6 +10,13 @@ release; fragments live in [`changelog.d/`](changelog.d/).
 
 <!-- towncrier release notes start -->
 
+## [0.4.3](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.3) - 2026-09-19
+
+### Changed
+
+- Require xenosite-forest 0.6.0; Phase I metabolite sites are 0-based atom indexes.
+
+
 ## [0.4.2](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.2) - 2026-09-14
 
 ### Changed
