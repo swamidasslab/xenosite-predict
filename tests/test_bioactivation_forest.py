@@ -100,6 +100,20 @@ def _forest_ba_index(
     return sites, structs
 
 
+def _inchi_connectivity(smiles: str) -> str | None:
+    """InChIKey connectivity layer (stereo/kekule-insensitive product identity)."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    try:
+        key = Chem.MolToInchiKey(mol)
+    except Exception:
+        return None
+    if not key:
+        return None
+    return key.split("-", 1)[0]
+
+
 def _site_covered(
     pathway: str,
     site: frozenset[int],
@@ -128,6 +142,11 @@ def _assert_golden_sites_covered(row: dict) -> None:
     if not mets:
         return
     forest, structs = _forest_ba_index(smiles)
+    forest_conn = {
+        (pw, key)
+        for pw, smi in structs
+        if (key := _inchi_connectivity(smi))
+    }
     missing = []
     for m in mets:
         pw = bioactivation_pathway_name(m["pathway"])
@@ -137,6 +156,11 @@ def _assert_golden_sites_covered(row: dict) -> None:
             continue
         canon = can_smi(line=golden_smi) if golden_smi else []
         if canon and (pw, canon[0]) in structs:
+            continue
+        # Forest 0.6.0 kekulize + topo collapse can pick a stereo/kekule
+        # representative whose site indexes differ from golden PBS.
+        key = _inchi_connectivity(golden_smi)
+        if key and (pw, key) in forest_conn:
             continue
         if golden_smi and Chem.MolFromSmiles(golden_smi) is None:
             continue
@@ -170,9 +194,11 @@ def test_bioactivation_pathway_aliases():
     [STYRENE, ETHCHLORVYNOL, APAP, NITRO, THIOPHENE, "CC", "C=C", "c1ccccc1"],
 )
 def test_ba_adapter_matches_native_forest(smiles):
-    rdmol = Chem.MolFromSmiles(smiles)
-    assert rdmol is not None
-    assert _adapter_keys(rdmol) == _native_forest_keys(rdmol)
+    # Independent mols: forest kekulizes the reactant in place (0.5.2+).
+    adapter_mol = Chem.MolFromSmiles(smiles)
+    native_mol = Chem.MolFromSmiles(smiles)
+    assert adapter_mol is not None and native_mol is not None
+    assert _adapter_keys(adapter_mol) == _native_forest_keys(native_mol)
 
 
 def test_styrene_ba_includes_vinyl_and_ring_epoxidation():

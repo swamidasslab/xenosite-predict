@@ -715,18 +715,30 @@ def test_cc_stable_oxygenation_probe_is_rdkit_zero():
 
 def test_forest_phase1_true_sites_are_rdkit_zero_ints():
     """Forest 0.6.0 ``phase1=True`` yields 0-based indexes, not ``1.h`` / ``2.3``."""
-    from xenosite.forest import bfs
+    from xenosite.forest import PhaseOneRS
 
-    smiles, steps = next(bfs(["CC", "CCO"], phase1=True, outmols=False, depth=1))
-    assert smiles == ["CC", "CCO"]
-    rule, site = steps[0]
+    _smi, path, _mols = next(
+        PhaseOneRS.find_path(
+            Chem.MolFromSmiles("CC"),
+            Chem.MolFromSmiles("CCO"),
+            phase1=True,
+            depth=1,
+        )
+    )
+    rule, site = path[0]
     assert rule == "Hydroxylation"
     assert site == frozenset({0})
     assert all(isinstance(i, int) for i in site)
 
-    smiles, steps = next(bfs(["C=C", "C1OC1"], phase1=True, outmols=False, depth=1))
-    assert smiles[0] == "C=C"
-    rule, site = steps[0]
+    _smi, path, _mols = next(
+        PhaseOneRS.find_path(
+            Chem.MolFromSmiles("C=C"),
+            Chem.MolFromSmiles("C1OC1"),
+            phase1=True,
+            depth=1,
+        )
+    )
+    rule, site = path[0]
     assert rule == "Epoxidation"
     assert site == frozenset({0, 1})
 
