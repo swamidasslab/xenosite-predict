@@ -1,7 +1,7 @@
 """Forest topological emission must match XenoSite UI identity keys.
 
-Requires ``xenosite-forest>=0.2.8`` (pathway + sorted topo ranks + product SMILES).
-Fails on 0.2.7, which still emits duplicate topo-equivalent sites.
+Requires ``xenosite-forest>=0.6.0`` (0-based Phase I sites; topo identity is
+pathway + sorted ranks + product SMILES).
 """
 
 from __future__ import annotations

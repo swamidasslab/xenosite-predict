@@ -90,7 +90,12 @@ class Phase1SiteTable:
 
 
 def phase1_site_strings(rule_name: str, site_rdkit_zero: frozenset[int]) -> frozenset[str]:
-    """``convert_site_to_phase1_format``: 0-based RDKit → 1-based ``N.h`` / ``a.b``."""
+    """Map a 0-based RDKit site onto OpenBabel Class-row keys (``N.h`` / ``a.b``).
+
+    Forest 0.6.0 ``phase1=True`` already reports 0-based indexes. These strings
+    are only for :func:`get_prob_for_one_site`, which walks 1-based Bond_and_LonePair
+    ``_index`` values (``m.gid.atom1.atom2``). Do not feed them back into forest.
+    """
     kind = PHASE1_SITES_ON.get(rule_name.split("_", 1)[0], "bonds")
     ones = [i + 1 for i in site_rdkit_zero]
     if kind == "atom_hydrogen":

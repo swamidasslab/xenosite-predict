@@ -698,8 +698,6 @@ def test_forest_site_matches_rdkit_mol():
 
 def test_cc_stable_oxygenation_probe_is_rdkit_zero():
     """Ethane + SO: hydroxylation site index 0 ⇒ forest uses RDKit 0-based."""
-    import xenosite.forest as xf
-
     forest_site_indexing_for_version.cache_clear()
     mode = forest_site_indexing()
     assert mode == ForestSiteIndexing.RDKIT_ZERO
@@ -713,6 +711,36 @@ def test_cc_stable_oxygenation_probe_is_rdkit_zero():
     assert hydroxy
     assert any(0 in s for s in hydroxy)
     assert all(max(s) < rdmol.GetNumAtoms() for s in hydroxy)
+
+
+def test_forest_phase1_true_sites_are_rdkit_zero_ints():
+    """Forest 0.6.0 ``phase1=True`` yields 0-based indexes, not ``1.h`` / ``2.3``."""
+    from xenosite.forest import PhaseOneRS
+
+    _smi, path, _mols = next(
+        PhaseOneRS.find_path(
+            Chem.MolFromSmiles("CC"),
+            Chem.MolFromSmiles("CCO"),
+            phase1=True,
+            depth=1,
+        )
+    )
+    rule, site = path[0]
+    assert rule == "Hydroxylation"
+    assert site == frozenset({0})
+    assert all(isinstance(i, int) for i in site)
+
+    _smi, path, _mols = next(
+        PhaseOneRS.find_path(
+            Chem.MolFromSmiles("C=C"),
+            Chem.MolFromSmiles("C1OC1"),
+            phase1=True,
+            depth=1,
+        )
+    )
+    rule, site = path[0]
+    assert rule == "Epoxidation"
+    assert site == frozenset({0, 1})
 
 
 def test_forest_site_to_rdkit_one_based_shift():
@@ -730,6 +758,18 @@ def test_one_based_indexing_via_env(monkeypatch):
     assert forest_site_indexing() == ForestSiteIndexing.ATOM_NUMBER_ONE
     forest_site_indexing_for_version.cache_clear()
     monkeypatch.delenv("XENOSITE_FOREST_SITE_INDEXING", raising=False)
+
+
+def test_phase1_env_alias_is_rdkit_zero(monkeypatch):
+    """Forest 0.6.0 Phase I sites are 0-based; the ``phase1`` env alias follows."""
+    monkeypatch.setenv("XENOSITE_FOREST_SITE_INDEXING", "phase1")
+    monkeypatch.setenv("XENOSITE_FOREST_MAP_INDEXING", "phase1")
+    _clear_forest_indexing_caches()
+    assert forest_site_indexing() == ForestSiteIndexing.RDKIT_ZERO
+    assert forest_map_indexing() == ForestMapIndexing.RDKIT_ZERO
+    _clear_forest_indexing_caches()
+    monkeypatch.delenv("XENOSITE_FOREST_SITE_INDEXING", raising=False)
+    monkeypatch.delenv("XENOSITE_FOREST_MAP_INDEXING", raising=False)
 
 
 def test_cc_map_probe_is_rdkit_zero():
