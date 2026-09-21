@@ -10,6 +10,13 @@ release; fragments live in [`changelog.d/`](changelog.d/).
 
 <!-- towncrier release notes start -->
 
+## [0.4.4](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.4) - 2026-09-21
+
+### Changed
+
+- Cap xenosite-forest below 0.7.
+
+
 ## [0.4.3](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.3) - 2026-09-19
 
 ### Changed
