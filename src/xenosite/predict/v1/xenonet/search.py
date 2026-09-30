@@ -16,9 +16,9 @@ from ._unvalidated import warn_unvalidated
 warn_unvalidated()
 
 from rdkit import Chem
-from xenosite.forest import PhaseOneRS
-from xenosite.forest.base import can_smi
-from xenosite.forest.utils import clean, refresh_mol
+from xenosite.forest.legacy import PhaseOneRS
+from xenosite.forest.legacy.base import can_smi
+from xenosite.forest.legacy.utils import clean, refresh_mol
 from xenosite.predict.forest import forest_site_indexing, forest_site_to_rdkit
 
 from .graph import XenoGraph

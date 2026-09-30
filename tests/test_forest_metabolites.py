@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from rdkit import Chem
-from xenosite.forest.base import can_smi
+from xenosite.forest.legacy.base import can_smi
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
@@ -715,7 +715,7 @@ def test_cc_stable_oxygenation_probe_is_rdkit_zero():
 
 def test_forest_phase1_true_sites_are_rdkit_zero_ints():
     """Forest 0.6.0 ``phase1=True`` yields 0-based indexes, not ``1.h`` / ``2.3``."""
-    from xenosite.forest import PhaseOneRS
+    from xenosite.forest.legacy import PhaseOneRS
 
     _smi, path, _mols = next(
         PhaseOneRS.find_path(
@@ -800,7 +800,7 @@ def test_wrong_site_indexing_detection_fails(monkeypatch):
 
 def test_wrong_map_indexing_detection_fails(monkeypatch):
     """Forcing the opposite map convention must fail ethylene ``map_idx`` checks."""
-    from xenosite.forest import load_ruleset
+    from xenosite.forest.legacy import load_ruleset
 
     _clear_forest_indexing_caches()
     detected = forest_map_indexing()
@@ -822,7 +822,7 @@ def test_wrong_map_indexing_detection_fails(monkeypatch):
 
 
 def test_ethylene_epoxidation_map_idx():
-    from xenosite.forest import load_ruleset
+    from xenosite.forest.legacy import load_ruleset
 
     rdmol = Chem.MolFromSmiles(ETHYLENE)
     rs = load_ruleset("SO.Epoxidation")
