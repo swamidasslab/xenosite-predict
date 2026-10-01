@@ -10,6 +10,13 @@ release; fragments live in [`changelog.d/`](changelog.d/).
 
 <!-- towncrier release notes start -->
 
+## [0.4.5](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.5) - 2026-10-01
+
+### Changed
+
+- Require xenosite-forest 0.10.2; attach metabolites via ForestMol/resolve (bioactivation still uses legacy BA).
+
+
 ## [0.4.4](https://github.com/swamidasslab/xenosite-predict/releases/tag/v0.4.4) - 2026-09-21
 
 ### Changed
