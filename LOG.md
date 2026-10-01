@@ -2,7 +2,7 @@
 
 ## 2026-10-01
 
-- Migrated metabolite attach to forest 0.10.2 (`resolve("xf:…")` + `ForestMol` / `metabolize`) against sibling checkout. Sites stay in the input RDKit frame (0.10.2 order-preserving ingest). Product CSMIs are RDKit-recanonicalized. `bioactivation` still enumerates via legacy `BA` (no `xf:Bioactivation`). XenoNet expansion stays on legacy `PhaseOneRS` for golden-fixture parity.
+- Migrated metabolite attach to forest 0.10.2 (`resolve("xf:…")` + `ForestMol` / `metabolize`). Initially wired against sibling checkout; switched to PyPI once `0.10.2` published. Sites stay in the input RDKit frame (order-preserving ingest). Product CSMIs are RDKit-recanonicalized. `bioactivation` still enumerates via legacy `BA` (no `xf:Bioactivation`). XenoNet expansion stays on legacy `PhaseOneRS` for golden-fixture parity.
 
 ## 2026-09-30
 
