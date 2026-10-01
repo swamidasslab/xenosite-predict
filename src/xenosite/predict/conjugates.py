@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from rdkit import Chem
-from xenosite.forest import load_ruleset
-from xenosite.forest.utils import label_star_atoms, mol_to_cxsmiles as _forest_cxsmiles
+from xenosite.forest.legacy import load_ruleset
+from xenosite.forest.legacy.utils import label_star_atoms, mol_to_cxsmiles as _forest_cxsmiles
 
 NO_THIOL_RULESET = "GlutathionationNoThiol"
 

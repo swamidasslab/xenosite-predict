@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 from rdkit import Chem
-from xenosite.forest import load_ruleset
-from xenosite.forest.base import can_smi
+from xenosite.forest.legacy import load_ruleset
+from xenosite.forest.legacy.base import can_smi
 
 from xenosite.predict.forest import (
     bioactivation_pathway_name,

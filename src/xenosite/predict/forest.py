@@ -25,8 +25,8 @@ from functools import lru_cache
 from typing import Collection, Iterator, Optional
 
 from rdkit import Chem
-from xenosite.forest.base import can_smi
-from xenosite.forest.utils import refresh_mol
+from xenosite.forest.legacy.base import can_smi
+from xenosite.forest.legacy.utils import refresh_mol
 
 from .conjugates import (
     HEADS as _CONJUGATE_HEADS,
