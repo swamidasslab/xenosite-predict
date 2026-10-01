@@ -4,23 +4,15 @@ from __future__ import annotations
 
 import pytest
 from rdkit import Chem
-from xenosite.forest.legacy.base import can_smi
+from xenosite.forest import ForestMol, resolve
 
 from xenosite.predict import predict
 from xenosite.predict.backends.onnx import OnnxBackend
 from xenosite.predict.conjugates import HEADS, NO_THIOL_RULESET, bare_smiles
 from xenosite.predict.features import _ob
 from xenosite.predict.forest import (
-    ForestMapIndexing,
-    ForestSiteIndexing,
     attach_metabolites,
     enumerate_metabolites,
-    forest_map_indexing,
-    forest_map_indexing_for_version,
-    forest_site_indexing,
-    forest_site_indexing_for_version,
-    forest_site_to_rdkit,
-    metabolite_atom_maps,
     metabolite_map_indices,
     site_rdkit_indices,
     site_score,
@@ -38,7 +30,7 @@ from xenosite.predict.types import (
     Molecule,
 )
 
-from tests.support import ROOT, onnx_weights_present, onnx_root
+from tests.support import onnx_weights_present, onnx_root
 
 GAP_SMILES = "COc1cc2nc(SCc3ccccc3C)[nH]c2cc1OC"
 ETHYLENE = "C=C"
@@ -50,11 +42,20 @@ ASPIRIN = "CC(=O)Oc1ccccc1C(=O)O"
 STYRENE_OXIDE = "c1ccccc1C1OC1"
 ETHANETHIOL = "CCS"
 
+SO = "xf:StableOxygenation"
+UO = "xf:UnstableOxygenation"
+ND = "xf:NDealkylation"
+HD = "xf:PhaseOne/Hydrolysis"
+EPOX = "xf:Epoxidation"
+QF = "xf:QuinoneFormation"
+UGT = "xf:Glucuronidation"
+GSH = "xf:GSH"
+
 
 def _forest_metabolite_keys(rdmol, ruleset: str) -> set[tuple[str, str, tuple[int, ...]]]:
     return {
         (pathway, smiles, tuple(site_rdkit_indices(site)))
-        for pathway, site, smiles, _ in enumerate_metabolites(rdmol, ruleset)
+        for pathway, site, smiles, *_ in enumerate_metabolites(rdmol, ruleset)
     }
 
 
@@ -68,7 +69,7 @@ def _attached_metabolite_keys(metabolites) -> set[tuple[str, str, tuple[int, ...
 def _unique_forest_count(rdmol, ruleset: str) -> int:
     keys = {
         (pathway, smiles, tuple(site_rdkit_indices(site)))
-        for pathway, site, smiles, _ in enumerate_metabolites(rdmol, ruleset)
+        for pathway, site, smiles, *_ in enumerate_metabolites(rdmol, ruleset)
     }
     return len(keys)
 
@@ -103,25 +104,20 @@ def _assert_ethylene_epoxidation_map_idx(maps: list[int]) -> None:
     assert 1 in maps and 2 in maps
 
 
-def _opposite_site_indexing(mode: ForestSiteIndexing) -> ForestSiteIndexing:
-    return (
-        ForestSiteIndexing.ATOM_NUMBER_ONE
-        if mode == ForestSiteIndexing.RDKIT_ZERO
-        else ForestSiteIndexing.RDKIT_ZERO
-    )
+def _rdkit_can(smi: str) -> str:
+    mol = Chem.MolFromSmiles(smi)
+    assert mol is not None, smi
+    return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=False)
 
 
-def _opposite_map_indexing(mode: ForestMapIndexing) -> ForestMapIndexing:
-    return (
-        ForestMapIndexing.ATOM_NUMBER_ONE
-        if mode == ForestMapIndexing.RDKIT_ZERO
-        else ForestMapIndexing.RDKIT_ZERO
-    )
-
-
-def _clear_forest_indexing_caches() -> None:
-    forest_site_indexing_for_version.cache_clear()
-    forest_map_indexing_for_version.cache_clear()
+def test_forestmol_rdkit_keeps_input_atom_order():
+    rdmol = Chem.MolFromSmiles("c1ccccc1OC")
+    sites = [
+        emit.site_atoms
+        for emit in resolve("xf:Hydroxylation").metabolize(ForestMol(rdmol))
+        if emit.pattern_name == "h"
+    ]
+    assert sites[:3] == [[0], [1], [2]]
 
 
 def test_ethylene_epoxidation_rdkit_indices():
@@ -153,7 +149,7 @@ def test_attach_metabolites_rdkit_passthrough():
     assert mol.rdkit is rdmol
     met = mol.results[0].metabolite[0]
     assert met.rdkit is not None
-    assert can_smi(rdmol=Chem.Mol(met.rdkit))[0] == met.smiles.split()[0]
+    assert _rdkit_can(Chem.MolToSmiles(met.rdkit)) == bare_smiles(met.smiles)
     assert "rdkit" not in met.model_dump()
     assert "rdkit" not in mol.model_dump()
 
@@ -171,7 +167,7 @@ def test_propane_includes_all_forest_metabolites_sorted():
     attach_metabolites(mol, rdmol=rdmol)
     mets = mol.results[0].metabolite
     assert mets
-    forest_count = sum(1 for _ in enumerate_metabolites(rdmol, "SO"))
+    forest_count = sum(1 for _ in enumerate_metabolites(rdmol, SO))
     assert len(mets) == forest_count
     _assert_sorted_by_score_desc(mets)
     assert mets[0].score >= mets[-1].score
@@ -254,7 +250,7 @@ def test_attach_metabolites_bond_result():
     attach_metabolites(mol, rdmol=rdmol)
     mets = mol.results[0].metabolite
     assert mets
-    assert len(mets) == _unique_forest_count(rdmol, "ND")
+    assert len(mets) == _unique_forest_count(rdmol, ND)
     _assert_sorted_by_score_desc(mets)
     scored = [m for m in mets if m.atom == [0, 1]]
     assert scored
@@ -275,7 +271,7 @@ def test_attach_metabolites_mol_atom_pair_result():
     mol.results = [result]
     attach_metabolites(mol, rdmol=rdmol)
     mets = mol.results[0].metabolite
-    assert len(mets) == _unique_forest_count(rdmol, "QF.QuinoneFormation")
+    assert len(mets) == _unique_forest_count(rdmol, QF)
     _assert_rdkit_indices(mol)
     for met in mets:
         assert met.map_idx
@@ -311,7 +307,7 @@ def test_topologically_equivalent_soms_collapsed():
     assert epox[0].atom in ([0, 1], [0, 5])
     assert epox[0].map_idx
 
-    forest_keys = _forest_metabolite_keys(rdmol, "SO.Epoxidation")
+    forest_keys = _forest_metabolite_keys(rdmol, EPOX)
     attached_keys = _attached_metabolite_keys(mol.results[0].metabolite)
     assert attached_keys == forest_keys
     assert sym_class  # bonds 0 and 5 are topologically equivalent on benzene
@@ -322,7 +318,7 @@ def test_exact_duplicate_forest_hits_deduped():
     rdmol, mol = parse_smiles(PROPANE)
     raw_cc = [
         (pathway, tuple(site_rdkit_indices(site)), smiles)
-        for pathway, site, smiles, _ in enumerate_metabolites(rdmol, "UO")
+        for pathway, site, smiles, *_ in enumerate_metabolites(rdmol, UO)
         if smiles == "CC"
     ]
     assert len(raw_cc) == 1
@@ -345,7 +341,7 @@ def test_exact_duplicate_forest_hits_deduped():
         "CC",
         "CO",
     }
-    assert len(mol.results[0].metabolite) == _unique_forest_count(rdmol, "UO")
+    assert len(mol.results[0].metabolite) == _unique_forest_count(rdmol, UO)
 
 
 def test_hydrolysis_emits_both_cleavage_fragments():
@@ -368,8 +364,8 @@ def test_hydrolysis_emits_both_cleavage_fragments():
     assert "O=C(O)c1ccccc1O" in smiles  # salicylic acid
     assert all(m.pathway == "Hydrolysis" for m in ester)
     assert all(float(m.score or 0.0) == pytest.approx(0.91) for m in ester)
-    assert len(mets) == _unique_forest_count(rdmol, "HD")
-    forest_keys = _forest_metabolite_keys(rdmol, "HD")
+    assert len(mets) == _unique_forest_count(rdmol, HD)
+    forest_keys = _forest_metabolite_keys(rdmol, HD)
     assert _attached_metabolite_keys(mets) == forest_keys
 
 
@@ -398,14 +394,14 @@ def test_ugt_metabolites_are_star_adducts():
     assert phenol[0].score == pytest.approx(0.81)
     assert phenol[0].atom == [0]
     assert 0 in phenol[0].map_idx
-    assert len(mets) == _unique_forest_count(rdmol, "CJ.Glucuronidation")
+    assert len(mets) == _unique_forest_count(rdmol, UGT)
 
 
 def test_reactivity_gsh_and_protein_use_star_not_glutathione():
     """GSH/protein adducts are dummy ``*`` at the forest site, not the GSH peptide."""
     rdmol, mol = parse_smiles(STYRENE_OXIDE)
     n = mol.atoms.num
-    sites = [site for _, site, _, _ in enumerate_metabolites(rdmol, "CJ.Glutathionation")]
+    sites = [site for _, site, *_ in enumerate_metabolites(rdmol, GSH)]
     assert sites
     scored = next(iter(sites[0]))
     mol.results = [
@@ -442,7 +438,7 @@ def test_reactivity_gsh_and_protein_use_star_not_glutathione():
         assert top
         assert all(float(m.score or 0.0) == pytest.approx(score) for m in top)
         assert all(0 in (m.map_idx or []) for m in mets)
-    assert len(gsh) == _unique_forest_count(rdmol, "CJ.Glutathionation")
+    assert len(gsh) == _unique_forest_count(rdmol, GSH)
 
 
 def test_dna_and_cyanide_star_adducts_skip_thiol():
@@ -461,9 +457,9 @@ def test_dna_and_cyanide_star_adducts_skip_thiol():
     assert dna and cyanide
     assert {bare_smiles(m.smiles) for m in dna} == {bare_smiles(m.smiles) for m in cyanide}
     assert all(m.pathway == "DNA" and "DNA" in m.smiles for m in dna)
-    assert all(m.pathway == "Cyanide" and "CN" in m.smiles for m in cyanide)
+    assert all(m.pathway == "Cyanide" and "Cyanide" in m.smiles for m in cyanide)
     assert len(dna) == _unique_forest_count(rdmol, NO_THIOL_RULESET)
-    assert len(dna) == _unique_forest_count(rdmol, "CJ.Glutathionation")
+    assert len(dna) == _unique_forest_count(rdmol, "xf:Glutathionation")
 
     thiol_rd, thiol_mol = parse_smiles(ETHANETHIOL)
     thiol_mol.results = [
@@ -548,7 +544,7 @@ def test_conjugate_head_cases_cover_all_heads():
     ids=[f"{m}:{smarts}" for m, smarts, _smi, _e in _CONJUGATE_HEAD_CASES],
 )
 def test_forest_electrophiles_via_all_conjugate_heads(model, smarts, smiles, expect):
-    """Each predict conjugation head enumerates every forest 0.2.6 SMARTS it owns."""
+    """Each predict conjugation head enumerates every forest SMARTS it owns."""
     head = HEADS[model]
     rdmol, mol = _attach_one(model, smiles)
     mets = mol.results[0].metabolite
@@ -584,8 +580,8 @@ def test_attach_metabolites_multiple_model_results():
     ]
     attach_metabolites(mol, rdmol=rdmol)
     stable, unstable = mol.results
-    assert len(stable.metabolite) == _unique_forest_count(rdmol, "SO")
-    assert len(unstable.metabolite) == _unique_forest_count(rdmol, "UO")
+    assert len(stable.metabolite) == _unique_forest_count(rdmol, SO)
+    assert len(unstable.metabolite) == _unique_forest_count(rdmol, UO)
     assert all(m.atom == [1] for m in stable.metabolite if abs(float(m.score or 0) - 0.72) < 1e-9)
     assert all(m.atom == [2] for m in unstable.metabolite if abs(float(m.score or 0) - 0.61) < 1e-9)
 
@@ -690,22 +686,18 @@ def test_phase1_metabolites_match_site_scores():
 def test_forest_site_matches_rdkit_mol():
     """Forest enumeration uses the same canonical RDKit mol as predict."""
     rdmol, mol = parse_smiles(ETHYLENE)
-    sites = {site for _, site, _, _ in enumerate_metabolites(rdmol, "SO.Epoxidation")}
+    sites = {site for _, site, *_ in enumerate_metabolites(rdmol, EPOX)}
     assert frozenset({0, 1}) in sites
     for idx in site_rdkit_indices(frozenset({0, 1})):
         assert rdmol.GetAtomWithIdx(idx).GetAtomicNum() > 1 or idx in (0, 1)
 
 
-def test_cc_stable_oxygenation_probe_is_rdkit_zero():
-    """Ethane + SO: hydroxylation site index 0 ⇒ forest uses RDKit 0-based."""
-    forest_site_indexing_for_version.cache_clear()
-    mode = forest_site_indexing()
-    assert mode == ForestSiteIndexing.RDKIT_ZERO
-
+def test_cc_stable_oxygenation_sites_are_rdkit_zero():
+    """Ethane + SO: hydroxylation site index 0 ⇒ input-frame 0-based."""
     rdmol = Chem.MolFromSmiles("CC")
     hydroxy = [
         site
-        for _p, site, _s, _m in enumerate_metabolites(rdmol, "SO")
+        for _p, site, *_ in enumerate_metabolites(rdmol, SO)
         if _p == "Hydroxylation"
     ]
     assert hydroxy
@@ -713,122 +705,16 @@ def test_cc_stable_oxygenation_probe_is_rdkit_zero():
     assert all(max(s) < rdmol.GetNumAtoms() for s in hydroxy)
 
 
-def test_forest_phase1_true_sites_are_rdkit_zero_ints():
-    """Forest 0.6.0 ``phase1=True`` yields 0-based indexes, not ``1.h`` / ``2.3``."""
-    from xenosite.forest.legacy import PhaseOneRS
+def test_bioactivation_uses_legacy_ba_ruleset():
+    from xenosite.predict.forest import ruleset_for_model
 
-    _smi, path, _mols = next(
-        PhaseOneRS.find_path(
-            Chem.MolFromSmiles("CC"),
-            Chem.MolFromSmiles("CCO"),
-            phase1=True,
-            depth=1,
-        )
-    )
-    rule, site = path[0]
-    assert rule == "Hydroxylation"
-    assert site == frozenset({0})
-    assert all(isinstance(i, int) for i in site)
-
-    _smi, path, _mols = next(
-        PhaseOneRS.find_path(
-            Chem.MolFromSmiles("C=C"),
-            Chem.MolFromSmiles("C1OC1"),
-            phase1=True,
-            depth=1,
-        )
-    )
-    rule, site = path[0]
-    assert rule == "Epoxidation"
-    assert site == frozenset({0, 1})
-
-
-def test_forest_site_to_rdkit_one_based_shift():
-    assert forest_site_to_rdkit(
-        frozenset({1, 2}), 2, ForestSiteIndexing.ATOM_NUMBER_ONE
-    ) == frozenset({0, 1})
-    assert forest_site_to_rdkit(
-        frozenset({0, 1}), 2, ForestSiteIndexing.RDKIT_ZERO
-    ) == frozenset({0, 1})
-
-
-def test_one_based_indexing_via_env(monkeypatch):
-    monkeypatch.setenv("XENOSITE_FOREST_SITE_INDEXING", "atom_number_one")
-    forest_site_indexing_for_version.cache_clear()
-    assert forest_site_indexing() == ForestSiteIndexing.ATOM_NUMBER_ONE
-    forest_site_indexing_for_version.cache_clear()
-    monkeypatch.delenv("XENOSITE_FOREST_SITE_INDEXING", raising=False)
-
-
-def test_phase1_env_alias_is_rdkit_zero(monkeypatch):
-    """Forest 0.6.0 Phase I sites are 0-based; the ``phase1`` env alias follows."""
-    monkeypatch.setenv("XENOSITE_FOREST_SITE_INDEXING", "phase1")
-    monkeypatch.setenv("XENOSITE_FOREST_MAP_INDEXING", "phase1")
-    _clear_forest_indexing_caches()
-    assert forest_site_indexing() == ForestSiteIndexing.RDKIT_ZERO
-    assert forest_map_indexing() == ForestMapIndexing.RDKIT_ZERO
-    _clear_forest_indexing_caches()
-    monkeypatch.delenv("XENOSITE_FOREST_SITE_INDEXING", raising=False)
-    monkeypatch.delenv("XENOSITE_FOREST_MAP_INDEXING", raising=False)
-
-
-def test_cc_map_probe_is_rdkit_zero():
-    _clear_forest_indexing_caches()
-    assert forest_map_indexing() == ForestMapIndexing.RDKIT_ZERO
-
-
-def test_wrong_site_indexing_detection_fails(monkeypatch):
-    """Forcing the opposite site convention must break ethylene attach invariants."""
-    _clear_forest_indexing_caches()
-    detected = forest_site_indexing()
-    wrong = _opposite_site_indexing(detected)
-    monkeypatch.setenv("XENOSITE_FOREST_SITE_INDEXING", wrong.value)
-    _clear_forest_indexing_caches()
-
-    mol = Molecule(
-        smiles=ETHYLENE,
-        atoms=Atoms(num=2),
-        bonds=Bonds(idx=[(0, 1)]),
-        results=[MolBondResult(model="epoxidation", model_version="0", mol=0.9, bond=[0.85])],
-    )
-    with pytest.raises(ValueError, match="invalid RDKit index"):
-        attach_metabolites(mol)
-
-    _clear_forest_indexing_caches()
-    monkeypatch.delenv("XENOSITE_FOREST_SITE_INDEXING", raising=False)
-
-
-def test_wrong_map_indexing_detection_fails(monkeypatch):
-    """Forcing the opposite map convention must fail ethylene ``map_idx`` checks."""
-    from xenosite.forest.legacy import load_ruleset
-
-    _clear_forest_indexing_caches()
-    detected = forest_map_indexing()
-    wrong = _opposite_map_indexing(detected)
-    monkeypatch.setenv("XENOSITE_FOREST_MAP_INDEXING", wrong.value)
-    _clear_forest_indexing_caches()
-
-    rdmol = Chem.MolFromSmiles(ETHYLENE)
-    rs = load_ruleset("SO.Epoxidation")
-    product = next(rs.metabolites(rdmol, unique=True))[1][-1]
-    maps = metabolite_map_indices(product)
-
-    with pytest.raises(AssertionError):
-        _assert_ethylene_epoxidation_map_idx(maps)
-
-    _clear_forest_indexing_caches()
-    monkeypatch.delenv("XENOSITE_FOREST_MAP_INDEXING", raising=False)
-    _assert_ethylene_epoxidation_map_idx(metabolite_map_indices(product))
+    assert ruleset_for_model("bioactivation") == "BA"
 
 
 def test_ethylene_epoxidation_map_idx():
-    from xenosite.forest.legacy import load_ruleset
-
     rdmol = Chem.MolFromSmiles(ETHYLENE)
-    rs = load_ruleset("SO.Epoxidation")
-    (rule, site), mols = next(rs.metabolites(rdmol, unique=True))
-    product = mols[-1]
-    _assert_ethylene_epoxidation_map_idx(metabolite_map_indices(product))
+    _pathway, _site, _smi, product, origins = next(enumerate_metabolites(rdmol, EPOX))
+    _assert_ethylene_epoxidation_map_idx(metabolite_map_indices(product, origins))
 
 
 def test_attach_metabolites_map_idx_always_mapped_smiles_optional():

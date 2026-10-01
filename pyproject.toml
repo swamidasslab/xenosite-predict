@@ -14,9 +14,13 @@ dependencies = [
     "httpx>=0.24",
     "pydantic>=2.5",
     "openbabel>=3.2.1",
-    "xenosite-forest>=0.9",
+    "xenosite-forest>=0.10.2",
     "msgpack>=1.0",
 ]
+
+[tool.uv.sources]
+# Sibling checkout until 0.10.2 is pulled from PyPI in published envs.
+xenosite-forest = { path = "../xenosite-forest", editable = true }
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

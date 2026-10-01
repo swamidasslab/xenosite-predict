@@ -4,10 +4,10 @@ Pipeline (not yet wired in ``from_onnx``):
   forest ``BA`` / ``BioactivationPathways`` → formation scores from
   epoxidation / quinone / phase1 + reactivity deltas → path head → mol head.
 
-Enumeration parity is owned by ``xenosite.forest`` (``ruleset_for_model`` maps
-``bioactivation`` → ``BA``). Legacy PBS pathway labels ``NitrogenReduction`` /
-``SulfurOxidation`` alias to forest ``NitroaromaticReduction`` /
-``ThiopheneSulfurOxidation``.
+Enumeration still uses the frozen legacy ``BA`` archive (``ruleset_for_model``
+maps ``bioactivation`` → ``BA``; no ``xf:Bioactivation`` in forest 0.10+).
+Legacy PBS pathway labels ``NitrogenReduction`` / ``SulfurOxidation`` alias to
+forest ``NitroaromaticReduction`` / ``ThiopheneSulfurOxidation``.
 
 Trained head inputs (TSV order, 20 features each):
   path: MolDesc_* (14) + Score__Formation + GSH/Protein topological

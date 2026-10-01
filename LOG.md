@@ -1,5 +1,9 @@
 # Lab log
 
+## 2026-10-01
+
+- Migrated metabolite attach to forest 0.10.2 (`resolve("xf:…")` + `ForestMol` / `metabolize`) against sibling checkout. Sites stay in the input RDKit frame (0.10.2 order-preserving ingest). Product CSMIs are RDKit-recanonicalized. `bioactivation` still enumerates via legacy `BA` (no `xf:Bioactivation`). XenoNet expansion stays on legacy `PhaseOneRS` for golden-fixture parity.
+
 ## 2026-09-30
 
 - Tried migrating metabolite attach to `xenosite-forest` 0.10.1 (`resolve("xf:…")` + `ForestMol` / `metabolize`). Postponed: `ForestMol(rdkit_mol)` in `xenosite.forest.mol` does `Chem.MolToSmiles(spec)` (canonical) then re-parses, so heavy-atom order / site frame no longer match the predict RDKit mol. Need a library fix that ingests RDKit (or order-preserving SMILES) without reindexing before predict can switch.

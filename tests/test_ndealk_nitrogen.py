@@ -29,14 +29,14 @@ def _site_has_nitrogen(rdmol, atom_idxs) -> bool:
 
 
 def test_ruleset_for_ndealk_and_isozyme_is_nd():
-    assert ruleset_for_model("ndealk") == "ND"
-    assert ruleset_for_model("isozyme.3a4") == "ND"
-    assert ruleset_for_model("isozyme.hlm") == "ND"
+    assert ruleset_for_model("ndealk") == "xf:NDealkylation"
+    assert ruleset_for_model("isozyme.3a4") == "xf:NDealkylation"
+    assert ruleset_for_model("isozyme.hlm") == "xf:NDealkylation"
 
 
 def test_phase1_unstable_oxygenation_still_uses_uo():
     """Regression: full UO dealkylation (incl. non-N) must remain available."""
-    assert ruleset_for_model("phase1.unstable_oxygenation") == "UO"
+    assert ruleset_for_model("phase1.unstable_oxygenation") == "xf:UnstableOxygenation"
 
 
 def test_attach_ndealk_metabolites_are_nitrogen_sites_only():
@@ -51,8 +51,8 @@ def test_attach_ndealk_metabolites_are_nitrogen_sites_only():
     attach_metabolites(mol, rdmol=rdmol)
     mets = mol.results[0].metabolite
     assert mets
-    assert len(mets) == _unique_forest_count(rdmol, "ND")
-    assert len(mets) < _unique_forest_count(rdmol, "UO.Dealkylation")
+    assert len(mets) == _unique_forest_count(rdmol, "xf:NDealkylation")
+    assert len(mets) < _unique_forest_count(rdmol, "xf:Dealkylation")
     for m in mets:
         assert _site_has_nitrogen(rdmol, m.atom or [])
 

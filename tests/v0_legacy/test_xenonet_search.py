@@ -1,4 +1,4 @@
-"""PhaseOneRS one-step + beam graphs. Needs phase1 ONNX + xenosite.forest."""
+"""Legacy PhaseOneRS one-step + beam graphs. Needs phase1 ONNX + xenosite.forest."""
 
 from __future__ import annotations
 

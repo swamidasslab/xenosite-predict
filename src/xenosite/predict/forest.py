@@ -1,40 +1,34 @@
 """Thin adapter to ``xenosite.forest`` for SOM → metabolite structure inference.
 
 Site-of-metabolism *scores* come from :func:`predict`; structure enumeration is
-delegated to `Metabolic Forest <https://github.com/swamidasslab/xenosite-forest>`_.
+delegated to `Metabolic Forest <https://github.com/swamidasslab/xenosite-forest>`_
+via ``resolve("xf:…")`` + ``RuleSet.metabolize(ForestMol(...))``.
 
-``xenosite.forest`` 0.6.0+ reports Phase I sites as 0-based atom indexes
-(the same scale as ``GetIdx()`` / ``RuleSet.metabolites``). The old ``1.h`` /
-``2.3`` ``phase1=True`` labels are gone. Two indexing conventions are still
-detected separately so mixed installs keep working:
+Forest 0.10.2+ keeps the input heavy-atom order when building ``ForestMol`` from
+an RDKit mol, so ``emit.site_atoms`` are already in that index frame. Product
+CSMI spelling may differ from RDKit canonical form; this adapter
+re-canonicalizes products with RDKit before exposing them.
 
-- **Site frozensets** (:func:`forest_site_indexing`) — probe ``CC`` + ``SO``.
-- **AtomTracker parent maps** (:func:`forest_map_indexing`) — probe ``CC`` +
-  ``SO`` product ``react_atom_idx`` vs ``old_mapno``.
-
-Sites are normalized to 0-based RDKit on the parent; ``Metabolite.map_idx`` uses
-1-based parent atom numbers (0 = new atom). Map numbers cannot be 0-based.
+``bioactivation`` is the exception: forest 0.10+ has no ``xf:Bioactivation``
+catalog entry, so that model still enumerates through the frozen
+``xenosite.forest.legacy`` ``BA`` ruleset.
 """
 
 from __future__ import annotations
 
-import os
 import warnings
-from enum import Enum
 from functools import lru_cache
 from typing import Collection, Iterator, Optional
 
 from rdkit import Chem
-from xenosite.forest.legacy.base import can_smi
-from xenosite.forest.legacy.utils import refresh_mol
+from xenosite.forest import ForestMol
 
 from .conjugates import (
     HEADS as _CONJUGATE_HEADS,
+    bare_smiles,
     head_for_model,
     is_star_conjugate,
-    labeled_star_mol,
     load_conjugate_ruleset,
-    mol_to_cxsmiles,
 )
 from .molecule import parse_smiles
 from .types import (
@@ -49,74 +43,41 @@ from .types import (
     Molecule,
 )
 
-# ``result.model`` → ``load_ruleset(...)`` specifier (see xenosite-forest docs/rulesets.md).
+# ``result.model`` → ``resolve(...)`` CURIE (see xenosite-forest catalog).
 # Conjugation heads live in :mod:`xenosite.predict.conjugates`.
+# ``bioactivation`` uses the legacy ``BA`` archive (no xf: catalog entry yet).
+_LEGACY_BIOACTIVATION = "BA"
 _MODEL_RULESETS: dict[str, str] = {
-    "epoxidation": "SO.Epoxidation",
-    "ndealk": "ND",
-    "quinone": "QF.QuinoneFormation",
-    "bioactivation": "BA",
-    "phase1.stable_oxygenation": "SO",
-    "phase1.unstable_oxygenation": "UO",
-    "phase1.dehydrogenation": "DH",
-    "phase1.reduction": "RD",
-    "phase1.hydrolysis": "HD",
+    "epoxidation": "xf:Epoxidation",
+    "ndealk": "xf:NDealkylation",
+    "quinone": "xf:QuinoneFormation",
+    "bioactivation": _LEGACY_BIOACTIVATION,
+    "phase1.stable_oxygenation": "xf:StableOxygenation",
+    "phase1.unstable_oxygenation": "xf:UnstableOxygenation",
+    "phase1.dehydrogenation": "xf:Dehydrogenation",
+    "phase1.reduction": "xf:PhaseOne/Reduction",
+    "phase1.hydrolysis": "xf:PhaseOne/Hydrolysis",
 }
 
-# Legacy bioactivation PBS pathway labels → forest ``pathway_name`` (BA ruleset).
+# Legacy bioactivation PBS pathway labels → forest ``BA`` names.
 _LEGACY_BIOACTIVATION_PATHWAY: dict[str, str] = {
     "NitrogenReduction": "NitroaromaticReduction",
     "SulfurOxidation": "ThiopheneSulfurOxidation",
 }
 
-_INDEX_PROBE_SMILES = "CC"
-_INDEX_PROBE_RULESET = "SO"
-_ENV_SITE_INDEXING = "XENOSITE_FOREST_SITE_INDEXING"
-_ENV_MAP_INDEXING = "XENOSITE_FOREST_MAP_INDEXING"
 _REACT_ATOM_IDX = "react_atom_idx"
-_OLD_MAPNO = "old_mapno"
 _INVALID_METABOLITE_WARNING = "Dropping RDKit-invalid metabolite"
 
 
-def _rule_metabolites(rs, rdmol, *, unique: bool = True):
-    """Iterate ``RuleSet.metabolites``.
-
-    Forest 0.2.3 emitted a :class:`UserWarning` for every RDKit-invalid fragment
-    ``clean()`` drops. 0.2.4 logs those at DEBUG. Keep a filter so mixed
-    installs stay quiet.
-    """
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message=_INVALID_METABOLITE_WARNING,
-            category=UserWarning,
-        )
-        yield from rs.metabolites(rdmol, unique=unique)
-
-
-class ForestSiteIndexing(str, Enum):
-    """How ``xenosite.forest`` labels sites in ``RuleSet.metabolites`` frozensets."""
-
-    RDKIT_ZERO = "rdkit_zero"
-    ATOM_NUMBER_ONE = "atom_number_one"
-
-
-class ForestMapIndexing(str, Enum):
-    """How AtomTracker ``react_atom_idx`` relates to 1-based parent atom numbers."""
-
-    RDKIT_ZERO = "rdkit_zero"
-    ATOM_NUMBER_ONE = "atom_number_one"
-
-
 def ruleset_for_model(model: str) -> Optional[str]:
-    """Return a forest ruleset name for a predict result model, if supported."""
+    """Return a forest ruleset CURIE (or legacy ``BA``) for a model, if supported."""
     head = head_for_model(model)
     if head is not None:
         return head.ruleset
     if model in _MODEL_RULESETS:
         return _MODEL_RULESETS[model]
     if model.startswith("isozyme."):
-        return "ND"
+        return "xf:NDealkylation"
     return None
 
 
@@ -130,9 +91,13 @@ def supported_metabolite_models() -> frozenset[str]:
     return frozenset(_MODEL_RULESETS) | frozenset(_CONJUGATE_HEADS)
 
 
-def pathway_name(rule: str) -> str:
-    """Normalize forest rule labels (``Hydroxylation_Smarts...`` → ``Hydroxylation``)."""
-    return rule.split("_", 1)[0]
+def pathway_name(rule_path: list[str] | str, pattern_name: str = "") -> str:
+    """Leaf rule name from a metabolize ``rule_path`` (leaf-first) or legacy rule."""
+    if isinstance(rule_path, str):
+        return rule_path.split("_", 1)[0]
+    if rule_path:
+        return rule_path[0]
+    return pattern_name
 
 
 def bioactivation_pathway_name(pathway: str) -> str:
@@ -140,185 +105,70 @@ def bioactivation_pathway_name(pathway: str) -> str:
     return _LEGACY_BIOACTIVATION_PATHWAY.get(pathway, pathway)
 
 
-def site_rdkit_indices(site: frozenset[int]) -> list[int]:
-    """Sorted 0-based RDKit indices for a site (after :func:`forest_site_to_rdkit`)."""
+def _is_legacy_ruleset(spec: str) -> bool:
+    return spec == _LEGACY_BIOACTIVATION or not spec.startswith("xf:")
+
+
+def site_rdkit_indices(site: frozenset[int] | list[int] | tuple[int, ...]) -> list[int]:
+    """Sorted 0-based RDKit indices for a site (input-mol frame)."""
     return sorted(site)
 
 
-def _site_indexing_from_env() -> Optional[ForestSiteIndexing]:
-    raw = os.environ.get(_ENV_SITE_INDEXING, "").strip().lower()
-    if raw in ("rdkit_zero", "rdkit", "0", "zero", "phase1"):
-        return ForestSiteIndexing.RDKIT_ZERO
-    if raw in ("atom_number_one", "one", "1"):
-        return ForestSiteIndexing.ATOM_NUMBER_ONE
-    return None
+def _rdkit_product_smiles(csmi: str, *, star: bool) -> tuple[Optional[str], Optional[Chem.Mol]]:
+    """Parse a forest product CSMI and re-canonicalize with RDKit.
 
-
-def _map_indexing_from_env() -> Optional[ForestMapIndexing]:
-    raw = os.environ.get(_ENV_MAP_INDEXING, "").strip().lower()
-    if raw in ("rdkit_zero", "rdkit", "0", "zero", "phase1"):
-        return ForestMapIndexing.RDKIT_ZERO
-    if raw in ("atom_number_one", "one", "1"):
-        return ForestMapIndexing.ATOM_NUMBER_ONE
-    return None
-
-
-def _probe_forest_site_indexing() -> ForestSiteIndexing:
-    """Detect forest site numbering using ``CC`` + stable oxygenation (``SO``)."""
-    forced = _site_indexing_from_env()
-    if forced is not None:
-        return forced
-
-    mol = Chem.MolFromSmiles(_INDEX_PROBE_SMILES)
+    Conjugation products keep CX ``atomLabel`` blocks; others return bare
+    non-isomeric canonical SMILES.
+    """
+    mol = Chem.MolFromSmiles(csmi)
     if mol is None:
-        return ForestSiteIndexing.RDKIT_ZERO
-    n_heavy = mol.GetNumAtoms()
-
-    rs = load_conjugate_ruleset(_INDEX_PROBE_RULESET)
-    saw_zero = False
-    saw_one_based_high = False
-    for (_rule, site), _mols in _rule_metabolites(rs, mol, unique=True):
-        for idx in site:
-            if idx == 0:
-                saw_zero = True
-            if idx >= n_heavy:
-                saw_one_based_high = True
-
-    if saw_zero:
-        return ForestSiteIndexing.RDKIT_ZERO
-    if saw_one_based_high:
-        return ForestSiteIndexing.ATOM_NUMBER_ONE
-    return ForestSiteIndexing.RDKIT_ZERO
-
-
-def _probe_forest_map_indexing() -> ForestMapIndexing:
-    """Detect AtomTracker parent indexing from a ``CC`` + ``SO`` hydroxylation product."""
-    forced = _map_indexing_from_env()
-    if forced is not None:
-        return forced
-
-    mol = Chem.MolFromSmiles(_INDEX_PROBE_SMILES)
-    if mol is None:
-        return ForestMapIndexing.RDKIT_ZERO
-
-    rs = load_conjugate_ruleset(_INDEX_PROBE_RULESET)
-    for (_rule, _site), mols in _rule_metabolites(rs, mol, unique=True):
-        product = mols[-1]
-        for atom in product.GetAtoms():
-            if atom.GetAtomicNum() == 1:
-                continue
-            if not atom.HasProp(_REACT_ATOM_IDX):
-                continue
-            react_idx = int(atom.GetProp(_REACT_ATOM_IDX))
-            if react_idx == 0:
-                return ForestMapIndexing.RDKIT_ZERO
-            if atom.HasProp(_OLD_MAPNO):
-                old_mapno = int(atom.GetProp(_OLD_MAPNO))
-                if old_mapno == react_idx:
-                    return ForestMapIndexing.ATOM_NUMBER_ONE
-                if old_mapno == react_idx + 1:
-                    return ForestMapIndexing.RDKIT_ZERO
-        break
-
-    return ForestMapIndexing.RDKIT_ZERO
-
-
-@lru_cache(maxsize=8)
-def forest_site_indexing_for_version(version: str) -> ForestSiteIndexing:
-    return _probe_forest_site_indexing()
-
-
-@lru_cache(maxsize=8)
-def forest_map_indexing_for_version(version: str) -> ForestMapIndexing:
-    return _probe_forest_map_indexing()
-
-
-def forest_site_indexing() -> ForestSiteIndexing:
-    """Cached site-index convention for the installed ``xenosite.forest`` version."""
-    import xenosite.forest as xf
-
-    version = getattr(xf, "__version__", "unknown")
-    return forest_site_indexing_for_version(version)
-
-
-def forest_map_indexing() -> ForestMapIndexing:
-    """Cached AtomTracker parent-map convention for the installed forest version."""
-    import xenosite.forest as xf
-
-    version = getattr(xf, "__version__", "unknown")
-    return forest_map_indexing_for_version(version)
-
-
-def forest_site_to_rdkit(
-    site: frozenset[int],
-    n_atoms: int,
-    mode: Optional[ForestSiteIndexing] = None,
-) -> frozenset[int]:
-    """Convert a forest site frozenset to 0-based RDKit atom indices."""
-    if mode is None:
-        mode = forest_site_indexing()
-    if mode == ForestSiteIndexing.ATOM_NUMBER_ONE:
-        out = frozenset(i - 1 for i in site)
-    else:
-        out = site
-    for idx in out:
-        if idx < 0 or idx >= n_atoms:
-            raise ValueError(
-                f"forest site {sorted(site)} ({mode.value}) maps to invalid "
-                f"RDKit index {idx} for {n_atoms} heavy atoms"
-            )
-    return out
-
-
-def _parent_map_number(atom: Chem.Atom, mode: Optional[ForestMapIndexing] = None) -> int:
-    """1-based parent atom number for a product heavy atom, or 0 if newly added."""
-    if mode is None:
-        mode = forest_map_indexing()
-    if not atom.HasProp(_REACT_ATOM_IDX):
-        return 0
-    react_idx = int(atom.GetProp(_REACT_ATOM_IDX))
-    if mode == ForestMapIndexing.RDKIT_ZERO:
-        return react_idx + 1
-    return react_idx
+        return None, None
+    try:
+        if star or "|" in csmi:
+            written = Chem.MolToCXSmiles(mol, canonical=True, isomericSmiles=False)
+        else:
+            written = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=False)
+    except Exception:
+        return None, None
+    return written, mol
 
 
 def metabolite_atom_maps(
     product: Chem.Mol,
+    origins: list[Optional[int]],
     *,
-    mode: Optional[ForestMapIndexing] = None,
     mapped_smiles: bool = False,
 ) -> tuple[list[int], Optional[str]]:
-    """Return ``(map_idx, mapped_smiles)`` from a forest product mol.
+    """Return ``(map_idx, mapped_smiles)`` from chematic ``stamp_origins``.
 
-    ``map_idx`` is always computed (1-based parent atom numbers per heavy atom in
-    canonical ``smiles`` order; 0 = new atom). ``mapped_smiles`` is included only
-    when requested — SMILES with ``:N`` map numbers tracing to the parent.
-
-    Forest 0.2.3 ``can_smi`` always unmaps, so mapped output is written with
-    ``MolToSmiles`` / CXSMILES after filling valence caches.
+    ``origins`` are 0-based parent indexes (``None`` = new atom), parallel to
+    chematic heavy atoms. ``map_idx`` is always computed as 1-based parent atom
+    numbers in canonical ``smiles`` order (0 = new atom).
     """
-    if mode is None:
-        mode = forest_map_indexing()
-
     tagged = Chem.Mol(product)
-    for atom in tagged.GetAtoms():
-        if atom.GetAtomicNum() == 1:
-            continue
-        parent = _parent_map_number(atom, mode)
-        if parent > 0:
-            atom.SetAtomMapNum(parent)
+    heavy = [a for a in tagged.GetAtoms() if a.GetAtomicNum() != 1]
+    if len(heavy) != len(origins):
+        map_idx = [0] * len(heavy)
+        if not mapped_smiles:
+            return map_idx, None
+        try:
+            return map_idx, Chem.MolToSmiles(tagged, canonical=True, isomericSmiles=False)
+        except Exception:
+            return map_idx, None
+
+    for atom, origin in zip(heavy, origins):
+        atom.SetAtomMapNum(0 if origin is None else int(origin) + 1)
 
     has_star_label = any(
         atom.GetAtomicNum() == 0 and atom.HasProp("atomLabel") for atom in tagged.GetAtoms()
     )
-    refresh_mol(tagged)
-    if has_star_label:
-        written = mol_to_cxsmiles(tagged)
-    else:
-        try:
+    try:
+        if has_star_label:
+            written = Chem.MolToCXSmiles(tagged, canonical=True, isomericSmiles=False)
+        else:
             written = Chem.MolToSmiles(tagged, canonical=True, isomericSmiles=False)
-        except Exception:
-            written = None
+    except Exception:
+        written = None
     mapped = written if mapped_smiles else None
     parsed = Chem.MolFromSmiles(written or "")
     if parsed is None:
@@ -334,11 +184,10 @@ def metabolite_atom_maps(
 
 def metabolite_map_indices(
     product: Chem.Mol,
-    *,
-    mode: Optional[ForestMapIndexing] = None,
+    origins: list[Optional[int]],
 ) -> list[int]:
     """Per heavy atom in canonical ``smiles`` order: 1-based parent map, 0 if new."""
-    map_idx, _ = metabolite_atom_maps(product, mode=mode, mapped_smiles=False)
+    map_idx, _ = metabolite_atom_maps(product, origins, mapped_smiles=False)
     return map_idx
 
 
@@ -388,92 +237,134 @@ def site_score(molecule: Molecule, result: ModelResult, site: frozenset[int]) ->
     return 0.0
 
 
-def _collapse_conjugate_to_star(
-    product: Chem.Mol,
-    *,
-    mode: Optional[ForestMapIndexing] = None,
-) -> Chem.Mol:
-    """Replace newly added conjugate atoms with a dummy ``*`` at each attachment."""
-    if mode is None:
-        mode = forest_map_indexing()
+@lru_cache(maxsize=32)
+def _ruleset(spec: str):
+    return load_conjugate_ruleset(spec)
 
-    new_atoms: set[int] = set()
+
+def _origins_from_legacy_product(product: Chem.Mol) -> list[Optional[int]]:
+    """0-based parent indexes from AtomTracker ``react_atom_idx`` (forest 0.6+)."""
+    origins: list[Optional[int]] = []
     for atom in product.GetAtoms():
         if atom.GetAtomicNum() == 1:
             continue
-        if _parent_map_number(atom, mode) <= 0:
-            new_atoms.add(atom.GetIdx())
-    if not new_atoms:
-        return product
-
-    attach: set[int] = set()
-    for bond in product.GetBonds():
-        a, b = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-        a_new, b_new = a in new_atoms, b in new_atoms
-        if a_new == b_new:
+        if not atom.HasProp(_REACT_ATOM_IDX):
+            origins.append(None)
             continue
-        attach.add(b if a_new else a)
-    if not attach:
-        return product
-
-    def _after_remove(idx: int) -> int:
-        return idx - sum(1 for n in new_atoms if n < idx)
-
-    rw = Chem.RWMol(product)
-    for idx in sorted(new_atoms, reverse=True):
-        rw.RemoveAtom(idx)
-    for pa in sorted(_after_remove(a) for a in attach):
-        dummy = rw.AddAtom(Chem.Atom(0))
-        rw.AddBond(pa, dummy, Chem.BondType.SINGLE)
-    mol = rw.GetMol()
-    Chem.SanitizeMol(mol, catchErrors=True)
-    return mol
+        origins.append(int(atom.GetProp(_REACT_ATOM_IDX)))
+    return origins
 
 
-def enumerate_metabolites(
+def _enumerate_legacy(
     rdmol: Chem.Mol,
     ruleset_spec: str,
-) -> Iterator[tuple[str, frozenset[int], str, Chem.Mol]]:
-    """Yield ``(pathway, rdkit_site, canonical_smiles, product_mol)`` for each metabolite.
+) -> Iterator[tuple[str, frozenset[int], str, Chem.Mol, list[Optional[int]]]]:
+    """Enumerate via frozen ``xenosite.forest.legacy`` (bioactivation ``BA`` only)."""
+    from xenosite.forest.legacy import load_ruleset
+    from xenosite.forest.legacy.base import can_smi
 
-    One call to ``RuleSet.metabolites`` enumerates all products for the substrate.
-    Cleavage rules (hydrolysis, dealkylation, …) return one mol per fragment; each
-    fragment is yielded as its own metabolite (same pathway and site).
-    Conjugation rulesets replace the added group with a dummy ``*``.
-
-    Rows are collapsed with the XenoSite UI identity key (pathway + product SMILES +
-    sorted topological ranks of the site). Rank the reactant **before** forest runs,
-    because metabolize kekulizes/tags the mol in place and that breaks ranking.
-    """
-    mode = forest_site_indexing()
-    map_mode = forest_map_indexing()
     n_atoms = rdmol.GetNumAtoms()
-    star = is_star_conjugate(ruleset_spec)
-    # Snapshot topology before forest mutates ``rdmol`` (kekulize + atom maps).
     topo_ranks = list(
         Chem.CanonicalRankAtoms(rdmol, includeChirality=False, breakTies=False)
     )
     seen: set[tuple[str, str, tuple[int, ...]]] = set()
-    rs = load_conjugate_ruleset(ruleset_spec)
-    for (rule, site), mols in _rule_metabolites(rs, rdmol, unique=True):
+    # Legacy metabolize kekulizes the reactant in place — copy first.
+    reactant = Chem.Mol(rdmol)
+    rs = load_ruleset(ruleset_spec)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=_INVALID_METABOLITE_WARNING,
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r"xenosite\.forest\.legacy is a frozen",
+            category=DeprecationWarning,
+        )
+        rows = list(rs.metabolites(reactant, unique=True))
+
+    for (rule, site), mols in rows:
         if not mols:
             continue
-        rdkit_site = forest_site_to_rdkit(site, n_atoms, mode)
+        rdkit_site = frozenset(int(i) for i in site)
+        for idx in rdkit_site:
+            if idx < 0 or idx >= n_atoms:
+                raise ValueError(
+                    f"legacy forest site {sorted(site)} out of range for "
+                    f"{n_atoms} heavy atoms"
+                )
         pathway = pathway_name(rule)
         rank_key = tuple(sorted(topo_ranks[i] for i in rdkit_site))
         for product in mols:
             if product is None or product.GetNumAtoms() == 0:
                 continue
-            if star:
-                product = _collapse_conjugate_to_star(product, mode=map_mode)
-            smiles = can_smi(rdmol=product)
-            if not smiles:
+            smiles_list = can_smi(rdmol=product)
+            if not smiles_list:
                 continue
-            identity = (pathway, smiles[0], rank_key)
+            smiles, product_mol = _rdkit_product_smiles(smiles_list[0], star=False)
+            if not smiles or product_mol is None:
+                continue
+            identity = (pathway, bare_smiles(smiles), rank_key)
             if identity in seen:
                 continue
             seen.add(identity)
-            yield pathway, rdkit_site, smiles[0], product
+            origins = _origins_from_legacy_product(product)
+            yield pathway, rdkit_site, smiles, product, origins
+
+
+def enumerate_metabolites(
+    rdmol: Chem.Mol,
+    ruleset_spec: str,
+) -> Iterator[tuple[str, frozenset[int], str, Chem.Mol, list[Optional[int]]]]:
+    """Yield ``(pathway, site, smiles, product_mol, origins)`` for each metabolite.
+
+    ``site`` is a frozenset of 0-based indexes in the **input** RDKit mol frame.
+    Cleavage rules yield one row per fragment. Product SMILES are RDKit-canonical
+    (CX preserved for star conjugates).
+
+    Rows are collapsed with the XenoSite UI identity key (pathway + product SMILES +
+    sorted topological ranks of the site).
+
+    ``BA`` / other non-``xf:`` specs use the legacy archive path.
+    """
+    if _is_legacy_ruleset(ruleset_spec):
+        yield from _enumerate_legacy(rdmol, ruleset_spec)
+        return
+
+    n_atoms = rdmol.GetNumAtoms()
+    star = is_star_conjugate(ruleset_spec)
+    topo_ranks = list(
+        Chem.CanonicalRankAtoms(rdmol, includeChirality=False, breakTies=False)
+    )
+    seen: set[tuple[str, str, tuple[int, ...]]] = set()
+    rs = _ruleset(ruleset_spec)
+    reactant = ForestMol(rdmol)
+
+    for emit in rs.metabolize(reactant):
+        site_atoms = list(emit.site_atoms)
+        if any(i < 0 or i >= n_atoms for i in site_atoms):
+            raise ValueError(
+                f"forest site {site_atoms} out of range for {n_atoms} heavy atoms"
+            )
+        rdkit_site = frozenset(site_atoms)
+        path = list(emit.rule_path())
+        pathway = pathway_name(path, emit.pattern_name)
+        rank_key = tuple(sorted(topo_ranks[i] for i in rdkit_site))
+        products = emit.products()
+        csmis = emit.product_csmis()
+        for product_fm, csmi in zip(products, csmis):
+            if not csmi:
+                continue
+            smiles, product_mol = _rdkit_product_smiles(csmi, star=star)
+            if not smiles or product_mol is None:
+                continue
+            identity = (pathway, bare_smiles(smiles), rank_key)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            origins = list(product_fm.stamp_origins())
+            yield pathway, rdkit_site, smiles, product_mol, origins
 
 
 def attach_metabolites(
@@ -491,8 +382,8 @@ def attach_metabolites(
     enumerate every metabolite the rules allow on the substrate. Predictor site
     scores are looked up for each product, then the list is sorted by score
     (descending). Each metabolite always includes ``map_idx`` (1-based parent
-    atom numbers via AtomTracker). When ``mapped_smiles`` is ``True``, also set
-    ``mapped_smiles`` with ``:N`` atom-map labels in the SMILES string.
+    atom numbers via chematic stamp origins). When ``mapped_smiles`` is ``True``,
+    also set ``mapped_smiles`` with ``:N`` atom-map labels in the SMILES string.
 
     Conjugation heads (``ugt``, ``reactivity.*``) write **CXSMILES** on
     ``Metabolite.smiles`` (dummy ``*`` + ``atomLabel``). The SMILES token
@@ -514,8 +405,9 @@ def attach_metabolites(
     if rdkit and molecule.rdkit is None:
         molecule.rdkit = rdmol
 
-    map_mode = forest_map_indexing()
-    enumerated: dict[str, list[tuple[str, frozenset[int], str, Chem.Mol]]] = {}
+    enumerated: dict[
+        str, list[tuple[str, frozenset[int], str, Chem.Mol, list[Optional[int]]]]
+    ] = {}
     allowed = None if models is None else set(models)
 
     for result in molecule.results:
@@ -535,7 +427,6 @@ def attach_metabolites(
             enumerated[spec],
             min_score=min_score,
             mapped_smiles=mapped_smiles,
-            map_mode=map_mode,
             rdkit=rdkit,
         )
     return molecule
@@ -544,25 +435,23 @@ def attach_metabolites(
 def _attach_from_enumeration(
     molecule: Molecule,
     result: ModelResult,
-    products: list[tuple[str, frozenset[int], str, Chem.Mol]],
+    products: list[tuple[str, frozenset[int], str, Chem.Mol, list[Optional[int]]]],
     *,
     min_score: Optional[float],
     mapped_smiles: bool,
-    map_mode: ForestMapIndexing,
     rdkit: bool,
 ) -> None:
     metabolites: list[Metabolite] = []
     seen: set[tuple[str, str, tuple[int, ...]]] = set()
 
     head = head_for_model(result.model)
-    for pathway, site, smiles, product in products:
+    for pathway, site, smiles, product, origins in products:
         if head is not None and head.pathway:
             pathway = head.pathway
-        labeled = labeled_star_mol(product, head.label) if head is not None else product
-        out_smiles = mol_to_cxsmiles(labeled) if head is not None else smiles
+        out_smiles = smiles
         if not out_smiles:
             continue
-        key = (pathway, out_smiles.split()[0], tuple(site_rdkit_indices(site)))
+        key = (pathway, bare_smiles(out_smiles), tuple(site_rdkit_indices(site)))
         if key in seen:
             continue
         seen.add(key)
@@ -570,7 +459,7 @@ def _attach_from_enumeration(
         if min_score is not None and score < min_score:
             continue
         maps, mapped = metabolite_atom_maps(
-            labeled, mode=map_mode, mapped_smiles=mapped_smiles
+            product, origins, mapped_smiles=mapped_smiles
         )
         metabolites.append(
             Metabolite(
@@ -580,7 +469,7 @@ def _attach_from_enumeration(
                 mapped_smiles=mapped,
                 pathway=pathway,
                 score=score,
-                rdkit=labeled if rdkit else None,
+                rdkit=product if rdkit else None,
             )
         )
 

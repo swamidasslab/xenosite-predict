@@ -1,27 +1,19 @@
 """Conjugation heads: map predict models onto forest Phase II rulesets.
 
-Forest 0.2.6+ ships Glucuronidation, Glutathionation, and
-``GlutathionationNoThiol``. UGT and GSH/protein use the built-in rulesets.
-Glutathionation covers epoxide, C–halogen (F/Cl/Br/I), thiol, terminal
-alkene, Michael acceptors, aldehydes, aziridines, sulfonate esters, and
-isocyanates. DNA and cyanide use ``GlutathionationNoThiol`` (same set
-without thiol disulfide).
-
-Dummy ``*`` atoms are written as **CXSMILES** on ``Metabolite.smiles`` (the
-field is still named ``smiles``). The CX ``atomLabel`` is ``GlcA`` / ``GSH`` /
-``Protein`` / ``DNA`` / ``CN`` so RDKit depictions can name the conjugate.
+Forest 0.10+ ships Glucuronidation and Reactivity adducts (GSH, Protein, DNA,
+Cyanide) via ``resolve("xf:…")``. Products are already star CXSMILES with
+``atomLabel`` set (``GlcA`` / ``GSH`` / ``Protein`` / ``DNA`` / ``Cyanide``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional
 
-from rdkit import Chem
-from xenosite.forest.legacy import load_ruleset
-from xenosite.forest.legacy.utils import label_star_atoms, mol_to_cxsmiles as _forest_cxsmiles
+from xenosite.forest import resolve
 
-NO_THIOL_RULESET = "GlutathionationNoThiol"
+NO_THIOL_RULESET = "xf:GlutathionationNoThiol"
 
 
 @dataclass(frozen=True)
@@ -34,21 +26,29 @@ class ConjugateHead:
 
 
 HEADS: dict[str, ConjugateHead] = {
-    "ugt": ConjugateHead("CJ.Glucuronidation", "GlcA"),
-    "reactivity.gsh": ConjugateHead("CJ.Glutathionation", "GSH"),
-    "reactivity.protein": ConjugateHead("CJ.Glutathionation", "Protein", "Protein"),
-    "reactivity.dna": ConjugateHead(NO_THIOL_RULESET, "DNA", "DNA"),
-    "reactivity.cyanide": ConjugateHead(NO_THIOL_RULESET, "CN", "Cyanide"),
+    "ugt": ConjugateHead("xf:Glucuronidation", "GlcA"),
+    "reactivity.gsh": ConjugateHead("xf:GSH", "GSH", "Glutathionation"),
+    "reactivity.protein": ConjugateHead("xf:Protein", "Protein", "Protein"),
+    "reactivity.dna": ConjugateHead("xf:DNA", "DNA", "DNA"),
+    "reactivity.cyanide": ConjugateHead("xf:Cyanide", "Cyanide", "Cyanide"),
 }
 
 STAR_RULESETS: frozenset[str] = frozenset(
     {
-        "CJ",
-        "CJ.Glucuronidation",
-        "CJ.Glutathionation",
-        "CJ.Acetylation",
-        "CJ.Sulfation",
+        "xf:Glucuronidation",
+        "xf:Glutathionation",
         NO_THIOL_RULESET,
+        "xf:GSH",
+        "xf:Protein",
+        "xf:DNA",
+        "xf:Cyanide",
+        "xf:Acetylation",
+        "xf:Sulfation",
+        "xf:Reactivity",
+        "xf:Reactivity/GSH",
+        "xf:Reactivity/Protein",
+        "xf:Reactivity/DNA",
+        "xf:Reactivity/Cyanide",
     }
 )
 
@@ -58,21 +58,15 @@ def head_for_model(model: str) -> Optional[ConjugateHead]:
 
 
 def is_star_conjugate(spec: str) -> bool:
-    return spec in STAR_RULESETS or spec.startswith("CJ.")
+    if spec in STAR_RULESETS:
+        return True
+    return spec.startswith("xf:Reactivity") or spec.startswith("xf:Glutathion")
 
 
+@lru_cache(maxsize=32)
 def load_conjugate_ruleset(spec: str):
-    return load_ruleset(spec)
-
-
-def labeled_star_mol(product: Chem.Mol, label: str) -> Chem.Mol:
-    """Copy ``product`` and set CX ``atomLabel`` on dummy atoms."""
-    return label_star_atoms(Chem.Mol(product), label)
-
-
-def mol_to_cxsmiles(mol: Chem.Mol) -> Optional[str]:
-    """Non-isomeric CXSMILES (atom labels kept)."""
-    return _forest_cxsmiles(mol, isomericSmiles=False)
+    """Resolve a forest ruleset CURIE / name (cached)."""
+    return resolve(spec)
 
 
 def bare_smiles(smiles: str) -> str:

@@ -1,22 +1,14 @@
-"""Bioactivation forest ``BA`` enumeration parity (xenosite-forest).
+"""Bioactivation forest ``BA`` enumeration via legacy archive (xenosite-forest).
 
-Head ONNX parity lives in ``test_bioactivation_heads.py``. This module checks
-that ``enumerate_metabolites(..., "BA")`` matches native forest and that
-legacy golden bioactivation sites are covered by forest (with pathway aliases).
-
-Forest is a **superset** of scored legacy pathways: legacy filters by formation /
-termination rules. Documented legacy-only sites (nitro dual N–O keys, rare
-epoxidation, fused thiophene) are allowed exceptions — not forest bugs.
-
-Forest 0.2.3 ``clean()`` drops a whole quinone/dealk product set if any fragment
-is RDKit-invalid. Golden coverage matches by site, then by canonical SMILES
-(site pairing can shift). Remaining QuinoneFormation misses are those dropped
-sets, not missing rules.
+Forest 0.10+ has no ``xf:Bioactivation`` catalog entry, so predict attaches
+bioactivation metabolites through ``xenosite.forest.legacy`` ``BA``. Head ONNX
+parity lives in ``test_bioactivation_heads.py``.
 """
 
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import pytest
@@ -27,8 +19,6 @@ from xenosite.forest.legacy.base import can_smi
 from xenosite.predict.forest import (
     bioactivation_pathway_name,
     enumerate_metabolites,
-    forest_site_indexing,
-    forest_site_to_rdkit,
     pathway_name,
     ruleset_for_model,
     site_rdkit_indices,
@@ -45,24 +35,24 @@ THIOPHENE = "c1cccs1"
 GOLDEN_SMILES = ROOT / "tests" / "fixtures" / "golden_smiles.json"
 GOLDEN_SUITE = ROOT / "tests" / "fixtures" / "golden_descriptor_suite.json"
 
-# Legacy PBS sites that do not appear in forest ``BA`` (after pathway aliases).
 _LEGACY_ONLY_SITES: frozenset[tuple[str, str, frozenset[int]]] = frozenset(
     {
-        # Aromatic epoxidation site present in metabolite1 PBS, absent from forest BA.
         ("N=C(N)c1ccc(OCCCCCOc2ccc(C(=N)N)cc2)cc1", "Epoxidation", frozenset({21, 22})),
-        # Dibenzothiophene: legacy sulfur oxidation; forest thiophene rule is monocyclic.
         ("c1ccc2c(c1)sc1ccccc12", "ThiopheneSulfurOxidation", frozenset({6})),
     }
 )
 
 
 def _native_forest_keys(rdmol, ruleset: str = "BA") -> set[tuple[str, str, tuple[int, ...]]]:
-    mode = forest_site_indexing()
     n = rdmol.GetNumAtoms()
     out: set[tuple[str, str, tuple[int, ...]]] = set()
-    rs = load_ruleset(ruleset)
-    for (rule, site), mols in rs.metabolites(rdmol, unique=True):
-        rdkit_site = forest_site_to_rdkit(site, n, mode)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        rs = load_ruleset(ruleset)
+        rows = list(rs.metabolites(rdmol, unique=True))
+    for (rule, site), mols in rows:
+        rdkit_site = frozenset(int(i) for i in site)
+        assert max(rdkit_site, default=-1) < n
         pw = pathway_name(rule)
         site_t = tuple(site_rdkit_indices(rdkit_site))
         for product in mols or []:
@@ -71,20 +61,20 @@ def _native_forest_keys(rdmol, ruleset: str = "BA") -> set[tuple[str, str, tuple
             smi = can_smi(rdmol=product)
             if not smi:
                 continue
-            out.add((pw, smi[0], site_t))
+            # Compare after RDKit re-canonicalization (legacy vs adapter spelling).
+            mol = Chem.MolFromSmiles(smi[0])
+            if mol is None:
+                continue
+            canon = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=False)
+            out.add((pw, canon, site_t))
     return out
 
 
 def _adapter_keys(rdmol, ruleset: str = "BA") -> set[tuple[str, str, tuple[int, ...]]]:
     return {
         (pw, smi, tuple(site_rdkit_indices(site)))
-        for pw, site, smi, _ in enumerate_metabolites(rdmol, ruleset)
+        for pw, site, smi, *_ in enumerate_metabolites(rdmol, ruleset)
     }
-
-
-def _forest_site_keys(smiles: str) -> set[tuple[str, frozenset[int]]]:
-    sites, _structs = _forest_ba_index(smiles)
-    return sites
 
 
 def _forest_ba_index(
@@ -94,14 +84,18 @@ def _forest_ba_index(
     assert rdmol is not None, smiles
     sites: set[tuple[str, frozenset[int]]] = set()
     structs: set[tuple[str, str]] = set()
-    for pw, site, smi, _ in enumerate_metabolites(rdmol, "BA"):
+    for pw, site, smi, *_ in enumerate_metabolites(rdmol, "BA"):
         sites.add((pw, frozenset(site_rdkit_indices(site))))
         structs.add((pw, smi))
     return sites, structs
 
 
+def _forest_site_keys(smiles: str) -> set[tuple[str, frozenset[int]]]:
+    sites, _structs = _forest_ba_index(smiles)
+    return sites
+
+
 def _inchi_connectivity(smiles: str) -> str | None:
-    """InChIKey connectivity layer (stereo/kekule-insensitive product identity)."""
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return None
@@ -124,7 +118,6 @@ def _site_covered(
         return True
     if (smiles, pathway, site) in _LEGACY_ONLY_SITES:
         return True
-    # Legacy nitro PBS often keys both N–O contacts; forest emits one site per nitro.
     if pathway == "NitroaromaticReduction":
         return any(pw == pathway and bool(site & s) for pw, s in forest)
     return False
@@ -154,11 +147,11 @@ def _assert_golden_sites_covered(row: dict) -> None:
         golden_smi = m.get("smiles") or ""
         if _site_covered(pw, site, forest, smiles):
             continue
-        canon = can_smi(line=golden_smi) if golden_smi else []
-        if canon and (pw, canon[0]) in structs:
-            continue
-        # Forest 0.6.0 kekulize + topo collapse can pick a stereo/kekule
-        # representative whose site indexes differ from golden PBS.
+        mol = Chem.MolFromSmiles(golden_smi) if golden_smi else None
+        if mol is not None:
+            canon = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=False)
+            if (pw, canon) in structs:
+                continue
         key = _inchi_connectivity(golden_smi)
         if key and (pw, key) in forest_conn:
             continue
@@ -170,16 +163,18 @@ def _assert_golden_sites_covered(row: dict) -> None:
     assert not missing, f"{smiles}: golden sites not in forest BA: {missing}"
 
 
-def test_bioactivation_maps_to_ba_ruleset():
+def test_bioactivation_maps_to_legacy_ba_ruleset():
     assert ruleset_for_model("bioactivation") == "BA"
-    rs = load_ruleset("BA")
-    assert set(rs.rulenames) == {
-        "QuinoneFormation",
-        "Epoxidation",
-        "NitroaromaticReduction",
-        "ThiopheneSulfurOxidation",
-    }
-    assert load_ruleset("BioactivationPathways").name == "BA"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        rs = load_ruleset("BA")
+        assert set(rs.rulenames) == {
+            "QuinoneFormation",
+            "Epoxidation",
+            "NitroaromaticReduction",
+            "ThiopheneSulfurOxidation",
+        }
+        assert load_ruleset("BioactivationPathways").name == "BA"
 
 
 def test_bioactivation_pathway_aliases():
@@ -193,8 +188,7 @@ def test_bioactivation_pathway_aliases():
     "smiles",
     [STYRENE, ETHCHLORVYNOL, APAP, NITRO, THIOPHENE, "CC", "C=C", "c1ccccc1"],
 )
-def test_ba_adapter_matches_native_forest(smiles):
-    # Independent mols: forest kekulizes the reactant in place (0.5.2+).
+def test_ba_adapter_matches_native_legacy_forest(smiles):
     adapter_mol = Chem.MolFromSmiles(smiles)
     native_mol = Chem.MolFromSmiles(smiles)
     assert adapter_mol is not None and native_mol is not None
@@ -205,7 +199,6 @@ def test_styrene_ba_includes_vinyl_and_ring_epoxidation():
     sites = _forest_site_keys(STYRENE)
     assert ("Epoxidation", frozenset({0, 1})) in sites
     assert ("QuinoneFormation", frozenset({3, 4})) in sites
-    # Forest is a superset of the seven scored legacy styrene pathways.
     assert len(sites) >= 7
 
 
@@ -235,7 +228,7 @@ def test_sudoxicam_quinone_dealk_site_after_invalid_drop():
     assert ("QuinoneFormation", frozenset({6, 9})) in sites
     leftovers = [
         smi
-        for pw, _site, smi, _ in enumerate_metabolites(rdmol, "BA")
+        for pw, _site, smi, *_ in enumerate_metabolites(rdmol, "BA")
         if pw == "QuinoneFormation" and smi.startswith("CN1C(C=O)")
     ]
     assert leftovers

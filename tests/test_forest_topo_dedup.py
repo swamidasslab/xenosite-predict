@@ -1,7 +1,7 @@
 """Forest topological emission must match XenoSite UI identity keys.
 
-Requires ``xenosite-forest>=0.6.0`` (0-based Phase I sites; topo identity is
-pathway + sorted ranks + product SMILES).
+Requires ``xenosite-forest>=0.10.2`` (input-frame sites; topo identity is
+pathway + sorted ranks + RDKit-canonical product SMILES).
 """
 
 from __future__ import annotations
@@ -17,51 +17,39 @@ PHENOL = "Oc1ccccc1"
 NAPHTHALENE = "c1ccc2ccccc2c1"
 
 
-def _ui_keys(rdmol, rows):
-    # Rank before enumeration: forest metabolize kekulizes the reactant in place.
-    ranks = list(
-        Chem.CanonicalRankAtoms(rdmol, includeChirality=False, breakTies=False)
-    )
-    return {
-        (pathway, smiles, tuple(sorted(ranks[i] for i in site)))
-        for pathway, site, smiles, _ in rows
-    }
-
-
 def _assert_topo_dedup(smiles: str, ruleset: str, *, expected_n: int | None = None) -> None:
     rdmol, _ = parse_smiles(smiles)
-    # Snapshot topology on the aromatic reactant (matches forest metabolize).
     ranks = list(
         Chem.CanonicalRankAtoms(rdmol, includeChirality=False, breakTies=False)
     )
     rows = list(enumerate_metabolites(rdmol, ruleset))
     keys = {
         (pathway, smiles_i, tuple(sorted(ranks[i] for i in site)))
-        for pathway, site, smiles_i, _ in rows
+        for pathway, site, smiles_i, *_ in rows
     }
     assert rows, f"no metabolites for {smiles} / {ruleset}"
     assert len(rows) == len(keys), (
         f"{smiles} / {ruleset}: emitted {len(rows)} rows but only {len(keys)} "
-        f"UI topo keys (forest <0.2.8 leaks symmetry-equivalent sites)"
+        f"UI topo keys (symmetry-equivalent sites leaked)"
     )
     if expected_n is not None:
         assert len(keys) == expected_n
 
 
 def test_enumerate_benzene_epoxidation_single_topo_product():
-    _assert_topo_dedup(BENZENE, "SO.Epoxidation", expected_n=1)
+    _assert_topo_dedup(BENZENE, "xf:Epoxidation", expected_n=1)
 
 
 def test_enumerate_phenol_epoxidation_ortho_meta_para():
-    _assert_topo_dedup(PHENOL, "SO.Epoxidation", expected_n=3)
+    _assert_topo_dedup(PHENOL, "xf:Epoxidation", expected_n=3)
 
 
 def test_enumerate_naphthalene_quinone_topo_dedup():
-    _assert_topo_dedup(NAPHTHALENE, "QF.QuinoneFormation")
+    _assert_topo_dedup(NAPHTHALENE, "xf:QuinoneFormation")
 
 
 def test_enumerate_ndealk_topo_dedup():
-    _assert_topo_dedup(NDEALK, "UO.Dealkylation")
+    _assert_topo_dedup(NDEALK, "xf:Dealkylation")
 
 
 def test_enumerate_topo_dedup_keeps_distinct_product_smiles():
@@ -70,12 +58,11 @@ def test_enumerate_topo_dedup_keeps_distinct_product_smiles():
     ranks = list(
         Chem.CanonicalRankAtoms(rdmol, includeChirality=False, breakTies=False)
     )
-    rows = list(enumerate_metabolites(rdmol, "QF.QuinoneFormation"))
+    rows = list(enumerate_metabolites(rdmol, "xf:QuinoneFormation"))
     keys = {
         (pathway, smiles_i, tuple(sorted(ranks[i] for i in site)))
-        for pathway, site, smiles_i, _ in rows
+        for pathway, site, smiles_i, *_ in rows
     }
     assert len(rows) == len(keys)
-    smiles = {s for _p, _site, s, _m in rows}
-    # More than one quinone regioisomer / pattern on naphthalene
+    smiles = {s for _p, _site, s, *_ in rows}
     assert len(smiles) >= 2

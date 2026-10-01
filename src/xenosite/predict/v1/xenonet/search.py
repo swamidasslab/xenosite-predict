@@ -1,12 +1,17 @@
-"""XenoNet beam / best-first expansion (PhaseOneRS + phase1 weights).
+"""XenoNet beam / best-first expansion (PhaseOne + phase1 weights).
 
 v0 heap key is ``(neg_weight, smiles, site)`` — SMILES-stable. Legacy compared
 the RDKit mol object, which is not ordered and can shuffle ties. Golden graphs
 use a large ``beam_width`` so ties do not drop children.
+
+Metabolite *attachment* for predict uses forest 0.10 ``xf:`` rulesets. XenoNet
+expansion still walks the frozen ``PhaseOneRS`` archive so existing golden
+fixtures stay comparable until they are regathered against Rust PhaseOne.
 """
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 from heapq import heappop, heappush
 from typing import Iterator
@@ -19,7 +24,6 @@ from rdkit import Chem
 from xenosite.forest.legacy import PhaseOneRS
 from xenosite.forest.legacy.base import can_smi
 from xenosite.forest.legacy.utils import clean, refresh_mol
-from xenosite.predict.forest import forest_site_indexing, forest_site_to_rdkit
 
 from .graph import XenoGraph
 from .score import (
@@ -59,11 +63,20 @@ def min_heavy_atoms(start: Chem.Mol, targets: list[str]) -> int:
 def possible_metabolites(
     mol: Chem.Mol,
 ) -> Iterator[tuple[tuple[str, frozenset[int]], Chem.Mol]]:
+    """One-step Phase I products via legacy ``PhaseOneRS`` (golden-fixture parity)."""
     n_atoms = mol.GetNumAtoms()
-    mode = forest_site_indexing()
     seen: set[tuple] = set()
-    for (rule, site), products in PhaseOneRS.metabolites(mol, unique=True):
-        rdkit_site = forest_site_to_rdkit(site, n_atoms, mode)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        rows = list(PhaseOneRS.metabolites(mol, unique=True))
+    for (rule, site), products in rows:
+        rdkit_site = frozenset(int(i) for i in site)
+        for idx in rdkit_site:
+            if idx < 0 or idx >= n_atoms:
+                raise ValueError(
+                    f"legacy PhaseOne site {sorted(site)} out of range for "
+                    f"{n_atoms} heavy atoms"
+                )
         for product in clean(products):
             key = (rule, tuple(sorted(rdkit_site)), _rdkit_smi(product))
             if key in seen:
